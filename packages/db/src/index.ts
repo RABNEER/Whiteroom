@@ -14,6 +14,7 @@ export { schedules } from "./schema/schedules.js";
 export { notifications } from "./schema/notifications.js";
 export { consentLogs } from "./schema/consent-logs.js";
 export { subscriptions } from "./schema/subscriptions.js";
+export { otpAttempts } from "./schema/otp-attempts.js";
 
 // ─── Utilities ───
 export { createId } from "./utils.js";

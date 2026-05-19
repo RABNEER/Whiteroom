@@ -15,6 +15,11 @@ const envSchema = z.object({
     .enum(["development", "production", "test"])
     .default("development"),
   PORT: z.coerce.number().default(3000),
+
+  // ─── MSG91 (OTP Provider) ───
+  MSG91_API_KEY: z.string().min(1).optional(),
+  MSG91_TEMPLATE_ID: z.string().min(1).optional(),
+  MSG91_SENDER_ID: z.string().min(1).optional(),
 });
 
 function validateEnv() {

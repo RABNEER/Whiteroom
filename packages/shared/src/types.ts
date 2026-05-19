@@ -59,3 +59,41 @@ export interface AttendanceBatchRequest {
   records: AttendanceMarkItem[];
   idempotencyKey: string;
 }
+
+// ─── Phase 2: Auth Response Types ───
+export interface OTPSendResponse {
+  sent: boolean;
+  expiresIn: number; // seconds
+}
+
+export interface OTPVerifyResponse {
+  accessToken: string;
+  refreshToken: string;
+  user: {
+    id: string;
+    role: string;
+    tenantId: string;
+  };
+  isNewUser: boolean;
+}
+
+export interface RefreshResponse {
+  accessToken: string;
+}
+
+export interface InviteResolveResponse {
+  tenantName: string;
+  logoUrl: string | null;
+  brandColor: string;
+}
+
+export interface TenantUpdateRequest {
+  name?: string;
+  logoUrl?: string;
+  brandColor?: string;
+}
+
+export interface InviteGenerateResponse {
+  inviteCode: string;
+}
+

@@ -5,6 +5,11 @@ import { corsMiddleware } from "./middleware/cors.js";
 import { errorHandler } from "./middleware/error.js";
 import { env } from "./lib/env.js";
 
+// ─── Route Imports ───
+import { authRoutes } from "./routes/auth/index.js";
+import { tenantRoutes } from "./routes/tenant/index.js";
+import { inviteRoutes } from "./routes/invite/index.js";
+
 const app = new Hono();
 
 // ─── Global Middleware ───
@@ -20,10 +25,10 @@ app.get("/health", (c) => {
   });
 });
 
-// ─── API v1 Routes (Phase 2+) ───
-// app.route("/api/v1/auth", authRoutes);
-// app.route("/api/v1/tenants", tenantRoutes);
-// ...
+// ─── API v1 Routes ───
+app.route("/api/v1/auth", authRoutes);
+app.route("/api/v1/tenants", tenantRoutes);
+app.route("/api/v1/invite", inviteRoutes);
 
 // ─── Global Error Handler ───
 app.onError(errorHandler);
@@ -49,6 +54,6 @@ serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   ╚╩╝┴ ┴┴ ┴ └─┘┴└─└─┘└─┘┴ ┴
   API running on port ${info.port}
   Environment: ${env.NODE_ENV}
+  Routes: /api/v1/auth, /api/v1/tenants, /api/v1/invite
 `);
 });
-
