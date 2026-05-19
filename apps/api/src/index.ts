@@ -9,6 +9,17 @@ import { env } from "./lib/env.js";
 import { authRoutes } from "./routes/auth/index.js";
 import { tenantRoutes } from "./routes/tenant/index.js";
 import { inviteRoutes } from "./routes/invite/index.js";
+import { classRoutes } from "./routes/classes/index.js";
+import { studentRoutes } from "./routes/students/index.js";
+import { scheduleRoutes } from "./routes/schedules/index.js";
+import { deviceRoutes } from "./routes/devices/index.js";
+import { parentRoutes } from "./routes/parent/index.js";
+import { attendanceRoutes } from "./routes/attendance/index.js";
+import { announcementRoutes } from "./routes/announcements/index.js";
+import { paymentRoutes } from "./routes/payments/index.js";
+import { reportRoutes } from "./routes/reports/index.js";
+import { adminRoutes } from "./routes/admin/index.js";
+import { startJobs } from "./jobs/index.js";
 
 const app = new Hono();
 
@@ -29,6 +40,16 @@ app.get("/health", (c) => {
 app.route("/api/v1/auth", authRoutes);
 app.route("/api/v1/tenants", tenantRoutes);
 app.route("/api/v1/invite", inviteRoutes);
+app.route("/api/v1/classes", classRoutes);
+app.route("/api/v1/students", studentRoutes);
+app.route("/api/v1/schedules", scheduleRoutes);
+app.route("/api/v1/devices", deviceRoutes);
+app.route("/api/v1/parent", parentRoutes);
+app.route("/api/v1/attendance", attendanceRoutes);
+app.route("/api/v1/announcements", announcementRoutes);
+app.route("/api/v1/payments", paymentRoutes);
+app.route("/api/v1/reports", reportRoutes);
+app.route("/api/v1/admin", adminRoutes);
 
 // ─── Global Error Handler ───
 app.onError(errorHandler);
@@ -54,6 +75,10 @@ serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   ╚╩╝┴ ┴┴ ┴ └─┘┴└─└─┘└─┘┴ ┴
   API running on port ${info.port}
   Environment: ${env.NODE_ENV}
-  Routes: /api/v1/auth, /api/v1/tenants, /api/v1/invite
+  Routes: /api/v1/auth, /api/v1/tenants, /api/v1/invite, /api/v1/classes, /api/v1/students, /api/v1/schedules, /api/v1/devices, /api/v1/parent, /api/v1/attendance, /api/v1/announcements, /api/v1/payments, /api/v1/reports, /api/v1/admin
 `);
+});
+
+startJobs().catch((err) => {
+  console.error("[jobs] Failed to start background workers:", err);
 });

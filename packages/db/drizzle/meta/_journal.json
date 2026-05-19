@@ -8,6 +8,27 @@
       "when": 1779149699865,
       "tag": "0000_skinny_iron_monger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779162191419,
+      "tag": "0001_rare_vulcan",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779168979166,
+      "tag": "0002_milky_invisible_woman",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779174898247,
+      "tag": "0003_smart_scarlet_spider",
+      "breakpoints": true
     }
   ]
 }

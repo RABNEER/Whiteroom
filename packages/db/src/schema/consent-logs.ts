@@ -12,6 +12,7 @@ export const consentLogs = pgTable("consent_logs", {
     .notNull()
     .references(() => users.id),
   consentType: text("consent_type").notNull(), // 'data_processing' | 'notifications'
+  mechanism: text("mechanism").notNull().default("otp"), // 'otp' | 'explicit'
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   grantedAt: timestamp("granted_at", { withTimezone: true })
@@ -19,3 +20,4 @@ export const consentLogs = pgTable("consent_logs", {
     .notNull(),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
+

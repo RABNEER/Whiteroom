@@ -12,6 +12,7 @@ import * as schema from "@whiteroom/db";
 import { createId } from "@whiteroom/db";
 import { UserRole, PlanTier } from "@whiteroom/shared";
 import { hashSHA256, generateInviteCode, slugify } from "./lib/otp.js";
+import { and, eq } from "drizzle-orm";
 
 // Load env
 config({ path: resolve(process.cwd(), ".env") });
@@ -34,35 +35,54 @@ async function seed() {
   const tenantName = "Sharma Coaching Centre";
   const slug = slugify(tenantName);
 
-  const [tenant] = await db
-    .insert(schema.tenants)
-    .values({
-      name: tenantName,
-      slug,
-      inviteCode,
-      phone: "+919876543210",
-      brandColor: "#4F46E5",
-    })
-    .returning();
+  const [existingTenant] = await db
+    .select()
+    .from(schema.tenants)
+    .where(eq(schema.tenants.slug, slug))
+    .limit(1);
 
-  console.log(`✅ Tenant: ${tenant!.name} (invite: ${inviteCode})`);
+  const [tenant] = existingTenant
+    ? [existingTenant]
+    : await db
+        .insert(schema.tenants)
+        .values({
+          name: tenantName,
+          slug,
+          inviteCode,
+          phone: "+919876543210",
+          brandColor: "#4F46E5",
+        })
+        .returning();
+
+  console.log(`✅ Tenant: ${tenant!.name} (invite: ${tenant!.inviteCode})`);
 
   // ─── Create Teacher ───
-  const [teacherUser] = await db
-    .insert(schema.users)
-    .values({
-      phone: "+919876543210",
-      name: "Rajesh Sharma",
-      role: UserRole.TEACHER,
-      tenantId: tenant!.id,
-    })
-    .returning();
+  const [existingTeacher] = await db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.phone, "+919876543210"))
+    .limit(1);
 
-  await db.insert(schema.teacherProfiles).values({
-    userId: teacherUser!.id,
-    tenantId: tenant!.id,
-    subject: "Mathematics",
-  });
+  const [teacherUser] = existingTeacher
+    ? [existingTeacher]
+    : await db
+        .insert(schema.users)
+        .values({
+          phone: "+919876543210",
+          name: "Rajesh Sharma",
+          role: UserRole.TEACHER,
+          tenantId: tenant!.id,
+        })
+        .returning();
+
+  await db
+    .insert(schema.teacherProfiles)
+    .values({
+      userId: teacherUser!.id,
+      tenantId: tenant!.id,
+      subject: "Mathematics",
+    })
+    .onConflictDoNothing();
 
   console.log(`✅ Teacher: Rajesh Sharma (+91 98765 43210)`);
 
@@ -79,39 +99,100 @@ async function seed() {
   ];
 
   for (let i = 0; i < studentNames.length; i++) {
-    await db.insert(schema.students).values({
-      name: studentNames[i]!,
-      rollNumber: String(i + 1).padStart(2, "0"),
-      tenantId: tenant!.id,
-    });
+    const rollNumber = String(i + 1).padStart(2, "0");
+    const [existingStudent] = await db
+      .select({ id: schema.students.id })
+      .from(schema.students)
+      .where(eq(schema.students.rollNumber, rollNumber))
+      .limit(1);
+
+    if (!existingStudent) {
+      await db.insert(schema.students).values({
+        name: studentNames[i]!,
+        rollNumber,
+        tenantId: tenant!.id,
+      });
+    }
   }
 
   console.log(`✅ Students: ${studentNames.length} created`);
 
   // ─── Create Parent (linked to first student) ───
-  const [parentUser] = await db
-    .insert(schema.users)
+  const [existingParent] = await db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.phone, "+919123456789"))
+    .limit(1);
+
+  const [parentUser] = existingParent
+    ? [existingParent]
+    : await db
+        .insert(schema.users)
+        .values({
+          phone: "+919123456789",
+          name: "Meera Patel",
+          role: UserRole.PARENT,
+          tenantId: tenant!.id,
+        })
+        .returning();
+
+  await db
+    .insert(schema.parentProfiles)
     .values({
-      phone: "+919123456789",
-      name: "Meera Patel",
-      role: UserRole.PARENT,
+      userId: parentUser!.id,
       tenantId: tenant!.id,
     })
-    .returning();
+    .onConflictDoNothing();
 
-  await db.insert(schema.parentProfiles).values({
-    userId: parentUser!.id,
-    tenantId: tenant!.id,
-  });
+  const [parentProfile] = await db
+    .select({ id: schema.parentProfiles.id })
+    .from(schema.parentProfiles)
+    .where(eq(schema.parentProfiles.userId, parentUser!.id))
+    .limit(1);
 
-  await db.insert(schema.consentLogs).values({
-    userId: parentUser!.id,
-    tenantId: tenant!.id,
-    consentType: "data_processing",
-  });
+  if (parentProfile) {
+    await db
+      .update(schema.students)
+      .set({ parentId: parentProfile.id, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.students.tenantId, tenant!.id),
+          eq(schema.students.rollNumber, "01")
+        )
+      );
+  }
+
+  const [existingConsent] = await db
+    .select({ id: schema.consentLogs.id })
+    .from(schema.consentLogs)
+    .where(eq(schema.consentLogs.userId, parentUser!.id))
+    .limit(1);
+
+  if (!existingConsent) {
+    await db.insert(schema.consentLogs).values({
+      userId: parentUser!.id,
+      tenantId: tenant!.id,
+      consentType: "data_processing",
+    });
+  }
 
   console.log(`✅ Parent: Meera Patel (+91 91234 56789)`);
   console.log(`✅ Consent log created for parent onboarding`);
+
+  const superAdminPhone = process.env.SUPER_ADMIN_PHONE;
+  if (superAdminPhone) {
+    await db
+      .insert(schema.users)
+      .values({
+        phone: superAdminPhone,
+        name: "Whiteroom Admin",
+        role: UserRole.SUPER_ADMIN,
+        tenantId: tenant!.id,
+      })
+      .onConflictDoNothing();
+
+    console.log(`✅ Super admin seeded from SUPER_ADMIN_PHONE`);
+  }
 
   // ─── Summary ───
   console.log(`
@@ -119,7 +200,7 @@ async function seed() {
   ║  🌱 Seed Complete                        ║
   ║                                          ║
   ║  Tenant: ${tenantName.padEnd(25)}      ║
-  ║  Invite: ${inviteCode.padEnd(25)}      ║
+  ║  Invite: ${tenant!.inviteCode.padEnd(25)}      ║
   ║  Teacher: +919876543210                  ║
   ║  Parent:  +919123456789                  ║
   ║  Students: 30                            ║

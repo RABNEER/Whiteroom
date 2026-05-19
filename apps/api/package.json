@@ -17,7 +17,9 @@
     "drizzle-orm": "^0.44.1",
     "hono": "^4.7.6",
     "jose": "^6.2.3",
+    "pg-boss": "^10.4.2",
     "postgres": "^3.4.7",
+    "razorpay": "^2.9.6",
     "zod": "^3.24.4"
   },
   "devDependencies": {

@@ -8,6 +8,7 @@ import {
   teacherProfiles,
   parentProfiles,
   consentLogs,
+  students,
 } from "@whiteroom/db";
 import {
   normalizePhone,
@@ -25,12 +26,14 @@ import {
   PlanTier,
 } from "@whiteroom/shared";
 import type { ApiResponse, OTPVerifyResponse, JWTPayload } from "@whiteroom/shared";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, isNull } from "drizzle-orm";
 
 const verifySchema = z.object({
   phone: z.string().min(10).max(15),
   otp: z.string().length(6),
   inviteCode: z.string().length(6).optional(),
+  studentName: z.string().trim().min(1).max(120).optional(),
+  rollNumber: z.string().trim().min(1).max(40).optional(),
 });
 
 /**
@@ -153,10 +156,13 @@ export async function otpVerifyHandler(c: Context) {
         })
         .returning();
 
-      await tx.insert(parentProfiles).values({
-        userId: newUser!.id,
-        tenantId: tenant.id,
-      });
+      const [parentProfile] = await tx
+        .insert(parentProfiles)
+        .values({
+          userId: newUser!.id,
+          tenantId: tenant.id,
+        })
+        .returning();
 
       await tx.insert(consentLogs).values({
         userId: newUser!.id,
@@ -165,6 +171,21 @@ export async function otpVerifyHandler(c: Context) {
         ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
         userAgent: c.req.header("user-agent") ?? null,
       });
+
+      if (parsed.data.studentName && parsed.data.rollNumber) {
+        await tx
+          .update(students)
+          .set({ parentId: parentProfile!.id, updatedAt: new Date() })
+          .where(
+            and(
+              eq(students.tenantId, tenant.id),
+              eq(students.name, parsed.data.studentName),
+              eq(students.rollNumber, parsed.data.rollNumber),
+              isNull(students.parentId),
+              isNull(students.deletedAt)
+            )
+          );
+      }
 
       return newUser!;
     });

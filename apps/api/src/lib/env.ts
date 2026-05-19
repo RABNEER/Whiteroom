@@ -20,6 +20,16 @@ const envSchema = z.object({
   MSG91_API_KEY: z.string().min(1).optional(),
   MSG91_TEMPLATE_ID: z.string().min(1).optional(),
   MSG91_SENDER_ID: z.string().min(1).optional(),
+
+  FIREBASE_PROJECT_ID: z.string().min(1).optional(),
+  FIREBASE_CLIENT_EMAIL: z.string().min(1).optional(),
+  FIREBASE_PRIVATE_KEY: z.string().min(1).optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+
+  RAZORPAY_KEY_ID: z.string().min(1).optional(),
+  RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
+  SUPER_ADMIN_PHONE: z.string().min(1).optional(),
 });
 
 function validateEnv() {
