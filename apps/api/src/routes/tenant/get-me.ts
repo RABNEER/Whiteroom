@@ -1,9 +1,9 @@
 import type { Context } from "hono";
 import { db } from "../../lib/db.js";
-import { tenants, subscriptions } from "@whiteroom/db";
+import { tenants } from "@whiteroom/db";
 import { Errors } from "@whiteroom/shared";
 import type { JWTPayload, ApiResponse, TenantInfo } from "@whiteroom/shared";
-import { eq } from "drizzle-orm";
+import { eq } from "@whiteroom/db";
 
 /**
  * GET /api/v1/tenants/me

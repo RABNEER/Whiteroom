@@ -3,7 +3,7 @@ import { db } from "../../lib/db.js";
 import { tenants } from "@whiteroom/db";
 import { Errors } from "@whiteroom/shared";
 import type { ApiResponse, InviteResolveResponse } from "@whiteroom/shared";
-import { eq, and } from "drizzle-orm";
+import { eq, and } from "@whiteroom/db";
 
 /**
  * GET /api/v1/invite/:code

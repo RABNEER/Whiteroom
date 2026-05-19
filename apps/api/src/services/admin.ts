@@ -1,6 +1,6 @@
 import { db } from "../lib/db.js";
 import { subscriptions, tenants, users } from "@whiteroom/db";
-import { and, count, eq, gte, sql } from "drizzle-orm";
+import { and, count, eq, gte, sql } from "@whiteroom/db";
 
 export async function listAdminTenants() {
   return db

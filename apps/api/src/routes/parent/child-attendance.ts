@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import type { ApiResponse, JWTPayload } from "@whiteroom/shared";
 import { getStudentAttendanceHistory } from "../../services/attendance.js";
+import { assertParentOwnsStudent } from "../../services/students.js";
 
 /**
  * Parent: view child's monthly attendance.
@@ -12,8 +13,7 @@ export async function childAttendanceHandler(c: Context) {
   const childId = c.req.param("id")!;
   const classId = c.req.query("classId");
 
-  // TODO: Verify this child is actually linked to this parent
-  // For now, tenant isolation provides the security boundary
+  await assertParentOwnsStudent(user.tenantId, user.userId, childId);
 
   const history = await getStudentAttendanceHistory(
     user.tenantId,

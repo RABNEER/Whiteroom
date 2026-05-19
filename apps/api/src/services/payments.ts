@@ -2,22 +2,46 @@ import { db } from "../lib/db.js";
 import { getRazorpayClient, verifyRazorpaySignature } from "../lib/razorpay.js";
 import { subscriptions } from "@whiteroom/db";
 import { Errors, PlanTier } from "@whiteroom/shared";
-import { eq } from "drizzle-orm";
+import { eq } from "@whiteroom/db";
+
+export const SubscriptionPlanKey = {
+  PRO_YEARLY: "pro_yearly",
+} as const;
+
+export type SubscriptionPlanKey =
+  (typeof SubscriptionPlanKey)[keyof typeof SubscriptionPlanKey];
+
+const subscriptionCatalog: Record<
+  SubscriptionPlanKey,
+  { amount: number; currency: "INR"; plan: string; durationDays: number }
+> = {
+  [SubscriptionPlanKey.PRO_YEARLY]: {
+    amount: 1_500_000, // Razorpay amount in paise: INR 15,000/year
+    currency: "INR",
+    plan: PlanTier.PRO,
+    durationDays: 365,
+  },
+};
 
 export async function createSubscriptionOrder(
   tenantId: string,
   userId: string,
-  input: { amount: number; currency?: string }
+  input: { plan: SubscriptionPlanKey }
 ) {
+  const catalogEntry = subscriptionCatalog[input.plan];
+  if (!catalogEntry) {
+    throw Errors.validation("Unsupported subscription plan.");
+  }
+
   const razorpay = getRazorpayClient();
   const order = await razorpay.orders.create({
-    amount: input.amount,
-    currency: input.currency ?? "INR",
+    amount: catalogEntry.amount,
+    currency: catalogEntry.currency,
     receipt: `tenant_${tenantId}_${Date.now()}`,
     notes: {
       tenantId,
       userId,
-      plan: PlanTier.PRO,
+      plan: input.plan,
     },
   });
 
@@ -51,20 +75,27 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
   const payment = event.payload?.payment?.entity;
   const order = event.payload?.order?.entity;
   const tenantId = payment?.notes?.tenantId ?? order?.notes?.tenantId;
+  const planKey = payment?.notes?.plan ?? order?.notes?.plan;
 
   if (!tenantId || !["payment.captured", "order.paid"].includes(event.event ?? "")) {
     return { processed: false };
   }
 
+  if (planKey !== SubscriptionPlanKey.PRO_YEARLY) {
+    return { processed: false };
+  }
+
+  const catalogEntry = subscriptionCatalog[planKey];
+
   const startDate = new Date();
   const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 30);
+  endDate.setDate(endDate.getDate() + catalogEntry.durationDays);
 
   const [subscription] = await db
     .insert(subscriptions)
     .values({
       tenantId,
-      plan: PlanTier.PRO,
+      plan: catalogEntry.plan,
       razorpayOrderId: payment?.order_id ?? order?.id ?? null,
       razorpayPaymentId: payment?.id ?? null,
       startDate,
@@ -74,7 +105,7 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
     .onConflictDoUpdate({
       target: subscriptions.tenantId,
       set: {
-        plan: PlanTier.PRO,
+        plan: catalogEntry.plan,
         razorpayOrderId: payment?.order_id ?? order?.id ?? null,
         razorpayPaymentId: payment?.id ?? null,
         startDate,

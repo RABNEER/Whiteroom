@@ -4,7 +4,7 @@ import {
   announcementReads,
 } from "@whiteroom/db";
 import { Errors } from "@whiteroom/shared";
-import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNull } from "@whiteroom/db";
 
 // ─── Create Announcement ───
 

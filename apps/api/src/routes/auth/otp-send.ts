@@ -6,7 +6,7 @@ import { normalizePhone, isValidIndianPhone, hashSHA256, generateOTP } from "../
 import { sendOTP } from "../../lib/msg91.js";
 import { Errors, Limits } from "@whiteroom/shared";
 import type { ApiResponse, OTPSendResponse } from "@whiteroom/shared";
-import { gte, eq, and, count } from "drizzle-orm";
+import { gte, eq, and, count } from "@whiteroom/db";
 
 const sendSchema = z.object({
   phone: z.string().min(10).max(15),

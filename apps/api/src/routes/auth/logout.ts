@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { db } from "../../lib/db.js";
 import { users } from "@whiteroom/db";
 import type { JWTPayload, ApiResponse } from "@whiteroom/shared";
-import { eq } from "drizzle-orm";
+import { eq } from "@whiteroom/db";
 
 /**
  * POST /api/v1/auth/logout

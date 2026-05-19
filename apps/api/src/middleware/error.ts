@@ -1,4 +1,4 @@
-import { Context, Next } from "hono";
+import { Context } from "hono";
 import { AppError, Errors } from "@whiteroom/shared";
 
 /**

@@ -26,7 +26,7 @@ import {
   PlanTier,
 } from "@whiteroom/shared";
 import type { ApiResponse, OTPVerifyResponse, JWTPayload } from "@whiteroom/shared";
-import { eq, and, gte, isNull } from "drizzle-orm";
+import { eq, and, gte, isNull } from "@whiteroom/db";
 
 const verifySchema = z.object({
   phone: z.string().min(10).max(15),
@@ -127,6 +127,29 @@ export async function otpVerifyHandler(c: Context) {
   let isNewUser = false;
 
   if (existingUser) {
+    if (parsed.data.inviteCode) {
+      const [tenant] = await db
+        .select({ id: tenants.id })
+        .from(tenants)
+        .where(eq(tenants.inviteCode, parsed.data.inviteCode))
+        .limit(1);
+
+      if (!tenant) {
+        throw Errors.notFound("Invite code");
+      }
+
+      if (
+        existingUser.tenantId !== tenant.id ||
+        existingUser.role !== UserRole.PARENT
+      ) {
+        throw new AppError(
+          ErrorCode.ALREADY_EXISTS,
+          "This phone number is already linked to another account. Multi-tenant account switching is not supported in v1.",
+          409
+        );
+      }
+    }
+
     // ─── Returning User ───
     userId = existingUser.id;
     tenantId = existingUser.tenantId!;

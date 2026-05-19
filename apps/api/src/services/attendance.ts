@@ -7,7 +7,7 @@ import {
   idempotencyKeys,
 } from "@whiteroom/db";
 import { Errors } from "@whiteroom/shared";
-import { and, eq, count, sql, desc, isNull } from "drizzle-orm";
+import { and, eq, count, sql, desc, isNull, inArray } from "@whiteroom/db";
 import {
   getParentUserIdsForStudents,
   sendPushToUsers,
@@ -37,7 +37,14 @@ export async function createAttendanceSession(
   const [enrolled] = await db
     .select({ value: count() })
     .from(classEnrollments)
-    .where(eq(classEnrollments.classId, input.classId));
+    .innerJoin(students, eq(classEnrollments.studentId, students.id))
+    .where(
+      and(
+        eq(classEnrollments.classId, input.classId),
+        eq(students.tenantId, tenantId),
+        isNull(students.deletedAt)
+      )
+    );
 
   const [session] = await db
     .insert(attendanceSessions)
@@ -100,7 +107,13 @@ export async function getAttendanceSession(tenantId: string, sessionId: string) 
     })
     .from(attendanceRecords)
     .innerJoin(students, eq(attendanceRecords.studentId, students.id))
-    .where(eq(attendanceRecords.sessionId, sessionId));
+    .where(
+      and(
+        eq(attendanceRecords.sessionId, sessionId),
+        eq(students.tenantId, tenantId),
+        isNull(students.deletedAt)
+      )
+    );
 
   return { ...session, records };
 }
@@ -158,6 +171,28 @@ export async function markAttendanceBatch(
 
     if (!session) {
       throw Errors.notFound("Attendance session");
+    }
+
+    const uniqueStudentIds = [...new Set(records.map((record) => record.studentId))];
+    if (uniqueStudentIds.length !== records.length) {
+      throw Errors.validation("Duplicate student attendance records are not allowed.");
+    }
+
+    const enrolledStudents = await tx
+      .select({ id: students.id })
+      .from(classEnrollments)
+      .innerJoin(students, eq(classEnrollments.studentId, students.id))
+      .where(
+        and(
+          eq(classEnrollments.classId, session.classId),
+          eq(students.tenantId, tenantId),
+          isNull(students.deletedAt),
+          inArray(students.id, uniqueStudentIds)
+        )
+      );
+
+    if (enrolledStudents.length !== uniqueStudentIds.length) {
+      throw Errors.validation("All attendance records must belong to enrolled students in this class.");
     }
 
     const upserted = [];
@@ -253,7 +288,10 @@ export async function getStudentAttendanceHistory(
     throw Errors.notFound("Student");
   }
 
-  const conditions = [eq(attendanceRecords.studentId, studentId)];
+  const conditions = [
+    eq(attendanceRecords.studentId, studentId),
+    eq(attendanceSessions.tenantId, tenantId),
+  ];
 
   if (filters?.classId) {
     conditions.push(eq(attendanceSessions.classId, filters.classId));

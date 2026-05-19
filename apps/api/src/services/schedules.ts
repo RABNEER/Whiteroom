@@ -1,7 +1,7 @@
 import { db } from "../lib/db.js";
 import { classes, schedules } from "@whiteroom/db";
 import { Errors } from "@whiteroom/shared";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "@whiteroom/db";
 
 async function requireTenantClass(tenantId: string, classId: string) {
   const [classRow] = await db

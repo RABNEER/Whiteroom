@@ -2,7 +2,7 @@ import { db } from "../lib/db.js";
 import { schedules, teacherProfiles } from "@whiteroom/db";
 import { sendPushToUser } from "../lib/fcm.js";
 import { getBoss } from "../lib/pgboss.js";
-import { eq } from "drizzle-orm";
+import { eq } from "@whiteroom/db";
 
 const dayNames = [
   "sunday",

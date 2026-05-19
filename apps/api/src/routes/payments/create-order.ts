@@ -2,11 +2,13 @@ import type { Context } from "hono";
 import { z } from "zod";
 import type { ApiResponse, JWTPayload } from "@whiteroom/shared";
 import { Errors } from "@whiteroom/shared";
-import { createSubscriptionOrder } from "../../services/payments.js";
+import {
+  createSubscriptionOrder,
+  SubscriptionPlanKey,
+} from "../../services/payments.js";
 
 const createOrderSchema = z.object({
-  amount: z.number().int().positive(),
-  currency: z.string().length(3).optional(),
+  plan: z.literal(SubscriptionPlanKey.PRO_YEARLY),
 });
 
 export async function createPaymentOrderHandler(c: Context) {

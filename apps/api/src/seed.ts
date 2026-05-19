@@ -6,13 +6,12 @@
  */
 import { config } from "dotenv";
 import { resolve } from "node:path";
-import { drizzle } from "drizzle-orm/postgres-js";
+import { drizzle } from "@whiteroom/db";
 import postgres from "postgres";
 import * as schema from "@whiteroom/db";
-import { createId } from "@whiteroom/db";
-import { UserRole, PlanTier } from "@whiteroom/shared";
-import { hashSHA256, generateInviteCode, slugify } from "./lib/otp.js";
-import { and, eq } from "drizzle-orm";
+import { UserRole } from "@whiteroom/shared";
+import { generateInviteCode, slugify } from "./lib/otp.js";
+import { and, eq } from "@whiteroom/db";
 
 // Load env
 config({ path: resolve(process.cwd(), ".env") });
@@ -84,7 +83,7 @@ async function seed() {
     })
     .onConflictDoNothing();
 
-  console.log(`✅ Teacher: Rajesh Sharma (+91 98765 43210)`);
+  console.log(`✅ Teacher: demo account seeded`);
 
   // ─── Create 30 Students ───
   const studentNames = [
@@ -176,7 +175,7 @@ async function seed() {
     });
   }
 
-  console.log(`✅ Parent: Meera Patel (+91 91234 56789)`);
+  console.log(`✅ Parent: demo account seeded`);
   console.log(`✅ Consent log created for parent onboarding`);
 
   const superAdminPhone = process.env.SUPER_ADMIN_PHONE;
@@ -201,8 +200,8 @@ async function seed() {
   ║                                          ║
   ║  Tenant: ${tenantName.padEnd(25)}      ║
   ║  Invite: ${tenant!.inviteCode.padEnd(25)}      ║
-  ║  Teacher: +919876543210                  ║
-  ║  Parent:  +919123456789                  ║
+  ║  Teacher and parent demo phones are      ║
+  ║  defined inside the seed script.         ║
   ║  Students: 30                            ║
   ╚══════════════════════════════════════════╝
 `);

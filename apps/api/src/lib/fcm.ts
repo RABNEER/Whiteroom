@@ -1,6 +1,9 @@
 import { db } from "./db.js";
+import { env } from "./env.js";
 import { deviceTokens, notifications } from "@whiteroom/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray } from "@whiteroom/db";
+import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getMessaging } from "firebase-admin/messaging";
 
 /**
  * FCM push notification helper.
@@ -8,8 +11,8 @@ import { eq, and, inArray } from "drizzle-orm";
  * Phase 4 uses a fire-and-forget pattern:
  * 1. Look up FCM tokens for target user(s)
  * 2. Write a notification record to the DB
- * 3. If Firebase Admin is configured, send via FCM
- *    Otherwise, silently log (dev mode)
+ * 3. If Firebase Admin is configured, send via FCM.
+ *    Otherwise, keep the notification unsent for local/dev environments.
  *
  * Constitution: No external state stores. Notification state lives in PostgreSQL.
  */
@@ -18,6 +21,28 @@ interface PushPayload {
   title: string;
   body: string;
   type: "absence" | "reminder" | "announcement";
+}
+
+function getFirebaseMessaging() {
+  if (
+    !env.FIREBASE_PROJECT_ID ||
+    !env.FIREBASE_CLIENT_EMAIL ||
+    !env.FIREBASE_PRIVATE_KEY
+  ) {
+    return null;
+  }
+
+  if (getApps().length === 0) {
+    initializeApp({
+      credential: cert({
+        projectId: env.FIREBASE_PROJECT_ID,
+        clientEmail: env.FIREBASE_CLIENT_EMAIL,
+        privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      }),
+    });
+  }
+
+  return getMessaging();
 }
 
 /**
@@ -41,23 +66,39 @@ export async function sendPushToUser(
         )
       );
 
-    // 2. Write notification record
-    await db.insert(notifications).values({
+    // 2. Write notification record before attempting delivery
+    const [notification] = await db.insert(notifications).values({
       tenantId,
       userId,
       title: payload.title,
       body: payload.body,
       type: payload.type,
       fcmToken: tokens[0]?.fcmToken ?? null,
-      sentAt: tokens.length > 0 ? new Date() : null,
+      sentAt: null,
+    }).returning();
+
+    const messaging = getFirebaseMessaging();
+    if (!messaging || tokens.length === 0) {
+      return;
+    }
+
+    const result = await messaging.sendEachForMulticast({
+      tokens: tokens.map((token) => token.fcmToken),
+      notification: {
+        title: payload.title,
+        body: payload.body,
+      },
+      data: {
+        type: payload.type,
+        tenantId,
+      },
     });
 
-    // 3. TODO: When FIREBASE_PROJECT_ID is configured, send via Firebase Admin SDK
-    // For now, log in dev mode
-    if (tokens.length > 0) {
-      console.log(
-        `[FCM] Would send to ${tokens.length} device(s) for user ${userId}: ${payload.title}`
-      );
+    if (result.successCount > 0 && notification) {
+      await db
+        .update(notifications)
+        .set({ sentAt: new Date() })
+        .where(eq(notifications.id, notification.id));
     }
   } catch (err) {
     // Fire-and-forget — log but don't throw

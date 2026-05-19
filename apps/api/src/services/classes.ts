@@ -1,7 +1,7 @@
 import { db } from "../lib/db.js";
 import { classEnrollments, classes, students } from "@whiteroom/db";
 import { Errors } from "@whiteroom/shared";
-import { and, count, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, eq, inArray, isNull } from "@whiteroom/db";
 
 export async function createClass(
   tenantId: string,

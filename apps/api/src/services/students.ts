@@ -1,7 +1,7 @@
 import { db } from "../lib/db.js";
 import { classEnrollments, classes, parentProfiles, students } from "@whiteroom/db";
 import { Errors } from "@whiteroom/shared";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "@whiteroom/db";
 
 export async function createStudent(
   tenantId: string,
@@ -122,7 +122,25 @@ export async function listParentChildClasses(
         eq(classes.tenantId, tenantId),
         isNull(classes.deletedAt)
       )
-    );
+  );
+}
+
+export async function assertParentOwnsStudent(
+  tenantId: string,
+  userId: string,
+  studentId: string
+) {
+  const [parent] = await db
+    .select({ id: parentProfiles.id })
+    .from(parentProfiles)
+    .where(and(eq(parentProfiles.tenantId, tenantId), eq(parentProfiles.userId, userId)))
+    .limit(1);
+
+  if (!parent) {
+    throw Errors.notFound("Parent profile");
+  }
+
+  await getParentOwnedStudent(tenantId, parent.id, studentId);
 }
 
 async function getParentOwnedStudent(

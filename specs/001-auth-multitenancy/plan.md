@@ -1,5 +1,22 @@
 # Implementation Plan: Auth & Multi-tenancy
 
+> Backend completion note (2026-05-19): Backend phases 1-5 are complete and
+> the implementation now includes the full API surface beyond auth and
+> multi-tenancy: core data, attendance, announcements, parent views, devices,
+> reports, payments, jobs, and admin. This document remains the historical
+> Phase 2 plan; use the hardening checklist in `tasks.md` for current backend
+> readiness work before mobile frontend integration.
+
+## Product Direction Update
+
+- Client app target: native Expo mobile app, not PWA.
+- Brand/UI DNA for the app layer: warm editorial palette, restrained indigo
+  accent, serif display moments, monospace metadata, functional dense views for
+  attendance and records.
+- Backend readiness bar: build passing is not enough. Tenant isolation, parent
+  ownership checks, real push delivery, payment pricing integrity, privacy, and
+  tests must pass before the frontend treats the API as stable.
+
 **Feature Branch**: `001-auth-multitenancy`  
 **Phase**: 2 of 5  
 **Prerequisite**: Phase 1 (Foundation) — ✅ Complete

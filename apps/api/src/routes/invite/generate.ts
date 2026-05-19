@@ -3,7 +3,7 @@ import { db } from "../../lib/db.js";
 import { tenants } from "@whiteroom/db";
 import { generateInviteCode } from "../../lib/otp.js";
 import type { JWTPayload, ApiResponse, InviteGenerateResponse } from "@whiteroom/shared";
-import { eq } from "drizzle-orm";
+import { eq } from "@whiteroom/db";
 
 /**
  * POST /api/v1/invite

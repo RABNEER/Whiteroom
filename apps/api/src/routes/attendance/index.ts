@@ -17,10 +17,11 @@ attendanceRoutes.get("/sessions", requireRole(UserRole.TEACHER), listSessionsHan
 attendanceRoutes.get("/sessions/:id", requireRole(UserRole.TEACHER), getSessionHandler);
 attendanceRoutes.post("/sessions/:id/mark", requireRole(UserRole.TEACHER), markBatchHandler);
 
-// Both teacher and parent can view student history
+// Teachers can view any student in their tenant. Parents use /parent/children/:id/attendance,
+// which verifies child ownership before returning records.
 attendanceRoutes.get(
   "/students/:id/history",
-  requireRole(UserRole.TEACHER, UserRole.PARENT),
+  requireRole(UserRole.TEACHER),
   studentHistoryHandler
 );
 

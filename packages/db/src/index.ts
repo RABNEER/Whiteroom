@@ -21,3 +21,16 @@ export { idempotencyKeys } from "./schema/idempotency-keys.js";
 
 // ─── Utilities ───
 export { createId } from "./utils.js";
+
+export {
+  and,
+  count,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  sql,
+} from "drizzle-orm";
+export { drizzle } from "drizzle-orm/postgres-js";

@@ -6,7 +6,7 @@ import { verifyRefreshToken, signAccessToken } from "../../lib/jwt.js";
 import { hashSHA256 } from "../../lib/otp.js";
 import { Errors, AppError, ErrorCode } from "@whiteroom/shared";
 import type { ApiResponse, RefreshResponse, JWTPayload } from "@whiteroom/shared";
-import { eq } from "drizzle-orm";
+import { eq } from "@whiteroom/db";
 
 const refreshSchema = z.object({
   refreshToken: z.string().min(1),
