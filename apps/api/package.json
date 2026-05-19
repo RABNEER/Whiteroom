@@ -1,0 +1,27 @@
+{
+  "name": "@whiteroom/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc && tsc-alias",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.3",
+    "@whiteroom/db": "workspace:*",
+    "@whiteroom/shared": "workspace:*",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.44.1",
+    "hono": "^4.7.6",
+    "postgres": "^3.4.7",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.17",
+    "tsc-alias": "^1.8.11",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
