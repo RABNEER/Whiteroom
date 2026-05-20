@@ -22,6 +22,8 @@ import {
   Screen,
   SectionTitle,
   AvatarBadge,
+  DonutChart3D,
+  SiblingDrawer,
 } from "@/components/ui";
 import { colors, font, radius, spacing } from "@/theme/tokens";
 import { formatDate } from "@/utils/format";
@@ -36,10 +38,19 @@ const parentTabs = [
 
 export default function ParentScreen() {
   const [tab, setTab] = useState<ParentTab>("feed");
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+
   const clear = useSession((state) => state.clear);
   const tenant = useQuery({ queryKey: ["tenant"], queryFn: api.tenantMe });
   const feed = useQuery({ queryKey: ["parentFeed"], queryFn: api.parentFeed });
   const children = useQuery({ queryKey: ["parentChildren"], queryFn: api.parentChildren });
+
+  const selectedChild = useMemo(
+    () => children.data?.find((child) => child.id === selectedChildId) ?? children.data?.[0],
+    [children.data, selectedChildId]
+  );
+
   const logout = useMutation({
     mutationFn: api.logout,
     onSettled: async () => {
@@ -56,6 +67,8 @@ export default function ParentScreen() {
           title={tab === "feed" ? "Class" : tab === "children" ? "Child" : "Family"}
           accent={tab === "feed" ? "Updates" : tab === "children" ? "Progress" : "Profile"}
           meta={`${feed.data?.unread ?? 0} unread updates`}
+          onAvatarPress={() => setDrawerVisible(true)}
+          avatarName={selectedChild?.name ?? "Aarav"}
           trailing={
             <>
               <IconButton icon={Bell} />
@@ -70,11 +83,37 @@ export default function ParentScreen() {
         {tab === "feed" ? (
           <FeedPanel tenantName={tenant.data?.name ?? "Whiteroom"} unread={feed.data?.unread ?? 0} />
         ) : tab === "children" ? (
-          <ChildrenPanel />
+          <ChildrenPanel selectedChild={selectedChild} setSelectedChildId={setSelectedChildId} />
         ) : (
           <ProfilePanel logoutPending={logout.isPending} onLogout={() => logout.mutate()} />
         )}
       </View>
+
+      <SiblingDrawer visible={drawerVisible} onClose={() => setDrawerVisible(false)}>
+        {children.data?.map((child) => {
+          const active = selectedChild?.id === child.id;
+          return (
+            <Pressable
+              key={child.id}
+              onPress={() => {
+                setSelectedChildId(child.id);
+                setDrawerVisible(false);
+              }}
+              style={{ marginBottom: spacing.xs }}
+            >
+              <Card inset={!active} style={active ? { borderColor: colors.teal, borderWidth: 2, backgroundColor: "rgba(86, 124, 141, 0.05)" } : undefined}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+                  <AvatarBadge label={child.name} small />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "800" }}>{child.name}</Text>
+                    <Muted>{active ? "Active Student" : "Switch Student"}</Muted>
+                  </View>
+                </View>
+              </Card>
+            </Pressable>
+          );
+        })}
+      </SiblingDrawer>
     </Screen>
   );
 }
@@ -137,13 +176,14 @@ function FeedPanel({ tenantName, unread }: { tenantName: string; unread: number 
   );
 }
 
-function ChildrenPanel() {
-  const [selected, setSelected] = useState<string | null>(null);
+function ChildrenPanel({
+  selectedChild,
+  setSelectedChildId,
+}: {
+  selectedChild: any;
+  setSelectedChildId: (id: string | null) => void;
+}) {
   const children = useQuery({ queryKey: ["parentChildren"], queryFn: api.parentChildren });
-  const selectedChild = useMemo(
-    () => children.data?.find((child) => child.id === selected) ?? children.data?.[0],
-    [children.data, selected]
-  );
   const classes = useQuery({
     queryKey: ["parentChildClasses", selectedChild?.id],
     queryFn: () => api.parentChildClasses(selectedChild!.id),
@@ -161,9 +201,22 @@ function ChildrenPanel() {
 
   const presentCount = attendance.data?.filter((row) => row.status === "present").length ?? 0;
   const absentCount = attendance.data?.filter((row) => row.status === "absent").length ?? 0;
+  const totalDays = presentCount + absentCount;
+  const attendancePercentage = totalDays > 0 ? Math.round((presentCount / totalDays) * 100) : 94; // fallback to 94% from mockup if no history
 
   return (
     <View style={{ gap: spacing.lg }}>
+      <Card style={{ padding: 28 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 28 }}>
+          <DonutChart3D value={attendancePercentage} />
+          <View style={{ flex: 1 }}>
+            <Eyebrow>RFID Attendance</Eyebrow>
+            <SectionTitle style={{ color: colors.teal }}>{attendancePercentage >= 90 ? "In Campus" : "Out of Campus"}</SectionTitle>
+            <Muted>08:32 AM • Gate 2</Muted>
+          </View>
+        </View>
+      </Card>
+
       <View style={{ flexDirection: "row", gap: spacing.md }}>
         <MetricCard label="Present" value={presentCount} tone="success" />
         <MetricCard label="Absent" value={absentCount} tone="danger" />
@@ -175,7 +228,7 @@ function ChildrenPanel() {
           <Button
             key={child.id}
             variant={selectedChild?.id === child.id ? "primary" : "ghost"}
-            onPress={() => setSelected(child.id)}
+            onPress={() => setSelectedChildId(child.id)}
           >
             {child.name}
           </Button>

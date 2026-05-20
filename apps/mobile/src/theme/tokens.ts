@@ -4,7 +4,7 @@ export const colors = {
   sky: "#C8D9E6",
   beige: "#F5EFEB",
   white: "#FFFFFF",
-  paper: "#C8D9E6",
+  paper: "#F5EFEB",
   paperDeep: "#567C8D",
   surface: "#FFFFFF",
   surfaceAlt: "#F5EFEB",
@@ -20,8 +20,8 @@ export const colors = {
   butter: "#F5EFEB",
   rose: "#F5EFEB",
   success: "#567C8D",
-  danger: "#2F4156",
-  warning: "#C8D9E6",
+  danger: "#EF4444",
+  warning: "#F59E0B",
   info: "#567C8D",
 } as const;
 
@@ -38,7 +38,7 @@ export const radius = {
   sm: 14,
   md: 20,
   lg: 28,
-  xl: 34,
+  xl: 38,
   full: 999,
 } as const;
 
