@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-native",
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "src/*"
+      ]
+    },
+    "types": [
+      "expo-router/types"
+    ]
+  },
+  "include": [
+    "app",
+    "src",
+    "expo-env.d.ts",
+    "*.config.js",
+    ".expo/types/**/*.ts"
+  ]
+}
