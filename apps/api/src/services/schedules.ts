@@ -32,7 +32,7 @@ export async function createSchedules(
 ) {
   await requireTenantClass(tenantId, input.classId);
 
-  return db
+  const rows = await db
     .insert(schedules)
     .values(
       input.daysOfWeek.map((dayOfWeek) => ({
@@ -44,6 +44,18 @@ export async function createSchedules(
       }))
     )
     .returning();
+
+  // FIX: No T+0/T+5/T+60 attendance reminders
+  try {
+    const { scheduleJobsForSchedule } = await import("../jobs/attendance-reminder.job.js");
+    for (const schedule of rows) {
+      await scheduleJobsForSchedule(schedule);
+    }
+  } catch (err) {
+    console.error("Failed to schedule jobs for new schedules:", err);
+  }
+
+  return rows;
 }
 
 export async function listSchedules(tenantId: string, classId?: string) {
@@ -96,6 +108,16 @@ export async function updateSchedule(
     .set({ ...input, updatedAt: new Date() })
     .where(and(eq(schedules.id, scheduleId), eq(schedules.tenantId, tenantId)))
     .returning();
+
+  // FIX: No T+0/T+5/T+60 attendance reminders
+  try {
+    const { scheduleJobsForSchedule } = await import("../jobs/attendance-reminder.job.js");
+    if (updated) {
+      await scheduleJobsForSchedule(updated);
+    }
+  } catch (err) {
+    console.error("Failed to reschedule jobs for updated schedule:", err);
+  }
 
   return updated!;
 }

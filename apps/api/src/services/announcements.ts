@@ -35,8 +35,23 @@ export async function createAnnouncement(
 
 // ─── List Announcements ───
 
-export async function listAnnouncements(tenantId: string) {
-  return db
+export async function listAnnouncements(
+  tenantId: string,
+  options?: { page?: number; limit?: number }
+) {
+  // FIX: No pagination on list endpoints — will OOM at 1000+ students
+  const page = Math.max(1, options?.page ?? 1);
+  const limit = Math.min(100, Math.max(1, options?.limit ?? 20));
+  const offset = (page - 1) * limit;
+
+  const [totalResult] = await db
+    .select({ total: count() })
+    .from(announcements)
+    .where(and(eq(announcements.tenantId, tenantId), isNull(announcements.deletedAt)));
+
+  const total = totalResult?.total ?? 0;
+
+  const data = await db
     .select()
     .from(announcements)
     .where(
@@ -45,7 +60,21 @@ export async function listAnnouncements(tenantId: string) {
         isNull(announcements.deletedAt)
       )
     )
-    .orderBy(desc(announcements.isPinned), desc(announcements.createdAt));
+    .orderBy(desc(announcements.isPinned), desc(announcements.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  return {
+    data,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrev: page > 1,
+    },
+  };
 }
 
 // ─── Get One Announcement ───

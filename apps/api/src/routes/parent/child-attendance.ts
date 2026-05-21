@@ -15,15 +15,19 @@ export async function childAttendanceHandler(c: Context) {
 
   await assertParentOwnsStudent(user.tenantId, user.userId, childId);
 
-  const history = await getStudentAttendanceHistory(
+  // FIX: No pagination on list endpoints — will OOM at 1000+ students
+  const page = Math.max(1, Number(c.req.query("page") ?? 1));
+  const limit = Math.min(100, Math.max(1, Number(c.req.query("limit") ?? 20)));
+
+  const result = await getStudentAttendanceHistory(
     user.tenantId,
     childId,
-    { classId }
+    { classId, page, limit }
   );
 
   const response: ApiResponse = {
     success: true,
-    data: history,
+    data: result,
   };
 
   return c.json(response);

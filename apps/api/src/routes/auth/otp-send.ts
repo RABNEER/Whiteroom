@@ -68,7 +68,11 @@ export async function otpSendHandler(c: Context) {
   });
 
   // ─── Send SMS ───
-  await sendOTP(phone, otp);
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[DEV MODE] Skipping SMS. OTP for ${phone} is: ${otp}`);
+  } else {
+    await sendOTP(phone, otp);
+  }
 
   const response: ApiResponse<OTPSendResponse> = {
     success: true,

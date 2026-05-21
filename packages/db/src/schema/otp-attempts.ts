@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index, integer } from "drizzle-orm/pg-core";
 import { createId } from "../utils.js";
 
 export const otpAttempts = pgTable(
@@ -18,5 +18,24 @@ export const otpAttempts = pgTable(
       table.phoneHash,
       table.createdAt
     ),
+  ]
+);
+
+export const otpLockouts = pgTable(
+  "otp_lockouts",
+  {
+    id: text("id").primaryKey().$defaultFn(createId),
+    phone: text("phone").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("otp_lockouts_phone_idx").on(table.phone),
   ]
 );

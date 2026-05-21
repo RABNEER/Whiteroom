@@ -16,6 +16,8 @@ import type {
   ScheduleResponse,
   StudentResponse,
   TenantInfo,
+  PaginatedResponse,
+  AnnouncementResponse,
 } from "@whiteroom/shared";
 import { sessionStore } from "@/auth/session-store";
 
@@ -95,45 +97,52 @@ async function request<T>(
 }
 
 export const api = {
-  otpSend: async (phone: string): Promise<OTPSendResponse> => {
-    return { sent: true, expiresIn: 45 };
-  },
-  otpVerify: async (input: {
+  otpSend: (phone: string): Promise<OTPSendResponse> =>
+    request<OTPSendResponse>("/auth/otp/send", {
+      method: "POST",
+      body: JSON.stringify({ phone }),
+    }),
+  otpVerify: (input: {
     phone: string;
     otp: string;
     inviteCode?: string;
     studentName?: string;
     rollNumber?: string;
-  }): Promise<OTPVerifyResponse> => {
-    const isParent = input.inviteCode !== undefined || input.studentName !== undefined;
-    return {
-      accessToken: "mock-access-token",
-      refreshToken: "mock-refresh-token",
-      user: {
-        id: "mock-user-id",
-        role: isParent ? "parent" : "teacher",
-        tenantId: "mock-tenant-id",
-      },
-      isNewUser: true,
-    };
-  },
-  logout: () => request<{ loggedOut: boolean }>("/auth/logout", { method: "POST" }),
+  }): Promise<OTPVerifyResponse> =>
+    request<OTPVerifyResponse>("/auth/otp/verify", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  logout: (deviceToken?: string) =>
+    request<{ loggedOut: boolean }>("/auth/logout", {
+      method: "POST",
+      body: deviceToken ? JSON.stringify({ deviceToken }) : undefined,
+      headers: deviceToken ? { "X-Device-Token": deviceToken } : undefined,
+    }),
+  switchTenant: (tenantId: string): Promise<OTPVerifyResponse> =>
+    request<OTPVerifyResponse>("/auth/switch-tenant", {
+      method: "POST",
+      body: JSON.stringify({ tenantId }),
+    }),
   tenantMe: () => request<TenantInfo>("/tenants/me"),
-  tenantUpdate: (input: { name?: string; logoUrl?: string; brandColor?: string }) =>
+  tenantUpdate: (input: { name?: string; logoUrl?: string; brandColor?: string; publicSearch?: boolean }) =>
     request<TenantInfo>("/tenants/me", {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
   inviteGenerate: () =>
     request<InviteGenerateResponse>("/invite", { method: "POST" }),
-  inviteResolve: async (code: string): Promise<InviteResolveResponse> => {
-    return {
-      tenantName: "Mock Premium School",
-      logoUrl: null,
-      brandColor: "#0f172a",
-    };
+  inviteResolve: (code: string): Promise<InviteResolveResponse> =>
+    request<InviteResolveResponse>(`/invite/${code}`),
+  classes: (page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.set("page", String(page));
+    if (limit) params.set("limit", String(limit));
+    const query = params.toString();
+    return request<PaginatedResponse<ClassResponse>>(
+      query ? `/classes?${query}` : "/classes"
+    );
   },
-  classes: () => request<ClassResponse[]>("/classes"),
   classCreate: (input: { name: string; subject?: string; teacherName?: string }) =>
     request<ClassResponse>("/classes", {
       method: "POST",
@@ -148,14 +157,29 @@ export const api = {
       body: JSON.stringify(input),
     }),
   classDelete: (id: string) => request<ClassResponse>(`/classes/${id}`, { method: "DELETE" }),
-  classStudents: (classId: string) =>
-    request<StudentResponse[]>(`/classes/${classId}/students`),
+  classStudents: (classId: string, page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.set("page", String(page));
+    if (limit) params.set("limit", String(limit));
+    const query = params.toString();
+    return request<PaginatedResponse<StudentResponse>>(
+      query ? `/classes/${classId}/students?${query}` : `/classes/${classId}/students`
+    );
+  },
   classAddStudents: (classId: string, studentIds: string[]) =>
     request<{ enrolled: number; skipped: number }>(`/classes/${classId}/students`, {
       method: "POST",
       body: JSON.stringify({ studentIds }),
     }),
-  students: () => request<StudentResponse[]>("/students"),
+  students: (page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.set("page", String(page));
+    if (limit) params.set("limit", String(limit));
+    const query = params.toString();
+    return request<PaginatedResponse<StudentResponse>>(
+      query ? `/students?${query}` : "/students"
+    );
+  },
   studentCreate: (input: { name: string; rollNumber?: string; phone?: string }) =>
     request<StudentResponse>("/students", {
       method: "POST",
@@ -181,12 +205,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ schedules: [input] }),
     }),
-  attendanceSessions: (filters?: { classId?: string; date?: string }) => {
+  attendanceSessions: (filters?: { classId?: string; date?: string; page?: number; limit?: number }) => {
     const params = new URLSearchParams();
     if (filters?.classId) params.set("classId", filters.classId);
     if (filters?.date) params.set("date", filters.date);
+    if (filters?.page) params.set("page", String(filters.page));
+    if (filters?.limit) params.set("limit", String(filters.limit));
     const query = params.toString();
-    return request<AttendanceSessionResponse[]>(
+    return request<PaginatedResponse<AttendanceSessionResponse>>(
       query ? `/attendance/sessions?${query}` : "/attendance/sessions"
     );
   },
@@ -202,13 +228,25 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input),
     }),
-  attendanceHistory: (studentId: string, classId?: string) =>
-    request<AttendanceHistoryItem[]>(
-      classId
-        ? `/attendance/students/${studentId}/history?classId=${classId}`
-        : `/attendance/students/${studentId}/history`
-    ),
-  announcements: () => request<ParentFeedResponse["announcements"]>("/announcements"),
+  attendanceHistory: (studentId: string, classId?: string, page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (classId) params.set("classId", classId);
+    if (page) params.set("page", String(page));
+    if (limit) params.set("limit", String(limit));
+    const query = params.toString();
+    return request<PaginatedResponse<AttendanceHistoryItem>>(
+      query ? `/attendance/students/${studentId}/history?${query}` : `/attendance/students/${studentId}/history`
+    );
+  },
+  announcements: (page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.set("page", String(page));
+    if (limit) params.set("limit", String(limit));
+    const query = params.toString();
+    return request<PaginatedResponse<AnnouncementResponse>>(
+      query ? `/announcements?${query}` : "/announcements"
+    );
+  },
   announcementCreate: (input: {
     title: string;
     body: string;
@@ -225,16 +263,28 @@ export const api = {
     request<unknown>(`/reports/attendance/summary?month=${month}`),
   reportsClassStats: (classId: string) =>
     request<unknown>(`/reports/classes/${classId}/stats`),
-  parentFeed: () => request<ParentFeedResponse>("/parent/feed"),
+  parentFeed: (page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.set("page", String(page));
+    if (limit) params.set("limit", String(limit));
+    const query = params.toString();
+    return request<ParentFeedResponse>(
+      query ? `/parent/feed?${query}` : "/parent/feed"
+    );
+  },
   parentChildren: () => request<StudentResponse[]>("/parent/children"),
   parentChildClasses: (studentId: string) =>
     request<ClassResponse[]>(`/parent/children/${studentId}/classes`),
-  parentChildAttendance: (studentId: string, classId?: string) =>
-    request<AttendanceHistoryItem[]>(
-      classId
-        ? `/parent/children/${studentId}/attendance?classId=${classId}`
-        : `/parent/children/${studentId}/attendance`
-    ),
+  parentChildAttendance: (studentId: string, classId?: string, page?: number, limit?: number) => {
+    const params = new URLSearchParams();
+    if (classId) params.set("classId", classId);
+    if (page) params.set("page", String(page));
+    if (limit) params.set("limit", String(limit));
+    const query = params.toString();
+    return request<PaginatedResponse<AttendanceHistoryItem>>(
+      query ? `/parent/children/${studentId}/attendance?${query}` : `/parent/children/${studentId}/attendance`
+    );
+  },
   registerFcm: (input: { fcmToken: string; platform: "ios" | "android" | "web" }) =>
     request("/devices/fcm", {
       method: "POST",

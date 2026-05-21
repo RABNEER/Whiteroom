@@ -535,10 +535,14 @@ export function LayeredChart({
   value,
   size = 150,
   strokeWidth = 24,
+  strokeColor = colors.navy,
+  bgColor = colors.sky,
 }: {
   value: number;
   size?: number;
   strokeWidth?: number;
+  strokeColor?: string;
+  bgColor?: string;
 }) {
   const radiusVal = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radiusVal;
@@ -551,7 +555,7 @@ export function LayeredChart({
           cx={size / 2}
           cy={size / 2}
           r={radiusVal}
-          stroke={colors.sky}
+          stroke={bgColor}
           strokeWidth={strokeWidth}
           fill="transparent"
         />
@@ -559,7 +563,7 @@ export function LayeredChart({
           cx={size / 2}
           cy={size / 2}
           r={radiusVal}
-          stroke={colors.navy}
+          stroke={strokeColor}
           strokeWidth={strokeWidth}
           fill="transparent"
           strokeDasharray={circumference}
@@ -678,9 +682,8 @@ export const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     backgroundColor: colors.white,
-    borderColor: "rgba(86, 124, 141, 0.15)",
-    borderRadius: 38,
-    borderWidth: 1.5,
+    borderBottomColor: "rgba(86, 124, 141, 0.15)",
+    borderBottomWidth: 1.5,
     flexDirection: "row",
     gap: spacing.md,
     justifyContent: "space-between",

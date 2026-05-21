@@ -7,6 +7,16 @@ export function formatDate(value?: string | Date | null) {
   }).format(new Date(value));
 }
 
+export function formatDateDdmmyyyy(value?: string | Date | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "—";
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
 export function todayIsoDate() {
   return new Date().toISOString().slice(0, 10);
 }

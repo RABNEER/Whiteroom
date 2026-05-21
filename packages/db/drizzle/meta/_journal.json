@@ -29,6 +29,13 @@
       "when": 1779174898247,
       "tag": "0003_smart_scarlet_spider",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779340800000,
+      "tag": "0004_otp_lockouts",
+      "breakpoints": true
     }
   ]
 }

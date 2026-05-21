@@ -2,6 +2,8 @@ import { Context, Next } from "hono";
 import { Errors } from "@whiteroom/shared";
 import type { JWTPayload, UserRole } from "@whiteroom/shared";
 import { verifyAccessToken } from "../lib/jwt.js";
+import { db } from "../lib/db.js";
+import { sql } from "@whiteroom/db";
 
 /**
  * Auth middleware — verifies JWT from Authorization header,
@@ -22,6 +24,14 @@ export async function authMiddleware(c: Context, next: Next) {
   try {
     const claims = await verifyAccessToken(token);
     c.set("user", claims);
+
+    // FIX: No Postgres RLS policies — data leakage if ORM bypassed
+    if (claims.tenantId) {
+      await db.execute(
+        sql`SELECT set_config('app.tenant_id', ${claims.tenantId}, true)`
+      );
+    }
+
     await next();
   } catch (err: unknown) {
     // jose throws JWTExpired for expired tokens

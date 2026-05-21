@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  TextInput,
   Pressable,
   ActivityIndicator,
   StyleSheet,
@@ -26,7 +25,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/api/client';
 import { useSession } from '@/auth/session-store';
 import { colors, spacing } from '@/theme/tokens';
-import { todayIsoDate } from '@/utils/format';
+import { todayIsoDate, formatDateDdmmyyyy } from '@/utils/format';
+import { isOnline, offlineQueue } from '@/utils/offlineQueue';
 import {
   AppHeader,
   BottomNav,
@@ -48,7 +48,7 @@ import {
 
 type Tab = 'HOME' | 'CLASSES' | 'ANNOUNCE' | 'PROFILE';
 type DetailView = 'LIST' | 'DETAIL';
-type SubTab = 'Attendance' | 'Students' | 'Invite';
+type SubTab = 'Attendance' | 'Students' | 'Schedule' | 'Invite';
 type AttendanceStatus = 'present' | 'absent';
 
 // ─── Root Screen ──────────────────────────────────────────────────────────────
@@ -73,7 +73,46 @@ export default function TeacherScreen() {
   }, [tenant.data]);
 
   const logout = useMutation({
-    mutationFn: api.logout,
+    mutationFn: async () => {
+      let fcmToken: string | undefined;
+      try {
+        const Notifications = require("expo-notifications");
+        const token = await Notifications.getDevicePushTokenAsync();
+        fcmToken = token.data;
+      } catch {
+        // Ignored if notifications not available
+      }
+      
+      await api.logout(fcmToken);
+
+      // FIX: FCM tokens not deleted on logout — notifications sent to old devices
+      try {
+        const messaging = require("@react-native-firebase/messaging");
+        if (typeof messaging === "function") {
+          await messaging().deleteToken();
+        } else if (messaging && typeof messaging.default === "function") {
+          await messaging.default().deleteToken();
+        }
+      } catch {
+        // Ignored if Firebase Messaging is not installed
+      }
+
+      try {
+        const AsyncStorage = require("@react-native-async-storage/async-storage");
+        if (AsyncStorage && typeof AsyncStorage.clear === "function") {
+          await AsyncStorage.clear();
+        }
+      } catch {
+        // Ignored if AsyncStorage is not installed
+      }
+
+      const { Platform } = require("react-native");
+      if (Platform.OS === "web") {
+        try {
+          globalThis.localStorage?.clear();
+        } catch {}
+      }
+    },
     onSettled: async () => {
       await clear();
       router.replace('/auth');
@@ -81,7 +120,7 @@ export default function TeacherScreen() {
   });
 
   const tenantName = tenant.data?.name ?? 'My Institution';
-  const classList = classes.data ?? [];
+  const classList = classes.data?.data ?? classes.data ?? [];
 
   // ── Bottom Tab Bar ───────────────────────────────────────────────────────────
   const TABS: { value: Tab; label: string; icon: LucideIcon }[] = [
@@ -176,8 +215,8 @@ function HomeTab({
     queryFn: () => api.attendanceSessions({ date: todayIsoDate() }),
   });
 
-  const todaySessions = sessionsQ.data ?? [];
-  const studentCount = students.data?.length ?? 0;
+  const todaySessions = sessionsQ.data?.data ?? sessionsQ.data ?? [];
+  const studentCount = students.data?.data?.length ?? students.data?.length ?? 0;
   const doneCount = todaySessions.filter((x) => x.totalPresent != null).length;
 
   return (
@@ -186,7 +225,7 @@ function HomeTab({
       <HeroPanel compact>
         <Eyebrow style={{ color: colors.sky }}>TODAY</Eyebrow>
         <DisplayTitle size="md" style={{ color: colors.white }}>{tenantName}</DisplayTitle>
-        <Muted style={{ color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>{todayIsoDate()}</Muted>
+        <Muted style={{ color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>{formatDateDdmmyyyy(new Date())}</Muted>
       </HeroPanel>
 
       {/* Stats Row */}
@@ -401,6 +440,7 @@ function ClassDetailView({
         options={[
           { value: 'Attendance', label: 'Attendance' },
           { value: 'Students', label: 'Students' },
+          { value: 'Schedule', label: 'Schedule' },
           { value: 'Invite', label: 'Invite' },
         ]}
         onChange={setSubTab}
@@ -409,6 +449,7 @@ function ClassDetailView({
       <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginTop: 16 }}>
         {subTab === 'Attendance' && <AttendanceView classId={cls.id} />}
         {subTab === 'Students' && <StudentsView classId={cls.id} />}
+        {subTab === 'Schedule' && <ScheduleView classId={cls.id} />}
         {subTab === 'Invite' && <InviteView />}
       </ScrollView>
     </View>
@@ -422,6 +463,42 @@ function AttendanceView({ classId }: { classId: string }) {
   const [records, setRecords] = useState<Record<string, AttendanceStatus>>({});
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [online, setOnline] = useState(isOnline());
+  const [offlineCount, setOfflineCount] = useState(0);
+
+  // Monitor network status on web browser
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const handleOnline = () => setOnline(true);
+      const handleOffline = () => setOnline(false);
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+      return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      };
+    }
+  }, []);
+
+  // Update offline count and handle auto-flush
+  const updateOfflineCount = () => {
+    offlineQueue.getQueue().then((q) => setOfflineCount(q.length));
+  };
+
+  useEffect(() => {
+    updateOfflineCount();
+  }, [submitted]);
+
+  useEffect(() => {
+    if (online) {
+      offlineQueue.flush(api.attendanceMark).then(({ success }) => {
+        if (success > 0) {
+          qc.invalidateQueries({ queryKey: ['sessions'] });
+          updateOfflineCount();
+        }
+      });
+    }
+  }, [online]);
 
   const students = useQuery({
     queryKey: ['classStudents', classId],
@@ -433,17 +510,49 @@ function AttendanceView({ classId }: { classId: string }) {
     onSuccess: (session) => {
       setSessionId(session.id);
       const initial: Record<string, AttendanceStatus> = {};
-      students.data?.forEach((st) => { initial[st.id] = 'present'; });
+      const studentList = students.data?.data ?? students.data ?? [];
+      studentList.forEach((st) => { initial[st.id] = 'present'; });
       setRecords(initial);
     },
   });
 
   const markAttendance = useMutation({
-    mutationFn: () =>
-      api.attendanceMark(sessionId!, {
+    mutationFn: async () => {
+      const payload = {
         idempotencyKey: `${classId}-${todayIsoDate()}`,
         records: Object.entries(records).map(([studentId, status]) => ({ studentId, status })),
-      }),
+      };
+
+      if (!online) {
+        await offlineQueue.enqueue({
+          sessionId: sessionId!,
+          records: payload.records,
+          idempotencyKey: payload.idempotencyKey,
+          timestamp: Date.now(),
+        });
+        return { offline: true };
+      }
+
+      try {
+        const res = await api.attendanceMark(sessionId!, payload);
+        return res;
+      } catch (err: unknown) {
+        const isNetworkError =
+          err instanceof TypeError ||
+          (err instanceof ApiError && err.status === 0) ||
+          (err instanceof Error && err.message.includes('fetch'));
+        if (isNetworkError) {
+          await offlineQueue.enqueue({
+            sessionId: sessionId!,
+            records: payload.records,
+            idempotencyKey: payload.idempotencyKey,
+            timestamp: Date.now(),
+          });
+          return { offline: true };
+        }
+        throw err;
+      }
+    },
     onSuccess: () => {
       setSubmitted(true);
       qc.invalidateQueries({ queryKey: ['sessions'] });
@@ -454,14 +563,20 @@ function AttendanceView({ classId }: { classId: string }) {
   const absentCount = Object.values(records).filter((v) => v === 'absent').length;
 
   if (submitted) {
+    const isOfflineSave = markAttendance.data && 'offline' in markAttendance.data;
     return (
       <View style={[s.card, { alignItems: 'center', padding: 32 }]}>
-        <Text style={{ fontSize: 40, marginBottom: 16 }}>✅</Text>
-        <Text style={s.successTitle}>Attendance Saved</Text>
-        <Text style={s.successSub}>{presentCount} present · {absentCount} absent</Text>
+        <Text style={{ fontSize: 40, marginBottom: 16 }}>{isOfflineSave ? '💾' : '✅'}</Text>
+        <Text style={s.successTitle}>{isOfflineSave ? 'Saved Offline' : 'Attendance Saved'}</Text>
+        <Text style={[s.successSub, { marginBottom: 12 }]}>{presentCount} present · {absentCount} absent</Text>
+        {isOfflineSave && (
+          <Banner tone="warning">
+            Saved locally. Will sync automatically when connection is restored.
+          </Banner>
+        )}
         <Pressable
           accessibilityRole="button"
-          style={s.outlineBtn}
+          style={[s.outlineBtn, { marginTop: 16 }]}
           onPress={() => { setSubmitted(false); setSessionId(null); setRecords({}); }}
         >
           <Text style={s.outlineBtnText}>Start New Session</Text>
@@ -473,14 +588,21 @@ function AttendanceView({ classId }: { classId: string }) {
   if (!sessionId) {
     return (
       <View style={s.card}>
+        {offlineCount > 0 && (
+          <View style={{ marginBottom: 12 }}>
+            <Banner tone="warning">
+              ⚠️ {offlineCount} session{offlineCount > 1 ? 's' : ''} saved offline. {online ? 'Syncing...' : 'Will sync when connection is restored.'}
+            </Banner>
+          </View>
+        )}
         <Text style={s.subViewTitle}>Take Attendance</Text>
         <Text style={s.subViewSub}>
-          {students.isLoading ? 'Loading students...' : `${students.data?.length ?? 0} students enrolled`}
+          {students.isLoading ? 'Loading students...' : `${(students.data?.data ?? students.data ?? []).length} students enrolled`}
         </Text>
         <Pressable
           accessibilityRole="button"
-          style={[s.startBtn, (!students.data?.length || createSession.isPending) && { opacity: 0.5 }]}
-          disabled={!students.data?.length || createSession.isPending}
+          style={[s.startBtn, (!(students.data?.data ?? students.data ?? []).length || createSession.isPending) && { opacity: 0.5 }]}
+          disabled={!(students.data?.data ?? students.data ?? []).length || createSession.isPending}
           onPress={() => createSession.mutate()}
         >
           {createSession.isPending
@@ -497,17 +619,17 @@ function AttendanceView({ classId }: { classId: string }) {
       <View style={s.statsRow}>
         <StatPill value={presentCount} label="Present" />
         <StatPill value={absentCount} label="Absent" />
-        <StatPill value={students.data?.length ?? 0} label="Total" />
+        <StatPill value={(students.data?.data ?? students.data ?? []).length} label="Total" />
       </View>
 
       {/* Donut Chart */}
       <View style={{ alignItems: 'center', marginVertical: 16 }}>
-        <DonutChart3D value={students.data?.length ? Math.round((presentCount / students.data.length) * 100) : 0} />
+        <DonutChart3D value={(students.data?.data ?? students.data ?? []).length ? Math.round((presentCount / (students.data?.data ?? students.data ?? []).length) * 100) : 0} />
       </View>
 
       {/* Student rows */}
       <View style={s.studentList}>
-        {students.data?.map((student) => (
+        {(students.data?.data ?? students.data ?? []).map((student: any) => (
           <StudentRow
             key={student.id}
             name={student.name}
@@ -638,7 +760,7 @@ function StudentsView({ classId }: { classId: string }) {
 
       {students.isLoading ? (
         <ActivityIndicator color={colors.teal} style={{ marginTop: 24 }} />
-      ) : students.data?.length === 0 ? (
+      ) : (students.data?.data ?? students.data ?? []).length === 0 ? (
         <View style={[s.card, { alignItems: 'center', padding: 24 }]}>
           <Text style={{ fontSize: 32, marginBottom: 8 }}>👥</Text>
           <Text style={{ color: colors.teal, fontSize: 13, textAlign: 'center' }}>
@@ -647,7 +769,7 @@ function StudentsView({ classId }: { classId: string }) {
         </View>
       ) : (
         <View style={s.studentList}>
-          {students.data?.map((student) => (
+          {(students.data?.data ?? students.data ?? []).map((student: any) => (
             <View key={student.id} style={s.studentRow}>
               <View style={s.studentInfo}>
                 <View style={s.studentAvatar}>
@@ -706,6 +828,178 @@ function InviteView() {
             ? <ActivityIndicator color={colors.white} />
             : <Text style={s.startBtnText}>GENERATE INVITE LINK</Text>}
         </Pressable>
+      )}
+    </View>
+  );
+}
+
+// ─── S21: Schedule View ──────────────────────────────────────────────────────────
+
+function ScheduleView({ classId }: { classId: string }) {
+  const qc = useQueryClient();
+  const [showAdd, setShowAdd] = useState(false);
+  const [day, setDay] = useState<string>('monday');
+  const [startTime, setStartTime] = useState('09:00');
+  const [endTime, setEndTime] = useState('10:00');
+  const [error, setError] = useState<string | null>(null);
+
+  const schedules = useQuery({
+    queryKey: ['classSchedules', classId],
+    queryFn: () => api.schedules(classId),
+  });
+
+  const addSchedule = useMutation({
+    mutationFn: () =>
+      api.scheduleCreate({
+        classId,
+        dayOfWeek: day,
+        startTime,
+        endTime,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['classSchedules', classId] });
+      setShowAdd(false);
+      setError(null);
+    },
+    onError: (err: any) => {
+      setError(err?.message || 'Failed to create schedule');
+    },
+  });
+
+  const days = [
+    { value: 'monday', label: 'M' },
+    { value: 'tuesday', label: 'T' },
+    { value: 'wednesday', label: 'W' },
+    { value: 'thursday', label: 'T' },
+    { value: 'friday', label: 'F' },
+    { value: 'saturday', label: 'S' },
+    { value: 'sunday', label: 'S' },
+  ];
+
+  const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
+
+  // Simple validation
+  const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const isValid = timePattern.test(startTime) && timePattern.test(endTime);
+
+  return (
+    <View>
+      {showAdd ? (
+        <Card style={{ marginBottom: 12, padding: 18, borderRadius: 16 }}>
+          <Text style={s.formTitle}>Add Schedule</Text>
+          {error && <Text style={{ color: colors.danger, fontSize: 13, marginBottom: 12 }}>⚠️ {error}</Text>}
+          
+          <Text style={s.formLabel}>SELECT DAY</Text>
+          <View style={{ flexDirection: 'row', gap: 6, marginBottom: 16 }}>
+            {days.map((d) => {
+              const active = day === d.value;
+              return (
+                <Pressable
+                  key={d.value}
+                  accessibilityRole="button"
+                  onPress={() => setDay(d.value)}
+                  style={[{
+                    flex: 1,
+                    height: 40,
+                    borderRadius: 20,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderWidth: 1.5,
+                  }, active ? {
+                    backgroundColor: colors.navy,
+                    borderColor: colors.navy,
+                  } : {
+                    backgroundColor: colors.white,
+                    borderColor: colors.sky,
+                  }]}
+                >
+                  <Text style={[{ fontSize: 13, fontWeight: '700' }, active ? { color: colors.white } : { color: colors.teal }]}>
+                    {d.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+            <View style={{ flex: 1 }}>
+              <Field
+                label="START TIME"
+                placeholder="09:00"
+                value={startTime}
+                onChangeText={(text) => {
+                  setStartTime(text);
+                  setError(null);
+                }}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Field
+                label="END TIME"
+                placeholder="10:00"
+                value={endTime}
+                onChangeText={(text) => {
+                  setEndTime(text);
+                  setError(null);
+                }}
+              />
+            </View>
+          </View>
+
+          <View style={s.formButtons}>
+            <Button variant="ghost" onPress={() => setShowAdd(false)} style={{ flex: 1 }}>
+              Cancel
+            </Button>
+            <Button
+              onPress={() => {
+                if (!isValid) {
+                  setError('Invalid time format (use HH:MM e.g. 09:00)');
+                  return;
+                }
+                addSchedule.mutate();
+              }}
+              disabled={!startTime || !endTime}
+              loading={addSchedule.isPending}
+              style={{ flex: 1 }}
+            >
+              Add Time
+            </Button>
+          </View>
+        </Card>
+      ) : (
+        <Pressable accessibilityRole="button" style={[s.newClassButton, { marginBottom: 12 }]} onPress={() => setShowAdd(true)}>
+          <Plus size={16} color={colors.white} />
+          <Text style={s.newClassText}>Add Schedule</Text>
+        </Pressable>
+      )}
+
+      {schedules.isLoading ? (
+        <ActivityIndicator color={colors.teal} style={{ marginTop: 24 }} />
+      ) : !schedules.data || schedules.data.length === 0 ? (
+        <View style={[s.card, { alignItems: 'center', padding: 24 }]}>
+          <Text style={{ fontSize: 32, marginBottom: 8 }}>📅</Text>
+          <Text style={{ color: colors.teal, fontSize: 13, textAlign: 'center' }}>
+            No schedules defined yet. Set up class times above.
+          </Text>
+        </View>
+      ) : (
+        <View style={{ gap: 10 }}>
+          {schedules.data.map((schedule) => (
+            <View key={schedule.id} style={[s.classCard, { marginHorizontal: 0, marginBottom: 0 }]}>
+              <View style={s.classCardLeft}>
+                <View style={s.classIconBox}>
+                  <Text style={{ fontSize: 16 }}>⏰</Text>
+                </View>
+                <View>
+                  <Text style={s.className}>{capitalize(schedule.dayOfWeek)}</Text>
+                  <Text style={s.classSub}>
+                    {schedule.startTime} – {schedule.endTime}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
       )}
     </View>
   );
@@ -780,14 +1074,14 @@ function AnnounceTab() {
         </Pressable>
       )}
 
-      {announcements.data?.map((ann) => (
+      {(announcements.data?.data ?? announcements.data ?? []).map((ann: any) => (
         <View key={ann.id} style={[s.card, { marginBottom: 12 }, ann.isPinned && { borderColor: colors.teal }]}>
           {ann.isPinned && <Text style={s.pinnedTag}>📌 PINNED</Text>}
           <Text style={s.announcementTitle}>{ann.title}</Text>
           <Text style={s.announcementBody}>{ann.body}</Text>
         </View>
       ))}
-      {!announcements.data?.length && !showCreate && (
+      {!(announcements.data?.data ?? announcements.data ?? []).length && !showCreate && (
         <View style={[s.card, { alignItems: 'center', padding: 24 }]}>
           <Text style={{ fontSize: 32, marginBottom: 8 }}>📣</Text>
           <Text style={{ color: colors.teal, fontSize: 13, textAlign: 'center' }}>
@@ -815,18 +1109,19 @@ function ProfileTab({ tenantName, onLogout }: { tenantName: string; onLogout: ()
   });
 
   return (
-    <ScrollView style={s.tabContent} showsVerticalScrollIndicator={false}>
-      <Card>
-        <Text style={s.sectionTitle}>INSTITUTION</Text>
+    <ScrollView style={s.tabContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
+      {/* Institution Details Card */}
+      <Text style={[s.sectionTitle, { marginBottom: 8, marginLeft: 4 }]}>Institution</Text>
+      <Card style={{ marginBottom: 16, borderRadius: 16, padding: 18 }}>
         {editing ? (
           <>
             <Field
-              label="NAME"
+              label="INSTITUTION NAME"
               value={newName}
               onChangeText={setNewName}
               autoFocus
             />
-            <View style={s.formButtons}>
+            <View style={[s.formButtons, { marginTop: 12 }]}>
               <Button variant="ghost" onPress={() => { setEditing(false); setNewName(tenantName); }} style={{ flex: 1 }}>
                 Cancel
               </Button>
@@ -841,17 +1136,48 @@ function ProfileTab({ tenantName, onLogout }: { tenantName: string; onLogout: ()
             </View>
           </>
         ) : (
-          <Pressable accessibilityRole="button" style={s.profileRow} onPress={() => setEditing(true)}>
-            <Text style={s.profileValue}>{tenantName}</Text>
-            <Text style={s.profileEdit}>Edit →</Text>
-          </Pressable>
+          <>
+            <Pressable accessibilityRole="button" style={[s.profileRow, { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.sky }]} onPress={() => setEditing(true)}>
+              <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>Name</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={s.profileValue}>{tenantName}</Text>
+                <Text style={s.profileEdit}>Edit</Text>
+              </View>
+            </Pressable>
+
+            <View style={[s.profileRow, { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.sky }]}>
+              <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>Type</Text>
+              <Text style={s.profileValue}>Educational Hub</Text>
+            </View>
+
+            <View style={[s.profileRow, { paddingVertical: 10 }]}>
+              <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>Role</Text>
+              <Text style={s.profileValue}>Teacher Account</Text>
+            </View>
+          </>
         )}
+      </Card>
+
+      {/* Account Details Card */}
+      <Text style={[s.sectionTitle, { marginBottom: 8, marginLeft: 4 }]}>Account Details</Text>
+      <Card style={{ marginBottom: 20, borderRadius: 16, padding: 18 }}>
+        <View style={[s.profileRow, { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.sky }]}>
+          <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>Status</Text>
+          <Text style={s.profileValue}>Active Session</Text>
+        </View>
+
+        <View style={[s.profileRow, { paddingVertical: 10 }]}>
+          <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>Verification</Text>
+          <View style={s.statusSuccess}>
+            <Text style={{ color: '#15803D', fontSize: 9, fontWeight: '900', letterSpacing: 0.5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>VERIFIED CORE</Text>
+          </View>
+        </View>
       </Card>
 
       <Button
         variant="danger"
         onPress={onLogout}
-        style={{ marginTop: 20 }}
+        style={{ borderRadius: 12 }}
       >
         Log Out
       </Button>

@@ -4,6 +4,8 @@ export interface JWTPayload {
   tenantId: string;
   role: string;
   plan: string;
+  activeTenantId?: string;
+  tenants?: { tenantId: string; role: string; status: string }[];
 }
 
 // ─── API Response Envelope ───
@@ -68,6 +70,7 @@ export interface OTPSendResponse {
   expiresIn: number; // seconds
 }
 
+// FIX: Parents cannot join multiple tenants — breaks multi-school families
 export interface OTPVerifyResponse {
   accessToken: string;
   refreshToken: string;
@@ -75,6 +78,12 @@ export interface OTPVerifyResponse {
     id: string;
     role: string;
     tenantId: string;
+    tenants?: {
+      tenantId: string;
+      role: string;
+      status: string;
+      tenantName: string;
+    }[];
   };
   isNewUser: boolean;
 }
@@ -196,9 +205,25 @@ export interface AnnouncementResponse {
   updatedAt: Date;
 }
 
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: PaginationMeta;
+}
+
 export interface ParentFeedResponse {
   announcements: AnnouncementResponse[];
+  meta?: PaginationMeta;
   unread: number;
   total: number;
 }
+
 

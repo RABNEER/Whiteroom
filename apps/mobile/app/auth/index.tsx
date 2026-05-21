@@ -27,7 +27,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { api, ApiError } from '@/api/client';
 import { useSession } from '@/auth/session-store';
-import { colors, spacing, radius } from '@/theme/tokens';
+import { colors, spacing } from '@/theme/tokens';
 import LogoImage from '../../src/assets/logo.png';
 
 type Step = 'SPLASH' | 'WELCOME' | 'PHONE' | 'OTP' | 'CONSENT' | 'ROLE_SELECT';

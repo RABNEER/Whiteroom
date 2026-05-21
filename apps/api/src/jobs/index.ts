@@ -19,6 +19,7 @@ export async function startJobs() {
 
   await Promise.all([
     boss.createQueue("attendance-reminder"),
+    boss.createQueue("attendance-auto-close"),
     boss.createQueue("absent-follow-up"),
     boss.createQueue("subscription-expiry"),
   ]);

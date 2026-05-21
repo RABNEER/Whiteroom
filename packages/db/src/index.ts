@@ -15,7 +15,8 @@ export { notifications } from "./schema/notifications.js";
 export { deviceTokens } from "./schema/device-tokens.js";
 export { consentLogs } from "./schema/consent-logs.js";
 export { subscriptions } from "./schema/subscriptions.js";
-export { otpAttempts } from "./schema/otp-attempts.js";
+export { otpAttempts, otpLockouts } from "./schema/otp-attempts.js";
+export { userTenants } from "./schema/user-tenants.js";
 export { reportsCache } from "./schema/reports-cache.js";
 export { idempotencyKeys } from "./schema/idempotency-keys.js";
 

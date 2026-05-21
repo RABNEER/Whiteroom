@@ -20,11 +20,40 @@ export async function createClass(
   return created!;
 }
 
-export async function listClasses(tenantId: string) {
-  return db
-    .select()
+export async function listClasses(
+  tenantId: string,
+  options?: { page?: number; limit?: number }
+) {
+  // FIX: No pagination on list endpoints — will OOM at 1000+ students
+  const page = Math.max(1, options?.page ?? 1);
+  const limit = Math.min(100, Math.max(1, options?.limit ?? 20));
+  const offset = (page - 1) * limit;
+
+  const [totalResult] = await db
+    .select({ total: count() })
     .from(classes)
     .where(and(eq(classes.tenantId, tenantId), isNull(classes.deletedAt)));
+
+  const total = totalResult?.total ?? 0;
+
+  const data = await db
+    .select()
+    .from(classes)
+    .where(and(eq(classes.tenantId, tenantId), isNull(classes.deletedAt)))
+    .limit(limit)
+    .offset(offset);
+
+  return {
+    data,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrev: page > 1,
+    },
+  };
 }
 
 export async function getActiveClass(tenantId: string, classId: string) {
@@ -127,10 +156,33 @@ export async function enrollStudents(
   };
 }
 
-export async function listClassStudents(tenantId: string, classId: string) {
+export async function listClassStudents(
+  tenantId: string,
+  classId: string,
+  options?: { page?: number; limit?: number }
+) {
   await getActiveClass(tenantId, classId);
 
-  return db
+  // FIX: No pagination on list endpoints — will OOM at 1000+ students
+  const page = Math.max(1, options?.page ?? 1);
+  const limit = Math.min(100, Math.max(1, options?.limit ?? 20));
+  const offset = (page - 1) * limit;
+
+  const [totalResult] = await db
+    .select({ total: count() })
+    .from(classEnrollments)
+    .innerJoin(students, eq(classEnrollments.studentId, students.id))
+    .where(
+      and(
+        eq(classEnrollments.classId, classId),
+        eq(students.tenantId, tenantId),
+        isNull(students.deletedAt)
+      )
+    );
+
+  const total = totalResult?.total ?? 0;
+
+  const data = await db
     .select({
       id: students.id,
       tenantId: students.tenantId,
@@ -150,7 +202,22 @@ export async function listClassStudents(tenantId: string, classId: string) {
         eq(students.tenantId, tenantId),
         isNull(students.deletedAt)
       )
-    );
+    )
+    .orderBy(students.name)
+    .limit(limit)
+    .offset(offset);
+
+  return {
+    data,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrev: page > 1,
+    },
+  };
 }
 
 export async function removeStudentFromClass(

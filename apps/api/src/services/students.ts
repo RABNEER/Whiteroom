@@ -1,7 +1,7 @@
 import { db } from "../lib/db.js";
 import { classEnrollments, classes, parentProfiles, students } from "@whiteroom/db";
 import { Errors } from "@whiteroom/shared";
-import { and, eq, isNull } from "@whiteroom/db";
+import { and, eq, isNull, count, sql } from "@whiteroom/db";
 
 export async function createStudent(
   tenantId: string,
@@ -20,11 +20,36 @@ export async function createStudent(
   return created!;
 }
 
-export async function listStudents(tenantId: string) {
-  return db
-    .select()
+export async function listStudents(
+  tenantId: string,
+  options?: { page?: number; limit?: number }
+) {
+  const page = Math.max(1, options?.page ?? 1);
+  const limit = Math.min(100, Math.max(1, options?.limit ?? 50));
+  const offset = (page - 1) * limit;
+
+  const [totalResult] = await db
+    .select({ total: count() })
     .from(students)
     .where(and(eq(students.tenantId, tenantId), isNull(students.deletedAt)));
+
+  const data = await db
+    .select()
+    .from(students)
+    .where(and(eq(students.tenantId, tenantId), isNull(students.deletedAt)))
+    .orderBy(students.name)
+    .limit(limit)
+    .offset(offset);
+
+  return {
+    data,
+    meta: {
+      total: totalResult?.total ?? 0,
+      page,
+      limit,
+      pages: Math.ceil((totalResult?.total ?? 0) / limit),
+    },
+  };
 }
 
 export async function getStudent(tenantId: string, studentId: string) {

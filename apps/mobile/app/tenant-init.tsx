@@ -16,7 +16,7 @@ import { router } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Upload, Lock, Globe, Shield, Check, ArrowRight } from 'lucide-react-native';
 import { api, ApiError } from '@/api/client';
-import { colors, spacing } from '@/theme/tokens';
+import { colors, font } from '@/theme/tokens';
 
 // ─── S7 / S8 / S9: Tenant Initialization Screen ──────────────────────────────
 
@@ -25,8 +25,16 @@ export default function TenantInitScreen() {
   const [name, setName] = useState('');
   const [publicSearch, setPublicSearch] = useState(false);
 
+  const showProAlert = (featureName: string) => {
+    Alert.alert(
+      'PRO Feature Required',
+      `Custom ${featureName} is locked to Whiteroom PRO. Upgrade to personalize your institution's theme.`,
+      [{ text: 'OK' }]
+    );
+  };
+
   const initMutation = useMutation({
-    mutationFn: () => api.tenantUpdate({ name: name.trim() }),
+    mutationFn: () => api.tenantUpdate({ name: name.trim(), publicSearch }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tenant'] });
       qc.invalidateQueries({ queryKey: ['classes'] });
@@ -86,6 +94,7 @@ export default function TenantInitScreen() {
                 autoCapitalize="words"
                 returnKeyType="done"
                 accessibilityLabel="Institution name input"
+                maxLength={100}
               />
             </View>
 
@@ -97,13 +106,19 @@ export default function TenantInitScreen() {
                   <Text style={styles.proText}>PRO</Text>
                 </View>
               </View>
-              <View style={[styles.uploadBox, { opacity: 0.5 }]}>
+              <Pressable
+                onPress={() => showProAlert('Logo Upload')}
+                style={({ pressed }) => [
+                  styles.uploadBox,
+                  { opacity: pressed ? 0.3 : 0.5 }
+                ]}
+              >
                 <Upload size={20} color={colors.teal} />
                 <Text style={styles.uploadText}>Upload logo image (.png / .jpg)</Text>
                 <View style={styles.lockIcon}>
                   <Lock size={12} color={colors.teal} />
                 </View>
-              </View>
+              </Pressable>
             </View>
 
             {/* Primary Brand Color — PRO Locked */}
@@ -116,13 +131,25 @@ export default function TenantInitScreen() {
               </View>
               <View style={styles.colorRow}>
                 {/* Active/selected: navy with teal border + check */}
-                <View style={[styles.colorCircle, { backgroundColor: colors.navy, borderColor: colors.teal, borderWidth: 2 }]}>
+                <Pressable
+                  onPress={() => showProAlert('Brand Color')}
+                  style={[styles.colorCircle, { backgroundColor: colors.navy, borderColor: colors.teal, borderWidth: 2 }]}
+                >
                   <Check size={16} color={colors.white} />
-                </View>
+                </Pressable>
                 {/* Locked options */}
-                <View style={[styles.colorCircle, { backgroundColor: '#4F46E5', opacity: 0.4 }]} />
-                <View style={[styles.colorCircle, { backgroundColor: '#06B6D4', opacity: 0.4 }]} />
-                <View style={[styles.colorCircle, { backgroundColor: '#10B981', opacity: 0.4 }]} />
+                <Pressable
+                  onPress={() => showProAlert('Brand Color')}
+                  style={({ pressed }) => [styles.colorCircle, { backgroundColor: '#4F46E5', opacity: pressed ? 0.2 : 0.4 }]}
+                />
+                <Pressable
+                  onPress={() => showProAlert('Brand Color')}
+                  style={({ pressed }) => [styles.colorCircle, { backgroundColor: '#06B6D4', opacity: pressed ? 0.2 : 0.4 }]}
+                />
+                <Pressable
+                  onPress={() => showProAlert('Brand Color')}
+                  style={({ pressed }) => [styles.colorCircle, { backgroundColor: '#10B981', opacity: pressed ? 0.2 : 0.4 }]}
+                />
               </View>
             </View>
           </View>
@@ -296,7 +323,7 @@ const styles = StyleSheet.create({
   proText: {
     color: colors.white,
     fontSize: 9,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontFamily: font.mono,
     fontWeight: '900',
   },
 

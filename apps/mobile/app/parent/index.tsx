@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Bell,
@@ -27,7 +27,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, ApiError } from '@/api/client';
 import { useSession } from '@/auth/session-store';
-import { colors, spacing } from '@/theme/tokens';
+import { colors } from '@/theme/tokens';
 import { formatDate } from '@/utils/format';
 import {
   AppHeader,
@@ -37,7 +37,6 @@ import {
   SiblingDrawer,
   Card,
   Banner,
-  Field,
   Button,
   Eyebrow,
   DisplayTitle,
@@ -77,11 +76,52 @@ export default function ParentScreen() {
   const [isSiblingDrawerOpen, setIsSiblingDrawerOpen] = useState(false);
 
   const clear = useSession((s) => s.clear);
+  const setSession = useSession((s) => s.setSession);
+  const queryClient = useQueryClient();
   const tenant = useQuery({ queryKey: ['tenant'], queryFn: api.tenantMe });
   const children = useQuery({ queryKey: ['parentChildren'], queryFn: api.parentChildren });
 
   const logout = useMutation({
-    mutationFn: api.logout,
+    mutationFn: async () => {
+      let fcmToken: string | undefined;
+      try {
+        const Notifications = require("expo-notifications");
+        const token = await Notifications.getDevicePushTokenAsync();
+        fcmToken = token.data;
+      } catch {
+        // Ignored if notifications not available
+      }
+      
+      await api.logout(fcmToken);
+
+      // FIX: FCM tokens not deleted on logout — notifications sent to old devices
+      try {
+        const messaging = require("@react-native-firebase/messaging");
+        if (typeof messaging === "function") {
+          await messaging().deleteToken();
+        } else if (messaging && typeof messaging.default === "function") {
+          await messaging.default().deleteToken();
+        }
+      } catch {
+        // Ignored if Firebase Messaging is not installed
+      }
+
+      try {
+        const AsyncStorage = require("@react-native-async-storage/async-storage");
+        if (AsyncStorage && typeof AsyncStorage.clear === "function") {
+          await AsyncStorage.clear();
+        }
+      } catch {
+        // Ignored if AsyncStorage is not installed
+      }
+
+      const { Platform } = require("react-native");
+      if (Platform.OS === "web") {
+        try {
+          globalThis.localStorage?.clear();
+        } catch {}
+      }
+    },
     onSettled: async () => {
       await clear();
       router.replace('/auth');
@@ -166,7 +206,6 @@ export default function ParentScreen() {
           <ProfileTab
             childrenList={childrenData}
             selectedChild={selectedChild}
-            onSelectChild={setSelectedChildId}
             onSelectChildPress={() => setIsSiblingDrawerOpen(true)}
             onLogout={() => {
               Alert.alert('Log Out', 'Are you sure you want to log out?', [
@@ -199,9 +238,26 @@ export default function ParentScreen() {
                 key={child.id}
                 accessibilityRole="button"
                 style={[s.siblingItem, active && { borderColor: colors.navy, borderWidth: 2 }]}
-                onPress={() => {
+                onPress={async () => {
                   setSelectedChildId(child.id);
                   setIsSiblingDrawerOpen(false);
+
+                  // FIX: Parents cannot join multiple tenants — breaks multi-school families
+                  const targetTenantId = child.tenantId;
+                  const currentTenantId = tenant.data?.id;
+
+                  if (targetTenantId && currentTenantId && targetTenantId !== currentTenantId) {
+                    try {
+                      const result = await api.switchTenant(targetTenantId);
+                      await setSession(result);
+                      await queryClient.invalidateQueries();
+                    } catch (err: unknown) {
+                      Alert.alert(
+                        'Error',
+                        err instanceof ApiError ? err.message : 'Failed to switch school tenant.'
+                      );
+                    }
+                  }
                 }}
               >
                 <AvatarBadge label={child.name} />
@@ -315,7 +371,8 @@ function AttendTab({
     enabled: Boolean(selectedChild?.id),
   });
 
-  const logs = attendance.data ?? [];
+  // FIX: No pagination on list endpoints — will OOM at 1000+ students
+  const logs = attendance.data?.data ?? (Array.isArray(attendance.data) ? attendance.data : []);
   const presentCount = logs.filter((l) => l.status === 'present').length;
   const absentCount = logs.filter((l) => l.status === 'absent').length;
   const total = logs.length;
@@ -327,21 +384,29 @@ function AttendTab({
       <Text style={[s.pageSub, { marginBottom: 16 }]}>Real-time session logs</Text>
 
       {/* Overall score banner with LayeredChart */}
-      <HeroPanel compact>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-          <View style={{ flex: 1 }}>
-            <Eyebrow style={{ color: colors.sky }}>OVERALL ATTENDANCE</Eyebrow>
-            <DisplayTitle size="lg" accent="%" style={{ color: colors.white }}>{percentage}</DisplayTitle>
-            <Muted style={{ color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
-              {presentCount} Present · {absentCount} Absent
-            </Muted>
+      <View style={{ marginBottom: 20 }}>
+        <HeroPanel compact>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <View style={{ flex: 1 }}>
+              <Eyebrow style={{ color: colors.sky }}>OVERALL ATTENDANCE</Eyebrow>
+              <DisplayTitle size="lg" accent="%" style={{ color: colors.white }}>{percentage}</DisplayTitle>
+              <Muted style={{ color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
+                {presentCount} Present · {absentCount} Absent
+              </Muted>
+            </View>
+            <LayeredChart
+              value={percentage}
+              size={110}
+              strokeWidth={16}
+              strokeColor={colors.white}
+              bgColor="rgba(255, 255, 255, 0.2)"
+            />
           </View>
-          <LayeredChart value={percentage} size={110} strokeWidth={16} />
-        </View>
-      </HeroPanel>
+        </HeroPanel>
+      </View>
 
       {/* Stats row with MetricCard */}
-      <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+      <View style={{ flexDirection: 'row', gap: 14, marginBottom: 20 }}>
         <MetricCard label="Present" value={presentCount} tone="success" />
         <MetricCard label="Absent" value={absentCount} tone="danger" />
         <MetricCard label="Total" value={total} tone="primary" />
@@ -405,7 +470,8 @@ function ChildAttendDetail({
     enabled: Boolean(selectedChild?.id),
   });
 
-  const logs = attendance.data ?? [];
+  // FIX: No pagination on list endpoints — will OOM at 1000+ students
+  const logs = attendance.data?.data ?? (Array.isArray(attendance.data) ? attendance.data : []);
 
   return (
     <ScrollView style={s.tabContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
@@ -544,7 +610,8 @@ function ChildClassDetail({
     enabled: Boolean(selectedChild?.id && classId),
   });
 
-  const logs = attendance.data ?? [];
+  // FIX: No pagination on list endpoints — will OOM at 1000+ students
+  const logs = attendance.data?.data ?? (Array.isArray(attendance.data) ? attendance.data : []);
   const presentCount = logs.filter((l) => l.status === 'present').length;
   const absentCount = logs.filter((l) => l.status === 'absent').length;
 
@@ -638,34 +705,32 @@ function ChildClassDetail({
 function ProfileTab({
   childrenList,
   selectedChild,
-  onSelectChild,
   onSelectChildPress,
   onLogout,
 }: {
   childrenList: ChildItem[];
   selectedChild: ChildItem | undefined;
-  onSelectChild: (id: string) => void;
   onSelectChildPress: () => void;
   onLogout: () => void;
 }) {
   return (
     <ScrollView style={s.tabContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
 
-      {/* Active Child */}
-      <Card style={{ marginBottom: 16 }}>
-        <Eyebrow>ACTIVE CHILD</Eyebrow>
+      {/* Active Child Card */}
+      <Card style={{ marginBottom: 16, borderRadius: 16 }}>
+        <Eyebrow style={{ color: colors.teal, marginBottom: 8 }}>Active Child</Eyebrow>
         {selectedChild ? (
           <Pressable
             accessibilityRole="button"
-            style={[s.siblingItem, { marginTop: 12 }]}
+            style={[s.siblingItem, { marginTop: 8, borderRadius: 12, borderWidth: 1, borderColor: colors.sky }]}
             onPress={onSelectChildPress}
           >
             <AvatarBadge label={selectedChild.name} />
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={s.siblingName}>{selectedChild.name}</Text>
-              {selectedChild.rollNumber
-                ? <Text style={s.classCardSub}>Roll {selectedChild.rollNumber}</Text>
-                : null}
+              {selectedChild.rollNumber ? (
+                <Text style={s.classCardSub}>Roll {selectedChild.rollNumber}</Text>
+              ) : null}
             </View>
             <View style={[s.badge, s.badgeDone]}>
               <Text style={[s.badgeText, s.badgeTextDone]}>Active</Text>
@@ -676,31 +741,41 @@ function ProfileTab({
             No children linked yet.
           </Text>
         )}
-        <Text style={{ color: colors.teal, fontSize: 11, textAlign: 'center', marginTop: 12 }}>
+        <Text style={{ color: colors.teal, fontSize: 11, textAlign: 'center', marginTop: 12, lineHeight: 16 }}>
           Tap the child card above or use the top-right header avatar to switch between registered siblings.
         </Text>
       </Card>
 
-      {/* Settings */}
-      <Text style={[s.sectionTitle, { marginBottom: 12 }]}>SETTINGS</Text>
-      <Card style={{ marginBottom: 16 }}>
+      {/* Settings Card */}
+      <Text style={[s.sectionTitle, { marginBottom: 8, marginLeft: 4 }]}>Settings</Text>
+      <Card style={{ marginBottom: 16, borderRadius: 16, paddingVertical: 8 }}>
         <ProfileLink icon={Bell} label="Alert Notifications" />
         <ProfileLink icon={Shield} label="Privacy & Data" last />
       </Card>
 
-      {/* Account */}
-      <Card style={{ marginBottom: 16 }}>
-        <Eyebrow>ACCOUNT TYPE</Eyebrow>
-        <View style={[s.profileRow, { marginTop: 8 }]}>
-          <Text style={s.profileValue}>Verified Family Account</Text>
+      {/* Account Details Card */}
+      <Text style={[s.sectionTitle, { marginBottom: 8, marginLeft: 4 }]}>Account Details</Text>
+      <Card style={{ marginBottom: 20, borderRadius: 16, padding: 18 }}>
+        <View style={[s.profileRow, { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.sky }]}>
+          <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>Account Type</Text>
+          <Text style={s.profileValue}>Family Account</Text>
+        </View>
+
+        <View style={[s.profileRow, { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.sky }]}>
+          <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>Verification</Text>
           <View style={s.activePill}>
             <Text style={s.activePillText}>SECURE OTP</Text>
           </View>
         </View>
+
+        <View style={[s.profileRow, { paddingVertical: 10 }]}>
+          <Text style={{ color: colors.teal, fontSize: 13, fontWeight: '600' }}>Linked Children</Text>
+          <Text style={s.profileValue}>{childrenList.length} Registered</Text>
+        </View>
       </Card>
 
-      {/* Logout using standard Button */}
-      <Button variant="danger" onPress={onLogout} style={{ marginTop: 8 }}>
+      {/* Logout button */}
+      <Button variant="danger" onPress={onLogout} style={{ borderRadius: 12 }}>
         Log Out
       </Button>
     </ScrollView>
@@ -708,15 +783,6 @@ function ProfileTab({
 }
 
 // ─── Helper Components ────────────────────────────────────────────────────────
-
-function StatPill({ value, label }: { value: number; label: string }) {
-  return (
-    <View style={s.statPill}>
-      <Text style={s.statNumber}>{value}</Text>
-      <Text style={s.statLabel}>{label}</Text>
-    </View>
-  );
-}
 
 function ProfileLink({ icon: Icon, label, last }: { icon: LucideIcon; label: string; last?: boolean }) {
   return (

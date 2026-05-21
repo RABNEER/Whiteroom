@@ -17,6 +17,7 @@ export async function createAttendanceSession(
   tenantId: string,
   input: { classId: string; date: string }
 ) {
+  // FIX: Teacher can create attendance session for another tenant's classroom
   const { classes } = await import("@whiteroom/db");
   const [classRow] = await db
     .select()
@@ -24,14 +25,17 @@ export async function createAttendanceSession(
     .where(
       and(
         eq(classes.id, input.classId),
-        eq(classes.tenantId, tenantId),
         isNull(classes.deletedAt)
       )
     )
     .limit(1);
 
   if (!classRow) {
-    throw Errors.notFound("Class");
+    throw Errors.notFound("Classroom");
+  }
+
+  if (classRow.tenantId !== tenantId) {
+    throw Errors.forbidden("You do not have access to this classroom");
   }
 
   const [enrolled] = await db
@@ -62,8 +66,36 @@ export async function createAttendanceSession(
 
 export async function listAttendanceSessions(
   tenantId: string,
-  filters: { classId?: string; date?: string }
+  filters: { classId?: string; date?: string; page?: number; limit?: number }
 ) {
+  // FIX: Teacher can create attendance session for another tenant's classroom
+  if (filters.classId) {
+    const { classes } = await import("@whiteroom/db");
+    const [classRow] = await db
+      .select()
+      .from(classes)
+      .where(
+        and(
+          eq(classes.id, filters.classId),
+          isNull(classes.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!classRow) {
+      throw Errors.notFound("Classroom");
+    }
+
+    if (classRow.tenantId !== tenantId) {
+      throw Errors.forbidden("You do not have access to this classroom");
+    }
+  }
+
+  // FIX: No pagination on list endpoints — will OOM at 1000+ students
+  const page = Math.max(1, filters.page ?? 1);
+  const limit = Math.min(100, Math.max(1, filters.limit ?? 20));
+  const offset = (page - 1) * limit;
+
   const conditions = [eq(attendanceSessions.tenantId, tenantId)];
 
   if (filters.classId) {
@@ -73,27 +105,48 @@ export async function listAttendanceSessions(
     conditions.push(eq(attendanceSessions.date, filters.date));
   }
 
-  return db
+  const [totalResult] = await db
+    .select({ total: count() })
+    .from(attendanceSessions)
+    .where(and(...conditions));
+
+  const total = totalResult?.total ?? 0;
+
+  const data = await db
     .select()
     .from(attendanceSessions)
     .where(and(...conditions))
-    .orderBy(desc(attendanceSessions.createdAt));
+    .orderBy(desc(attendanceSessions.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  return {
+    data,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrev: page > 1,
+    },
+  };
 }
 
 export async function getAttendanceSession(tenantId: string, sessionId: string) {
+  // FIX: Teacher can create attendance session for another tenant's classroom
   const [session] = await db
     .select()
     .from(attendanceSessions)
-    .where(
-      and(
-        eq(attendanceSessions.id, sessionId),
-        eq(attendanceSessions.tenantId, tenantId)
-      )
-    )
+    .where(eq(attendanceSessions.id, sessionId))
     .limit(1);
 
   if (!session) {
     throw Errors.notFound("Attendance session");
+  }
+
+  if (session.tenantId !== tenantId) {
+    throw Errors.forbidden("You do not have access to this attendance session");
   }
 
   const records = await db
@@ -162,15 +215,16 @@ export async function markAttendanceBatch(
       .select()
       .from(attendanceSessions)
       .where(
-        and(
-          eq(attendanceSessions.id, sessionId),
-          eq(attendanceSessions.tenantId, tenantId)
-        )
+        eq(attendanceSessions.id, sessionId)
       )
       .limit(1);
 
     if (!session) {
       throw Errors.notFound("Attendance session");
+    }
+
+    if (session.tenantId !== tenantId) {
+      throw Errors.forbidden("You do not have access to this attendance session");
     }
 
     const uniqueStudentIds = [...new Set(records.map((record) => record.studentId))];
@@ -273,13 +327,14 @@ export async function getStudentAttendanceHistory(
   studentId: string,
   filters?: { classId?: string; month?: string }
 ) {
+  // FIX: Teacher can create attendance session for another tenant's classroom
   const [student] = await db
-    .select({ id: students.id })
+    .select({ id: students.id, tenantId: students.tenantId })
     .from(students)
     .where(
       and(
         eq(students.id, studentId),
-        eq(students.tenantId, tenantId)
+        isNull(students.deletedAt)
       )
     )
     .limit(1);
@@ -287,6 +342,15 @@ export async function getStudentAttendanceHistory(
   if (!student) {
     throw Errors.notFound("Student");
   }
+
+  if (student.tenantId !== tenantId) {
+    throw Errors.forbidden("You do not have access to this student");
+  }
+
+  // FIX: No pagination on list endpoints — will OOM at 1000+ students
+  const page = Math.max(1, filters?.page ?? 1);
+  const limit = Math.min(100, Math.max(1, filters?.limit ?? 20));
+  const offset = (page - 1) * limit;
 
   const conditions = [
     eq(attendanceRecords.studentId, studentId),
@@ -297,7 +361,18 @@ export async function getStudentAttendanceHistory(
     conditions.push(eq(attendanceSessions.classId, filters.classId));
   }
 
-  return db
+  const [totalResult] = await db
+    .select({ total: count() })
+    .from(attendanceRecords)
+    .innerJoin(
+      attendanceSessions,
+      eq(attendanceRecords.sessionId, attendanceSessions.id)
+    )
+    .where(and(...conditions));
+
+  const total = totalResult?.total ?? 0;
+
+  const data = await db
     .select({
       id: attendanceRecords.id,
       sessionId: attendanceRecords.sessionId,
@@ -312,5 +387,19 @@ export async function getStudentAttendanceHistory(
       eq(attendanceRecords.sessionId, attendanceSessions.id)
     )
     .where(and(...conditions))
-    .orderBy(desc(attendanceSessions.date));
+    .orderBy(desc(attendanceSessions.date))
+    .limit(limit)
+    .offset(offset);
+
+  return {
+    data,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      hasNext: page * limit < total,
+      hasPrev: page > 1,
+    },
+  };
 }

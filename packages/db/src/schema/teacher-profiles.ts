@@ -7,7 +7,6 @@ export const teacherProfiles = pgTable("teacher_profiles", {
   id: text("id").primaryKey().$defaultFn(createId),
   userId: text("user_id")
     .notNull()
-    .unique()
     .references(() => users.id),
   tenantId: text("tenant_id")
     .notNull()

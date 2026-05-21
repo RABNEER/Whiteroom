@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { logger } from "hono/logger";
+import { bodyLimit } from "hono/body-limit";
 import { corsMiddleware } from "./middleware/cors.js";
 import { errorHandler } from "./middleware/error.js";
 import { env } from "./lib/env.js";
@@ -22,6 +23,29 @@ import { adminRoutes } from "./routes/admin/index.js";
 import { startJobs } from "./jobs/index.js";
 
 const app = new Hono();
+
+// FIX: No request body size limit
+app.use("*", (c, next) => {
+  if (c.req.path.startsWith("/api/upload/")) {
+    return next();
+  }
+  return bodyLimit({
+    maxSize: 1 * 1024 * 1024, // 1MB for all routes
+    onError: (c) => {
+      return c.json({ 
+        error: "Payload too large",
+        maxSize: "1MB" 
+      }, 413);
+    }
+  })(c, next);
+});
+
+app.use(
+  "/api/upload/*",
+  bodyLimit({
+    maxSize: 10 * 1024 * 1024 // 10MB for uploads only
+  })
+);
 
 // ─── Global Middleware ───
 app.use("*", logger());

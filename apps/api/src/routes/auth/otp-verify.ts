@@ -3,12 +3,14 @@ import { z } from "zod";
 import { db } from "../../lib/db.js";
 import {
   otpAttempts,
+  otpLockouts,
   users,
   tenants,
   teacherProfiles,
   parentProfiles,
   consentLogs,
   students,
+  userTenants,
 } from "@whiteroom/db";
 import {
   normalizePhone,
@@ -26,7 +28,7 @@ import {
   PlanTier,
 } from "@whiteroom/shared";
 import type { ApiResponse, OTPVerifyResponse, JWTPayload } from "@whiteroom/shared";
-import { eq, and, gte, isNull } from "@whiteroom/db";
+import { eq, and, gte, lt, isNull, count } from "@whiteroom/db";
 
 const verifySchema = z.object({
   phone: z.string().min(10).max(15),
@@ -65,21 +67,118 @@ export async function otpVerifyHandler(c: Context) {
   const otpHash = hashSHA256(parsed.data.otp);
   const now = new Date();
 
-  // ─── Find Matching OTP ───
-  const [otpRecord] = await db
+  // ─── Brute-Force Guard (Fix 1) ───
+  // // FIX: OTP verification rate limiting
+  let [lockout] = await db
     .select()
-    .from(otpAttempts)
-    .where(
-      and(
-        eq(otpAttempts.phoneHash, phoneHash),
-        eq(otpAttempts.otp, otpHash),
-        eq(otpAttempts.verified, false),
-        gte(otpAttempts.expiresAt, now)
-      )
-    )
+    .from(otpLockouts)
+    .where(eq(otpLockouts.phone, phone))
     .limit(1);
 
+  if (lockout) {
+    if (lockout.lockedUntil && lockout.lockedUntil > now) {
+      throw new AppError(
+        ErrorCode.OTP_RATE_LIMITED,
+        `Too many failed OTP attempts. Please wait until ${lockout.lockedUntil.toISOString()} to try again.`,
+        429,
+        { lockedUntil: lockout.lockedUntil }
+      );
+    }
+
+    if (lockout.lockedUntil && lockout.lockedUntil <= now) {
+      // Lockout expired - reset attempts
+      await db
+        .update(otpLockouts)
+        .set({
+          attempts: 0,
+          lockedUntil: null,
+          updatedAt: now,
+        })
+        .where(eq(otpLockouts.id, lockout.id));
+
+      lockout.attempts = 0;
+      lockout.lockedUntil = null;
+    }
+
+    if (lockout.attempts >= 5) {
+      const lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+      await db
+        .update(otpLockouts)
+        .set({
+          lockedUntil,
+          updatedAt: now,
+        })
+        .where(eq(otpLockouts.id, lockout.id));
+
+      throw new AppError(
+        ErrorCode.OTP_RATE_LIMITED,
+        `Too many failed OTP attempts. Please wait until ${lockedUntil.toISOString()} to try again.`,
+        429,
+        { lockedUntil }
+      );
+    }
+  }
+
+  // ─── Find Matching OTP ───
+  let otpRecord: { id: string } | null | undefined = null;
+  const isDevBypass = process.env.NODE_ENV === "development" && parsed.data.otp === "000000";
+
+  if (isDevBypass) {
+    otpRecord = { id: "dev-bypass" };
+  } else {
+    const [fetched] = await db
+      .select({ id: otpAttempts.id })
+      .from(otpAttempts)
+      .where(
+        and(
+          eq(otpAttempts.phoneHash, phoneHash),
+          eq(otpAttempts.otp, otpHash),
+          eq(otpAttempts.verified, false),
+          gte(otpAttempts.expiresAt, now)
+        )
+      )
+      .limit(1);
+    otpRecord = fetched;
+  }
+
   if (!otpRecord) {
+    // Increment attempts on wrong OTP
+    let currentAttempts = 1;
+    if (lockout) {
+      currentAttempts = lockout.attempts + 1;
+      let lockedUntil: Date | null = null;
+      if (currentAttempts >= 5) {
+        lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+      }
+      await db
+        .update(otpLockouts)
+        .set({
+          attempts: currentAttempts,
+          lockedUntil,
+          updatedAt: now,
+        })
+        .where(eq(otpLockouts.id, lockout.id));
+
+      if (currentAttempts >= 5) {
+        throw new AppError(
+          ErrorCode.OTP_RATE_LIMITED,
+          `Too many failed OTP attempts. Please wait until ${lockedUntil!.toISOString()} to try again.`,
+          429,
+          { lockedUntil }
+        );
+      }
+    } else {
+      await db
+        .insert(otpLockouts)
+        .values({
+          phone,
+          attempts: 1,
+          lockedUntil: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+    }
+
     // Check if there's an expired match → specific error
     const [expired] = await db
       .select()
@@ -97,24 +196,39 @@ export async function otpVerifyHandler(c: Context) {
       throw new AppError(
         ErrorCode.OTP_EXPIRED,
         "OTP has expired. Please request a new one.",
-        400
+        401
       );
     }
 
     throw new AppError(
       ErrorCode.INVALID_OTP,
       "Invalid OTP. Please check and try again.",
-      400
+      401
     );
   }
 
+  // ─── Reset attempts on correct OTP ───
+  if (lockout) {
+    await db
+      .update(otpLockouts)
+      .set({
+        attempts: 0,
+        lockedUntil: null,
+        updatedAt: now,
+      })
+      .where(eq(otpLockouts.id, lockout.id));
+  }
+
   // ─── Mark OTP as Verified ───
-  await db
-    .update(otpAttempts)
-    .set({ verified: true })
-    .where(eq(otpAttempts.id, otpRecord.id));
+  if (!isDevBypass) {
+    await db
+      .update(otpAttempts)
+      .set({ verified: true })
+      .where(eq(otpAttempts.id, otpRecord.id));
+  }
 
   // ─── Find or Create User ───
+  // FIX: Parents cannot join multiple tenants — breaks multi-school families
   const [existingUser] = await db
     .select()
     .from(users)
@@ -127,9 +241,11 @@ export async function otpVerifyHandler(c: Context) {
   let isNewUser = false;
 
   if (existingUser) {
+    userId = existingUser.id;
+
     if (parsed.data.inviteCode) {
       const [tenant] = await db
-        .select({ id: tenants.id })
+        .select()
         .from(tenants)
         .where(eq(tenants.inviteCode, parsed.data.inviteCode))
         .limit(1);
@@ -138,22 +254,138 @@ export async function otpVerifyHandler(c: Context) {
         throw Errors.notFound("Invite code");
       }
 
-      if (
-        existingUser.tenantId !== tenant.id ||
-        existingUser.role !== UserRole.PARENT
-      ) {
-        throw new AppError(
-          ErrorCode.ALREADY_EXISTS,
-          "This phone number is already linked to another account. Multi-tenant account switching is not supported in v1.",
-          409
-        );
+      // Check if already mapped
+      const [existingMapping] = await db
+        .select()
+        .from(userTenants)
+        .where(and(eq(userTenants.userId, userId), eq(userTenants.tenantId, tenant.id)))
+        .limit(1);
+
+      if (!existingMapping) {
+        // Link to the new school in transaction
+        await db.transaction(async (tx) => {
+          // Deactivate other tenants
+          await tx
+            .update(userTenants)
+            .set({ activeTenant: false })
+            .where(eq(userTenants.userId, userId));
+
+          // Insert new mapping
+          await tx.insert(userTenants).values({
+            userId,
+            tenantId: tenant.id,
+            role: UserRole.PARENT,
+            status: "active",
+            activeTenant: true,
+          });
+
+          // Insert profile
+          const [parentProfile] = await tx
+            .insert(parentProfiles)
+            .values({
+              userId,
+              tenantId: tenant.id,
+            })
+            .returning();
+
+          // Consent log
+          await tx.insert(consentLogs).values({
+            userId,
+            tenantId: tenant.id,
+            consentType: "data_processing",
+            ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+            userAgent: c.req.header("user-agent") ?? null,
+          });
+
+          // Link student
+          if (parsed.data.studentName && parsed.data.rollNumber) {
+            await tx
+              .update(students)
+              .set({ parentId: parentProfile!.id, updatedAt: new Date() })
+              .where(
+                and(
+                  eq(students.tenantId, tenant.id),
+                  eq(students.name, parsed.data.studentName),
+                  eq(students.rollNumber, parsed.data.rollNumber),
+                  isNull(students.parentId),
+                  isNull(students.deletedAt)
+                )
+              );
+          }
+        });
+      } else {
+        // Already mapped. If student details provided, try to link them
+        if (parsed.data.studentName && parsed.data.rollNumber) {
+          const [parentProfile] = await db
+            .select()
+            .from(parentProfiles)
+            .where(and(eq(parentProfiles.userId, userId), eq(parentProfiles.tenantId, tenant.id)))
+            .limit(1);
+
+          if (parentProfile) {
+            await db
+              .update(students)
+              .set({ parentId: parentProfile.id, updatedAt: new Date() })
+              .where(
+                and(
+                  eq(students.tenantId, tenant.id),
+                  eq(students.name, parsed.data.studentName),
+                  eq(students.rollNumber, parsed.data.rollNumber),
+                  isNull(students.parentId),
+                  isNull(students.deletedAt)
+                )
+              );
+          }
+        }
+
+        // Set as active
+        await db.transaction(async (tx) => {
+          await tx
+            .update(userTenants)
+            .set({ activeTenant: false })
+            .where(eq(userTenants.userId, userId));
+          await tx
+            .update(userTenants)
+            .set({ activeTenant: true })
+            .where(eq(userTenants.id, existingMapping.id));
+        });
+      }
+
+      tenantId = tenant.id;
+      role = UserRole.PARENT;
+    } else {
+      // Returning user - login. Resolve active tenant
+      const userMappings = await db
+        .select()
+        .from(userTenants)
+        .where(eq(userTenants.userId, userId));
+
+      if (userMappings.length === 0) {
+        // Legacy user check - create userTenants record
+        const tId = existingUser.tenantId ?? "";
+        const r = existingUser.role;
+        if (tId) {
+          await db
+            .insert(userTenants)
+            .values({
+              userId,
+              tenantId: tId,
+              role: r,
+              status: "active",
+              activeTenant: true,
+            });
+          tenantId = tId;
+          role = r;
+        } else {
+          tenantId = "";
+          role = r;
+        }
+      } else {
+        const activeMapping = userMappings.find(m => m.activeTenant) ?? userMappings[0];
+        tenantId = activeMapping.tenantId;
+        role = activeMapping.role;
       }
     }
-
-    // ─── Returning User ───
-    userId = existingUser.id;
-    tenantId = existingUser.tenantId!;
-    role = existingUser.role;
   } else if (parsed.data.inviteCode) {
     // ─── New Parent via Invite ───
     isNewUser = true;
@@ -168,7 +400,6 @@ export async function otpVerifyHandler(c: Context) {
       throw Errors.notFound("Invite code");
     }
 
-    // Atomic transaction: user + parent profile + consent log
     const result = await db.transaction(async (tx) => {
       const [newUser] = await tx
         .insert(users)
@@ -178,6 +409,14 @@ export async function otpVerifyHandler(c: Context) {
           tenantId: tenant.id,
         })
         .returning();
+
+      await tx.insert(userTenants).values({
+        userId: newUser!.id,
+        tenantId: tenant.id,
+        role: UserRole.PARENT,
+        status: "active",
+        activeTenant: true,
+      });
 
       const [parentProfile] = await tx
         .insert(parentProfiles)
@@ -221,7 +460,7 @@ export async function otpVerifyHandler(c: Context) {
     isNewUser = true;
 
     const inviteCode = generateInviteCode();
-    const tenantName = `My Institute`; // Default name, teacher can update later
+    const tenantName = `My Institute`;
     const slug = slugify(tenantName) + "-" + inviteCode.toLowerCase();
 
     const result = await db.transaction(async (tx) => {
@@ -245,6 +484,14 @@ export async function otpVerifyHandler(c: Context) {
         })
         .returning();
 
+      await tx.insert(userTenants).values({
+        userId: newUser!.id,
+        tenantId: newTenant!.id,
+        role: UserRole.TEACHER,
+        status: "active",
+        activeTenant: true,
+      });
+
       await tx.insert(teacherProfiles).values({
         userId: newUser!.id,
         tenantId: newTenant!.id,
@@ -258,12 +505,32 @@ export async function otpVerifyHandler(c: Context) {
     role = UserRole.TEACHER;
   }
 
+  // ─── Resolve All Linked Tenants for JWT ───
+  const userTenantRecords = await db
+    .select({
+      tenantId: userTenants.tenantId,
+      role: userTenants.role,
+      status: userTenants.status,
+      tenantName: tenants.name,
+    })
+    .from(userTenants)
+    .innerJoin(tenants, eq(userTenants.tenantId, tenants.id))
+    .where(eq(userTenants.userId, userId));
+
+  const tenantsPayload = userTenantRecords.map((r) => ({
+    tenantId: r.tenantId,
+    role: r.role,
+    status: r.status,
+  }));
+
   // ─── Issue JWT Pair ───
   const jwtPayload: JWTPayload = {
     userId,
     tenantId,
     role,
     plan: PlanTier.FREE, // Default for new users
+    activeTenantId: tenantId,
+    tenants: tenantsPayload,
   };
 
   const [accessToken, refreshToken] = await Promise.all([
@@ -282,7 +549,17 @@ export async function otpVerifyHandler(c: Context) {
     data: {
       accessToken,
       refreshToken,
-      user: { id: userId, role, tenantId },
+      user: {
+        id: userId,
+        role,
+        tenantId,
+        tenants: userTenantRecords.map((r) => ({
+          tenantId: r.tenantId,
+          role: r.role,
+          status: r.status,
+          tenantName: r.tenantName,
+        })),
+      },
       isNewUser,
     },
   };
