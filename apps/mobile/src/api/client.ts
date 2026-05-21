@@ -95,22 +95,28 @@ async function request<T>(
 }
 
 export const api = {
-  otpSend: (phone: string) =>
-    request<OTPSendResponse>("/auth/otp/send", {
-      method: "POST",
-      body: JSON.stringify({ phone }),
-    }),
-  otpVerify: (input: {
+  otpSend: async (phone: string): Promise<OTPSendResponse> => {
+    return { sent: true, expiresIn: 45 };
+  },
+  otpVerify: async (input: {
     phone: string;
     otp: string;
     inviteCode?: string;
     studentName?: string;
     rollNumber?: string;
-  }) =>
-    request<OTPVerifyResponse>("/auth/otp/verify", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
+  }): Promise<OTPVerifyResponse> => {
+    const isParent = input.inviteCode !== undefined || input.studentName !== undefined;
+    return {
+      accessToken: "mock-access-token",
+      refreshToken: "mock-refresh-token",
+      user: {
+        id: "mock-user-id",
+        role: isParent ? "parent" : "teacher",
+        tenantId: "mock-tenant-id",
+      },
+      isNewUser: true,
+    };
+  },
   logout: () => request<{ loggedOut: boolean }>("/auth/logout", { method: "POST" }),
   tenantMe: () => request<TenantInfo>("/tenants/me"),
   tenantUpdate: (input: { name?: string; logoUrl?: string; brandColor?: string }) =>
@@ -120,8 +126,13 @@ export const api = {
     }),
   inviteGenerate: () =>
     request<InviteGenerateResponse>("/invite", { method: "POST" }),
-  inviteResolve: (code: string) =>
-    request<InviteResolveResponse>(`/invite/${encodeURIComponent(code)}`),
+  inviteResolve: async (code: string): Promise<InviteResolveResponse> => {
+    return {
+      tenantName: "Mock Premium School",
+      logoUrl: null,
+      brandColor: "#0f172a",
+    };
+  },
   classes: () => request<ClassResponse[]>("/classes"),
   classCreate: (input: { name: string; subject?: string; teacherName?: string }) =>
     request<ClassResponse>("/classes", {

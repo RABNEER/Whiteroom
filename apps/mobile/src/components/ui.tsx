@@ -2,7 +2,6 @@ import { ComponentType, ReactNode } from "react";
 import {
   ActivityIndicator,
   DimensionValue,
-  Platform,
   Pressable,
   ScrollView,
   StyleProp,
@@ -14,11 +13,23 @@ import {
   View,
   ViewStyle,
   Modal,
+  Image,
 } from "react-native";
+import LogoImage from "../assets/logo.png";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { LucideProps } from "lucide-react-native";
-import { colors, font, radius, spacing } from "@/theme/tokens";
-import Svg, { Path, Circle, Defs, RadialGradient, Rect } from "react-native-svg";
+import { colors as tokensColors, font, radius, spacing } from "@/theme/tokens";
+
+// Backward compatibility map for purged design tokens inside the ui library
+const colors = {
+  ...tokensColors,
+  success: "#15803D",
+  primary: tokensColors.navy,
+  info: tokensColors.teal,
+  muted: tokensColors.teal,
+  ink: tokensColors.navy,
+};
+import Svg, { Path, Circle } from "react-native-svg";
 
 export type NavItem<T extends string> = {
   value: T;
@@ -63,8 +74,8 @@ export function Screen({
   );
 }
 
-export function Eyebrow({ children }: { children: ReactNode }) {
-  return <Text style={styles.eyebrow}>{children}</Text>;
+export function Eyebrow({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
+  return <Text style={[styles.eyebrow, style]}>{children}</Text>;
 }
 
 export function BrandWordmark({ compact = false }: { compact?: boolean }) {
@@ -79,15 +90,23 @@ export function DisplayTitle({
   children,
   accent,
   size = "lg",
+  style,
 }: {
   children: ReactNode;
   accent?: string;
   size?: "md" | "lg";
+  style?: StyleProp<TextStyle>;
 }) {
+  const flatStyle = StyleSheet.flatten(style);
+  const color = flatStyle?.color;
   return (
-    <Text style={[styles.display, size === "md" && styles.displayMd]}>
+    <Text style={[styles.display, size === "md" && styles.displayMd, style]}>
       {children}
-      {accent ? <Text style={styles.displayAccent}> {accent}</Text> : null}
+      {accent ? (
+        <Text style={[styles.displayAccent, color ? { color } : null]}>
+          {" "}{accent}
+        </Text>
+      ) : null}
     </Text>
   );
 }
@@ -113,7 +132,10 @@ export function AppHeader({
     <View style={styles.header}>
       <View style={styles.brandLockup}>
         <View style={styles.brandMark}>
-          <Text style={styles.brandMarkText}>W</Text>
+          <Image
+            source={LogoImage}
+            style={{ width: 34, height: 34, borderRadius: 8 }}
+          />
         </View>
         <View style={styles.headerText}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -173,67 +195,37 @@ export function AvatarBadge({
   label: string;
   small?: boolean;
 }) {
-  const lowerLabel = label.toLowerCase();
-  const isAarav = lowerLabel.includes("aarav");
-  const isRiya = lowerLabel.includes("riya");
-
-  if (isAarav) {
-    return (
-      <View style={[styles.avatarBadge, small && styles.avatarBadgeSmall, styles.avatarBadgeClay]}>
-        <Svg viewBox="0 0 100 100" style={styles.clayChar}>
-          <Defs>
-            <RadialGradient id="skinAarav" cx="30%" cy="30%" r="70%">
-              <stop offset="0%" stopColor="#fff" />
-              <stop offset="100%" stopColor="#f0e0d0" />
-            </RadialGradient>
-            <RadialGradient id="hairAarav" cx="30%" cy="30%" r="70%">
-              <stop offset="0%" stopColor="#567C8D" />
-              <stop offset="100%" stopColor="#2F4156" />
-            </RadialGradient>
-          </Defs>
-          <Rect x="40" y="75" width="20" height="15" fill="#f0e0d0" rx={5} />
-          <Path d="M20 90 Q20 75 50 75 Q80 75 80 90 L80 100 L20 100 Z" fill="#2F4156" />
-          <Circle cx="50" cy="50" r="35" fill="url(#skinAarav)" />
-          <Path d="M15 45 Q15 15 50 15 Q85 15 85 45 Q85 30 75 25 Q50 10 25 25 Q15 30 15 45" fill="url(#hairAarav)" />
-          <Circle cx="38" cy="52" r="3" fill="#2F4156" />
-          <Circle cx="62" cy="52" r="3" fill="#2F4156" />
-        </Svg>
-      </View>
-    );
+  const firstLetter = label.slice(0, 1).toUpperCase();
+  
+  // Deterministic palette slot mapping based on character code
+  let bgColor: string = colors.sky;
+  let textColor: string = colors.navy;
+  
+  if (label === "+") {
+    bgColor = colors.white;
+    textColor = colors.teal;
+  } else if (label.length > 0) {
+    const code = label.toUpperCase().charCodeAt(0);
+    const slot = code % 4;
+    if (slot === 0) {
+      bgColor = colors.navy;
+      textColor = colors.white;
+    } else if (slot === 1) {
+      bgColor = colors.teal;
+      textColor = colors.white;
+    } else if (slot === 2) {
+      bgColor = colors.sky;
+      textColor = colors.navy;
+    } else {
+      bgColor = colors.paper;
+      textColor = colors.navy;
+    }
   }
 
-  if (isRiya) {
-    return (
-      <View style={[styles.avatarBadge, small && styles.avatarBadgeSmall, styles.avatarBadgeClay]}>
-        <Svg viewBox="0 0 100 100" style={styles.clayChar}>
-          <Defs>
-            <RadialGradient id="skinRiya" cx="30%" cy="30%" r="70%">
-              <stop offset="0%" stopColor="#fff" />
-              <stop offset="100%" stopColor="#f0e0d0" />
-            </RadialGradient>
-            <RadialGradient id="hairPink" cx="30%" cy="30%" r="70%">
-              <stop offset="0%" stopColor="#C8D9E6" />
-              <stop offset="100%" stopColor="#567C8D" />
-            </RadialGradient>
-          </Defs>
-          <Rect x="40" y="75" width="20" height="15" fill="#f0e0d0" rx={5} />
-          <Path d="M20 90 Q20 75 50 75 Q80 75 80 90 L80 100 L20 100 Z" fill="#567C8D" />
-          <Circle cx="20" cy="35" r="15" fill="url(#hairPink)" />
-          <Circle cx="80" cy="35" r="15" fill="url(#hairPink)" />
-          <Circle cx="50" cy="50" r="35" fill="url(#skinRiya)" />
-          <Path d="M15 45 Q15 15 50 15 Q85 15 85 45 Q85 30 75 25 Q50 10 25 25 Q15 30 15 45" fill="url(#hairPink)" />
-          <Circle cx="38" cy="52" r="3" fill="#2F4156" />
-          <Circle cx="62" cy="52" r="3" fill="#2F4156" />
-        </Svg>
-      </View>
-    );
-  }
-
-  // Fallback beautiful 3D clay sphere look
   return (
-    <View style={[styles.avatarBadge, small && styles.avatarBadgeSmall]}>
-      <Text style={[styles.avatarBadgeText, small && styles.avatarBadgeSmallText]}>
-        {label.slice(0, 2).toUpperCase()}
+    <View style={[styles.avatarBadge, small && styles.avatarBadgeSmall, { backgroundColor: bgColor }]}>
+      <Text style={[styles.avatarBadgeText, small && styles.avatarBadgeSmallText, { color: textColor }]}>
+        {firstLetter}
       </Text>
     </View>
   );
@@ -456,26 +448,23 @@ export function BottomNav<T extends string>({
   return (
     <View style={styles.bottomNavContainer}>
       <View style={styles.bottomNav}>
-        {items.map((item, index) => {
+        {items.map((item) => {
           const active = item.value === value;
           const Icon = item.icon;
-          const center = items.length >= 5 && index === Math.floor(items.length / 2);
           return (
             <Pressable
               key={item.value}
               accessibilityRole="button"
               onPress={() => onChange(item.value)}
-              style={[styles.bottomItem, center && styles.bottomCenterItem]}
+              style={styles.bottomItem}
             >
               <View style={[
                 styles.navIconBox,
-                center && styles.bottomCenterIconBox,
                 active && styles.navIconBoxActive,
-                active && center && styles.bottomCenterIconBoxActive,
               ]}>
                 <Icon
-                  color={active ? colors.white : center ? colors.white : colors.teal}
-                  size={center ? 22 : 18}
+                  color={active ? colors.white : colors.teal}
+                  size={18}
                 />
               </View>
               <Text style={[styles.bottomLabel, active && styles.bottomLabelActive]}>
@@ -698,16 +687,6 @@ export const styles = StyleSheet.create({
     minHeight: 74,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 8, height: 8 },
-      },
-      android: { elevation: 3 },
-      web: { boxShadow: "0 16px 34px rgba(47, 65, 86, 0.10)" },
-    }),
   },
   brandLockup: {
     alignItems: "center",
@@ -744,16 +723,6 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.teal,
     borderRadius: radius.full,
     marginLeft: 4,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.teal,
-        shadowOpacity: 0.5,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 0 },
-      },
-      android: { elevation: 1 },
-      web: { boxShadow: "0 0 8px var(--teal)" },
-    }),
   },
   navContext: {
     color: colors.teal,
@@ -776,16 +745,6 @@ export const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderColor: "rgba(86, 124, 141, 0.15)",
     borderWidth: 1.5,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        shadowOffset: { width: 4, height: 4 },
-      },
-      android: { elevation: 2 },
-      web: { boxShadow: "6px 6px 12px rgba(47, 65, 86, 0.08)" },
-    }),
   },
   heroPanel: {
     backgroundColor: colors.navy,
@@ -795,16 +754,6 @@ export const styles = StyleSheet.create({
     position: "relative",
     borderColor: "rgba(86, 124, 141, 0.15)",
     borderWidth: 1.5,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.28,
-        shadowRadius: 26,
-        shadowOffset: { width: 8, height: 12 },
-      },
-      android: { elevation: 5 },
-      web: { boxShadow: "0 28px 60px rgba(47, 65, 86, 0.28)" },
-    }),
   },
   heroPanelCompact: {
     minHeight: 150,
@@ -821,6 +770,8 @@ export const styles = StyleSheet.create({
     zIndex: 2,
     padding: spacing.lg,
     gap: spacing.md,
+    flex: 1,
+    justifyContent: "center",
   },
   avatarBadge: {
     alignItems: "center",
@@ -831,16 +782,6 @@ export const styles = StyleSheet.create({
     height: 58,
     justifyContent: "center",
     width: 58,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        shadowOffset: { width: 2, height: 4 },
-      },
-      android: { elevation: 2 },
-      web: { boxShadow: "4px 4px 8px rgba(47, 65, 86, 0.05)" },
-    }),
   },
   avatarBadgeSmall: {
     borderWidth: 2,
@@ -920,16 +861,6 @@ export const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderColor: "rgba(86, 124, 141, 0.15)",
     borderWidth: 1.5,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        shadowOffset: { width: 4, height: 4 },
-      },
-      android: { elevation: 3 },
-      web: { boxShadow: "4px 4px 10px rgba(47, 65, 86, 0.1)" },
-    }),
   },
   buttonGhost: {
     backgroundColor: colors.white,
@@ -973,15 +904,6 @@ export const styles = StyleSheet.create({
     height: 46,
     justifyContent: "center",
     width: 46,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.05,
-        shadowRadius: 6,
-        shadowOffset: { width: 2, height: 2 },
-      },
-      android: { elevation: 1 },
-    }),
   },
   iconButtonActive: {
     backgroundColor: colors.navy,
@@ -994,16 +916,6 @@ export const styles = StyleSheet.create({
     borderWidth: 1.5,
     gap: spacing.sm,
     padding: spacing.md,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 8, height: 8 },
-      },
-      android: { elevation: 3 },
-      web: { boxShadow: "0 22px 48px rgba(47, 65, 86, 0.14)" },
-    }),
   },
   cardInset: {
     backgroundColor: "rgba(86, 124, 141, 0.06)",
@@ -1027,16 +939,6 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     borderColor: "rgba(86, 124, 141, 0.1)",
     borderWidth: 1,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        shadowOffset: { width: 1, height: 2 },
-      },
-      android: { elevation: 1 },
-      web: { boxShadow: "2px 2px 6px rgba(47, 65, 86, 0.05)" },
-    }),
   },
   metricDot: {
     borderRadius: radius.full,
@@ -1089,16 +991,6 @@ export const styles = StyleSheet.create({
     padding: spacing.xs,
     borderColor: "rgba(86, 124, 141, 0.15)",
     borderWidth: 1.5,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-        shadowOffset: { width: 2, height: 2 },
-      },
-      android: { elevation: 1 },
-      web: { boxShadow: "2px 2px 6px rgba(47, 65, 86, 0.04)" },
-    }),
   },
   segment: {
     borderRadius: radius.full,
@@ -1110,16 +1002,6 @@ export const styles = StyleSheet.create({
   },
   segmentActive: {
     backgroundColor: colors.navy,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.12,
-        shadowRadius: 8,
-        shadowOffset: { width: 3, height: 3 },
-      },
-      android: { elevation: 3 },
-      web: { boxShadow: "3px 3px 8px rgba(47, 65, 86, 0.12)" },
-    }),
   },
   segmentText: {
     color: colors.teal,
@@ -1138,8 +1020,8 @@ export const styles = StyleSheet.create({
     zIndex: 1000,
   },
   bottomNav: {
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    borderColor: "rgba(255, 255, 255, 0.6)",
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    borderColor: "#D0DCE6",
     borderRadius: 40,
     borderWidth: 1.5,
     flexDirection: "row",
@@ -1147,16 +1029,6 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     height: 86,
     paddingHorizontal: spacing.sm,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.12,
-        shadowRadius: 24,
-        shadowOffset: { width: 0, height: 12 },
-      },
-      android: { elevation: 6 },
-      web: { boxShadow: "0 20px 48px rgba(47, 65, 86, 0.12)" },
-    }),
   },
   bottomItem: {
     alignItems: "center",
@@ -1172,55 +1044,11 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.white,
     borderColor: "rgba(86, 124, 141, 0.15)",
-    borderWidth: 1,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        shadowOffset: { width: 1, height: 2 },
-      },
-      android: { elevation: 1 },
-      web: { boxShadow: "4px 4px 8px rgba(47, 65, 86, 0.05)" },
-    }),
+    borderWidth: 1.5,
   },
   navIconBoxActive: {
-    backgroundColor: colors.teal,
-    borderColor: colors.teal,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        shadowOffset: { width: 4, height: 4 },
-      },
-      android: { elevation: 4 },
-      web: { boxShadow: "8px 8px 16px rgba(47, 65, 86, 0.15)" },
-    }),
-  },
-  bottomCenterItem: {
-    marginTop: -28,
-  },
-  bottomCenterIconBox: {
     backgroundColor: colors.navy,
-    borderColor: colors.white,
-    borderWidth: 3,
-    width: 58,
-    height: 58,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.18,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 6 },
-      },
-      android: { elevation: 5 },
-      web: { boxShadow: "0 10px 20px rgba(47, 65, 86, 0.18)" },
-    }),
-  },
-  bottomCenterIconBoxActive: {
-    backgroundColor: colors.teal,
-    borderColor: colors.white,
+    borderColor: colors.navy,
   },
   bottomLabel: {
     color: colors.teal,
@@ -1251,16 +1079,6 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     borderColor: "rgba(86, 124, 141, 0.12)",
     borderWidth: 1.5,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.08,
-        shadowRadius: 6,
-        shadowOffset: { width: 2, height: 2 },
-      },
-      android: { elevation: 1 },
-      web: { boxShadow: "inset 4px 4px 8px rgba(47, 65, 86, 0.05)" },
-    }),
   },
   donutVal: {
     fontSize: 20,
@@ -1281,16 +1099,6 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     borderColor: "rgba(86, 124, 141, 0.15)",
     borderWidth: 1.5,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.12,
-        shadowRadius: 10,
-        shadowOffset: { width: 4, height: 4 },
-      },
-      android: { elevation: 3 },
-      web: { boxShadow: "0 8px 16px rgba(47, 65, 86, 0.12)" },
-    }),
   },
   layeredVal: {
     fontSize: 28,
@@ -1314,16 +1122,6 @@ export const styles = StyleSheet.create({
     paddingBottom: spacing.xl + 20,
     borderColor: "rgba(255, 255, 255, 0.8)",
     borderWidth: 1.5,
-    ...Platform.select({
-      ios: {
-        shadowColor: colors.navy,
-        shadowOpacity: 0.16,
-        shadowRadius: 28,
-        shadowOffset: { width: 0, height: -10 },
-      },
-      android: { elevation: 12 },
-      web: { boxShadow: "0 -20px 48px rgba(47, 65, 86, 0.15)" },
-    }),
   },
   drawerHandle: {
     width: 50,

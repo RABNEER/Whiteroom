@@ -21,7 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           justifyContent: "center",
         }}
       >
-        <ActivityIndicator color={colors.ink} />
+        <ActivityIndicator color={colors.navy} />
       </View>
     );
   }

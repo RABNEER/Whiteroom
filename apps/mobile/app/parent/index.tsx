@@ -1,357 +1,965 @@
-import { useMemo, useState } from "react";
-import { Pressable, Text, View } from "react-native";
-import { router } from "expo-router";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Bell, BookOpen, CalendarCheck, Home, LogOut, UserRound } from "lucide-react-native";
-import { api, ApiError } from "@/api/client";
-import { queryClient } from "@/api/query";
-import { useSession } from "@/auth/session-store";
-import { registerDeviceForNotifications } from "@/features/notifications";
+import { useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { router } from 'expo-router';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import {
+  ArrowLeft,
+  Bell,
+  BookOpen,
+  Calendar,
+  CalendarCheck,
+  ChevronRight,
+  Clock,
+  LogOut,
+  Megaphone,
+  Shield,
+  User,
+  type LucideIcon,
+} from 'lucide-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { api, ApiError } from '@/api/client';
+import { useSession } from '@/auth/session-store';
+import { colors, spacing } from '@/theme/tokens';
+import { formatDate } from '@/utils/format';
 import {
   AppHeader,
-  Banner,
   BottomNav,
-  Button,
-  Card,
-  EmptyState,
-  Eyebrow,
   HeroPanel,
+  LayeredChart,
+  SiblingDrawer,
+  Card,
+  Banner,
+  Field,
+  Button,
+  Eyebrow,
+  DisplayTitle,
+  Muted,
+  AvatarBadge,
   IconButton,
   MetricCard,
-  Muted,
-  Screen,
-  SectionTitle,
-  AvatarBadge,
-  DonutChart3D,
-  SiblingDrawer,
-} from "@/components/ui";
-import { colors, font, radius, spacing } from "@/theme/tokens";
-import { formatDate } from "@/utils/format";
+  Segmented,
+} from '@/components/ui';
 
-type ParentTab = "feed" | "children" | "profile";
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const parentTabs = [
-  { value: "feed", label: "Home", icon: Home },
-  { value: "children", label: "Children", icon: BookOpen },
-  { value: "profile", label: "Profile", icon: UserRound },
-] as const;
+type ParentTab = 'FEED' | 'ATTEND' | 'CLASSES' | 'PROFILE';
+type ViewState = 'LIST' | 'ATTEND_DETAIL' | 'CLASS_DETAIL';
+
+interface ChildItem {
+  id: string;
+  name: string;
+  rollNumber?: string | null;
+}
+
+const TABS: { value: ParentTab; label: string; icon: LucideIcon }[] = [
+  { value: 'FEED', label: 'Feed', icon: Megaphone },
+  { value: 'ATTEND', label: 'Attend', icon: CalendarCheck },
+  { value: 'CLASSES', label: 'Classes', icon: BookOpen },
+  { value: 'PROFILE', label: 'Profile', icon: User },
+];
+
+// ─── Root Screen ──────────────────────────────────────────────────────────────
 
 export default function ParentScreen() {
-  const [tab, setTab] = useState<ParentTab>("feed");
+  const [activeTab, setActiveTab] = useState<ParentTab>('FEED');
+  const [viewState, setViewState] = useState<ViewState>('LIST');
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
-  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [selectedClassName, setSelectedClassName] = useState<string | null>(null);
+  const [isSiblingDrawerOpen, setIsSiblingDrawerOpen] = useState(false);
 
-  const clear = useSession((state) => state.clear);
-  const tenant = useQuery({ queryKey: ["tenant"], queryFn: api.tenantMe });
-  const feed = useQuery({ queryKey: ["parentFeed"], queryFn: api.parentFeed });
-  const children = useQuery({ queryKey: ["parentChildren"], queryFn: api.parentChildren });
-
-  const selectedChild = useMemo(
-    () => children.data?.find((child) => child.id === selectedChildId) ?? children.data?.[0],
-    [children.data, selectedChildId]
-  );
+  const clear = useSession((s) => s.clear);
+  const tenant = useQuery({ queryKey: ['tenant'], queryFn: api.tenantMe });
+  const children = useQuery({ queryKey: ['parentChildren'], queryFn: api.parentChildren });
 
   const logout = useMutation({
     mutationFn: api.logout,
     onSettled: async () => {
       await clear();
-      router.replace("/auth");
+      router.replace('/auth');
+    },
+    onError: (err: unknown) => {
+      Alert.alert('Error', err instanceof ApiError ? err.message : 'Logout failed.');
     },
   });
 
+  // Fall back to placeholder children while API loads (dev convenience)
+  const childrenData: ChildItem[] = useMemo(() => {
+    const list = children.data ?? [];
+    if (list.length === 0) return [];
+    return list;
+  }, [children.data]);
+
+  const selectedChild: ChildItem | undefined = useMemo(
+    () => childrenData.find((c) => c.id === selectedChildId) ?? childrenData[0],
+    [childrenData, selectedChildId],
+  );
+
+  const tenantName = tenant.data?.name ?? 'Whiteroom';
+
+  const handleTabPress = (tab: ParentTab) => {
+    setActiveTab(tab);
+    setViewState('LIST');
+    setSelectedClassId(null);
+    setSelectedClassName(null);
+  };
+
   return (
-    <Screen footer={<BottomNav value={tab} items={[...parentTabs]} onChange={setTab} />}>
-      <View style={{ gap: spacing.lg }}>
-        <AppHeader
-          eyebrow="Parent room"
-          title={tab === "feed" ? "Class" : tab === "children" ? "Child" : "Family"}
-          accent={tab === "feed" ? "Updates" : tab === "children" ? "Progress" : "Profile"}
-          meta={`${feed.data?.unread ?? 0} unread updates`}
-          onAvatarPress={() => setDrawerVisible(true)}
-          avatarName={selectedChild?.name ?? "Aarav"}
-          trailing={
-            <>
-              <IconButton icon={Bell} />
-            </>
-          }
-        />
+    <SafeAreaView style={s.root}>
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <AppHeader
+        eyebrow="PARENT"
+        title={selectedChild ? selectedChild.name : 'Parent View'}
+        accent={selectedChild?.rollNumber ? `Roll ${selectedChild.rollNumber}` : undefined}
+        avatarName={selectedChild?.name ?? 'Parent'}
+        onAvatarPress={() => setIsSiblingDrawerOpen(true)}
+        trailing={<IconButton icon={LogOut} onPress={() => logout.mutate()} />}
+      />
 
-        {tenant.error || feed.error || children.error ? (
-          <Banner tone="danger">{readError(tenant.error ?? feed.error ?? children.error)}</Banner>
-        ) : null}
+      {/* ── Content ────────────────────────────────────────────────── */}
+      <View style={{ flex: 1 }}>
+        {activeTab === 'FEED' && (
+          <FeedTab selectedChild={selectedChild} tenantName={tenantName} />
+        )}
 
-        {tab === "feed" ? (
-          <FeedPanel tenantName={tenant.data?.name ?? "Whiteroom"} unread={feed.data?.unread ?? 0} />
-        ) : tab === "children" ? (
-          <ChildrenPanel selectedChild={selectedChild} setSelectedChildId={setSelectedChildId} />
-        ) : (
-          <ProfilePanel logoutPending={logout.isPending} onLogout={() => logout.mutate()} />
+        {activeTab === 'ATTEND' && viewState === 'LIST' && (
+          <AttendTab
+            selectedChild={selectedChild}
+            onDetail={() => setViewState('ATTEND_DETAIL')}
+          />
+        )}
+        {activeTab === 'ATTEND' && viewState === 'ATTEND_DETAIL' && (
+          <ChildAttendDetail
+            selectedChild={selectedChild}
+            onBack={() => setViewState('LIST')}
+          />
+        )}
+
+        {activeTab === 'CLASSES' && viewState === 'LIST' && (
+          <ClassesTab
+            selectedChild={selectedChild}
+            onDetail={(classId, className) => {
+              setSelectedClassId(classId);
+              setSelectedClassName(className);
+              setViewState('CLASS_DETAIL');
+            }}
+          />
+        )}
+        {activeTab === 'CLASSES' && viewState === 'CLASS_DETAIL' && (
+          <ChildClassDetail
+            selectedChild={selectedChild}
+            classId={selectedClassId}
+            className={selectedClassName}
+            onBack={() => setViewState('LIST')}
+          />
+        )}
+
+        {activeTab === 'PROFILE' && (
+          <ProfileTab
+            childrenList={childrenData}
+            selectedChild={selectedChild}
+            onSelectChild={setSelectedChildId}
+            onSelectChildPress={() => setIsSiblingDrawerOpen(true)}
+            onLogout={() => {
+              Alert.alert('Log Out', 'Are you sure you want to log out?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Log Out', style: 'destructive', onPress: () => logout.mutate() },
+              ]);
+            }}
+          />
         )}
       </View>
 
-      <SiblingDrawer visible={drawerVisible} onClose={() => setDrawerVisible(false)}>
-        {children.data?.map((child) => {
-          const active = selectedChild?.id === child.id;
-          return (
-            <Pressable
-              key={child.id}
-              onPress={() => {
-                setSelectedChildId(child.id);
-                setDrawerVisible(false);
-              }}
-              style={{ marginBottom: spacing.xs }}
-            >
-              <Card inset={!active} style={active ? { borderColor: colors.teal, borderWidth: 2, backgroundColor: "rgba(86, 124, 141, 0.05)" } : undefined}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-                  <AvatarBadge label={child.name} small />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "800" }}>{child.name}</Text>
-                    <Muted>{active ? "Active Student" : "Switch Student"}</Muted>
-                  </View>
+      {/* ── Bottom Tab Bar ─────────────────────────────────────────── */}
+      <BottomNav
+        value={activeTab}
+        items={TABS}
+        onChange={handleTabPress}
+      />
+
+      {/* Sibling Switcher bottom drawer modal */}
+      <SiblingDrawer visible={isSiblingDrawerOpen} onClose={() => setIsSiblingDrawerOpen(false)}>
+        {childrenData.length === 0 ? (
+          <Text style={{ color: colors.teal, fontSize: 13, textAlign: 'center', paddingVertical: 16 }}>
+            No children linked yet.
+          </Text>
+        ) : (
+          childrenData.map((child) => {
+            const active = selectedChild?.id === child.id;
+            return (
+              <Pressable
+                key={child.id}
+                accessibilityRole="button"
+                style={[s.siblingItem, active && { borderColor: colors.navy, borderWidth: 2 }]}
+                onPress={() => {
+                  setSelectedChildId(child.id);
+                  setIsSiblingDrawerOpen(false);
+                }}
+              >
+                <AvatarBadge label={child.name} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={s.siblingName}>{child.name}</Text>
+                  {child.rollNumber ? (
+                    <Text style={s.classCardSub}>Roll {child.rollNumber}</Text>
+                  ) : null}
                 </View>
-              </Card>
-            </Pressable>
-          );
-        })}
+                {active && (
+                  <View style={[s.badge, s.badgeDone]}>
+                    <Text style={[s.badgeText, s.badgeTextDone]}>Active</Text>
+                  </View>
+                )}
+              </Pressable>
+            );
+          })
+        )}
       </SiblingDrawer>
-    </Screen>
+    </SafeAreaView>
   );
 }
 
-function FeedPanel({ tenantName, unread }: { tenantName: string; unread: number }) {
-  const feed = useQuery({ queryKey: ["parentFeed"], queryFn: api.parentFeed });
-  const markRead = useMutation({
-    mutationFn: (id: string) => api.announcementRead(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["parentFeed"] }),
-  });
+// ─── S25/S26: Feed Tab ────────────────────────────────────────────────────────
 
-  if (!feed.data?.announcements.length) {
-    return (
-      <View style={{ gap: spacing.lg }}>
-        <HeroPanel compact>
-          <View style={{ alignItems: "center", flexDirection: "row", gap: spacing.md }}>
-            <AvatarBadge label={tenantName} />
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.white, fontSize: 24, fontWeight: "900" }}>{tenantName}</Text>
-              <Muted style={{ color: colors.sky }}>{unread} unread school updates</Muted>
-            </View>
-          </View>
-        </HeroPanel>
-        <View style={{ flexDirection: "row", gap: spacing.md }}>
-          <MetricCard label="Unread" value={feed.data?.unread ?? 0} note="Live" />
-          <MetricCard label="Children" value="--" note="Linked" tone="success" />
-        </View>
-        <EmptyState title="No updates yet" body="Announcements from teachers will show here." />
-      </View>
-    );
-  }
+function FeedTab({
+  selectedChild,
+  tenantName,
+}: {
+  selectedChild: ChildItem | undefined;
+  tenantName: string;
+}) {
+  const feed = useQuery({ queryKey: ['parentFeed'], queryFn: api.parentFeed });
+  const announcements = feed.data?.announcements ?? [];
+  const unread = feed.data?.unread ?? 0;
 
   return (
-    <View style={{ gap: spacing.lg }}>
+    <ScrollView style={s.tabContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
+      {/* Welcome banner */}
       <HeroPanel compact>
-        <View style={{ alignItems: "center", flexDirection: "row", gap: spacing.md }}>
-          <AvatarBadge label={tenantName} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.white, fontSize: 24, fontWeight: "900" }}>{tenantName}</Text>
-            <Muted style={{ color: colors.sky }}>Fresh updates from class.</Muted>
-          </View>
-        </View>
+        <Eyebrow style={{ color: colors.sky }}>FEED</Eyebrow>
+        <DisplayTitle size="md" style={{ color: colors.white }}>{selectedChild?.name ?? 'Parent'}</DisplayTitle>
+        <Muted style={{ color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>Class updates from {tenantName}</Muted>
       </HeroPanel>
-      <View style={{ flexDirection: "row", gap: spacing.md }}>
-        <MetricCard label="Unread" value={feed.data.unread} note="Live" />
-        <MetricCard label="Updates" value={feed.data.announcements.length} note="New" tone="success" />
-      </View>
 
-      {feed.data.announcements.map((item) => (
-        <Card key={item.id}>
-          <Eyebrow>{formatDate(item.createdAt)}</Eyebrow>
-          <SectionTitle>{item.title}</SectionTitle>
-          <Muted>{item.body}</Muted>
-          <Button variant="soft" loading={markRead.isPending} onPress={() => markRead.mutate(item.id)}>
-            Mark Read
-          </Button>
+      {/* Unread alert */}
+      {unread > 0 && (
+        <Banner tone="warning">
+          You have {unread} unread announcement{unread > 1 ? 's' : ''}. Tap a card to read.
+        </Banner>
+      )}
+
+      <Text style={[s.sectionTitle, { marginBottom: 12, marginTop: 16 }]}>ANNOUNCEMENTS & UPDATES</Text>
+
+      {feed.isLoading ? (
+        <ActivityIndicator color={colors.teal} style={{ marginTop: 24 }} />
+      ) : announcements.length === 0 ? (
+        <Card style={{ alignItems: 'center', paddingVertical: 32 }}>
+          <Text style={{ fontSize: 32, marginBottom: 8 }}>📭</Text>
+          <Text style={{ color: colors.teal, fontSize: 13, textAlign: 'center' }}>
+            No announcements posted yet.
+          </Text>
         </Card>
-      ))}
-    </View>
+      ) : (
+        announcements.map((ann) => (
+          <Card
+            key={ann.id}
+            style={ann.isPinned ? { borderColor: colors.teal, borderWidth: 2 } : undefined}
+          >
+            {/* Institution badge row */}
+            <View style={s.annInstitutionRow}>
+              <View style={s.annInstitutionBadge}>
+                <Text style={s.annInstitutionInitial}>
+                  {tenantName.slice(0, 1).toUpperCase()}
+                </Text>
+              </View>
+              <Text style={s.annInstitutionName}>
+                {tenantName.toUpperCase()}
+              </Text>
+            </View>
+
+            {ann.isPinned && <Text style={s.pinnedTag}>📌 PINNED</Text>}
+            <Text style={s.cardTitle}>{ann.title}</Text>
+            <Text style={{ color: colors.teal, fontSize: 13, lineHeight: 18 }}>{ann.body}</Text>
+
+            <View style={s.annFooter}>
+              <Text style={s.cardDate}>{formatDate(ann.createdAt)}</Text>
+              <Button variant="ghost" style={{ paddingHorizontal: 12, paddingVertical: 4, height: 32 }}>
+                View Detail
+              </Button>
+            </View>
+          </Card>
+        ))
+      )}
+    </ScrollView>
   );
 }
 
-function ChildrenPanel({
+// ─── S27/S28: Attend Tab ──────────────────────────────────────────────────────
+
+function AttendTab({
   selectedChild,
-  setSelectedChildId,
+  onDetail,
 }: {
-  selectedChild: any;
-  setSelectedChildId: (id: string | null) => void;
+  selectedChild: ChildItem | undefined;
+  onDetail: () => void;
 }) {
-  const children = useQuery({ queryKey: ["parentChildren"], queryFn: api.parentChildren });
-  const classes = useQuery({
-    queryKey: ["parentChildClasses", selectedChild?.id],
-    queryFn: () => api.parentChildClasses(selectedChild!.id),
-    enabled: Boolean(selectedChild?.id),
-  });
   const attendance = useQuery({
-    queryKey: ["parentChildAttendance", selectedChild?.id],
+    queryKey: ['parentChildAttendance', selectedChild?.id],
     queryFn: () => api.parentChildAttendance(selectedChild!.id),
     enabled: Boolean(selectedChild?.id),
   });
 
-  if (!children.data?.length) {
-    return <EmptyState title="No linked children" body="Join through your teacher's invite code to link a child." />;
-  }
-
-  const presentCount = attendance.data?.filter((row) => row.status === "present").length ?? 0;
-  const absentCount = attendance.data?.filter((row) => row.status === "absent").length ?? 0;
-  const totalDays = presentCount + absentCount;
-  const attendancePercentage = totalDays > 0 ? Math.round((presentCount / totalDays) * 100) : 94; // fallback to 94% from mockup if no history
+  const logs = attendance.data ?? [];
+  const presentCount = logs.filter((l) => l.status === 'present').length;
+  const absentCount = logs.filter((l) => l.status === 'absent').length;
+  const total = logs.length;
+  const percentage = total > 0 ? Math.round((presentCount / total) * 100) : 100;
 
   return (
-    <View style={{ gap: spacing.lg }}>
-      <Card style={{ padding: 28 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 28 }}>
-          <DonutChart3D value={attendancePercentage} />
+    <ScrollView style={s.tabContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
+      <Text style={s.pageTitle}>Attendance</Text>
+      <Text style={[s.pageSub, { marginBottom: 16 }]}>Real-time session logs</Text>
+
+      {/* Overall score banner with LayeredChart */}
+      <HeroPanel compact>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
           <View style={{ flex: 1 }}>
-            <Eyebrow>RFID Attendance</Eyebrow>
-            <SectionTitle style={{ color: colors.teal }}>{attendancePercentage >= 90 ? "In Campus" : "Out of Campus"}</SectionTitle>
-            <Muted>08:32 AM • Gate 2</Muted>
+            <Eyebrow style={{ color: colors.sky }}>OVERALL ATTENDANCE</Eyebrow>
+            <DisplayTitle size="lg" accent="%" style={{ color: colors.white }}>{percentage}</DisplayTitle>
+            <Muted style={{ color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>
+              {presentCount} Present · {absentCount} Absent
+            </Muted>
+          </View>
+          <LayeredChart value={percentage} size={110} strokeWidth={16} />
+        </View>
+      </HeroPanel>
+
+      {/* Stats row with MetricCard */}
+      <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+        <MetricCard label="Present" value={presentCount} tone="success" />
+        <MetricCard label="Absent" value={absentCount} tone="danger" />
+        <MetricCard label="Total" value={total} tone="primary" />
+      </View>
+
+      <Text style={[s.sectionTitle, { marginBottom: 12 }]}>ATTENDANCE RECORDS</Text>
+
+      {attendance.isLoading ? (
+        <ActivityIndicator color={colors.teal} style={{ marginTop: 24 }} />
+      ) : logs.length === 0 ? (
+        <Card style={{ alignItems: 'center', paddingVertical: 32 }}>
+          <Text style={{ fontSize: 32, marginBottom: 8 }}>🗓️</Text>
+          <Text style={{ color: colors.teal, fontSize: 13, textAlign: 'center' }}>
+            No attendance sessions recorded yet.
+          </Text>
+        </Card>
+      ) : (
+        logs.map((log) => {
+          const present = log.status === 'present';
+          return (
+            <Pressable
+              key={log.id}
+              accessibilityRole="button"
+              style={s.classCard}
+              onPress={onDetail}
+            >
+              <View style={s.classCardLeft}>
+                <View style={s.classIconBox}>
+                  <CalendarCheck color={colors.teal} size={18} />
+                </View>
+                <View>
+                  <Text style={s.classCardName}>{formatDate(log.date)}</Text>
+                  <Text style={s.classCardSub}>Session</Text>
+                </View>
+              </View>
+              <View style={[s.badge, present ? s.badgeDone : s.badgeDanger]}>
+                <Text style={[s.badgeText, present ? s.badgeTextDone : s.badgeTextDanger]}>
+                  {present ? 'Present' : 'Absent'}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })
+      )}
+    </ScrollView>
+  );
+}
+
+// ─── S28: Child Attend Detail ─────────────────────────────────────────────────
+
+function ChildAttendDetail({
+  selectedChild,
+  onBack,
+}: {
+  selectedChild: ChildItem | undefined;
+  onBack: () => void;
+}) {
+  const attendance = useQuery({
+    queryKey: ['parentChildAttendance', selectedChild?.id],
+    queryFn: () => api.parentChildAttendance(selectedChild!.id),
+    enabled: Boolean(selectedChild?.id),
+  });
+
+  const logs = attendance.data ?? [];
+
+  return (
+    <ScrollView style={s.tabContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
+      <Pressable accessibilityRole="button" style={s.backRow} onPress={onBack}>
+        <ArrowLeft size={14} color={colors.teal} />
+        <Text style={s.backText}>Back to Overview</Text>
+      </Pressable>
+
+      <Text style={s.detailTitle}>Attendance Detail</Text>
+      <Text style={[s.detailSub, { marginBottom: 16 }]}>
+        {selectedChild?.name ?? 'Student'}
+      </Text>
+
+      {/* Calendar placeholder */}
+      <Card style={{ marginBottom: 16 }}>
+        <Eyebrow>CALENDAR VIEW</Eyebrow>
+        <View style={[s.calendarPlaceholder, { marginTop: 12 }]}>
+          <Calendar size={48} color={colors.sky} />
+          <Text style={{ color: colors.teal, fontSize: 13, marginTop: 12 }}>
+            Visual Attendance Map
+          </Text>
+        </View>
+      </Card>
+
+      {/* Session logs */}
+      <Card>
+        <Eyebrow>SESSION LOGS</Eyebrow>
+        <View style={{ marginTop: 8 }}>
+          {logs.length === 0 ? (
+            <Text style={{ color: colors.teal, fontSize: 13, textAlign: 'center', paddingVertical: 16 }}>
+              No records found.
+            </Text>
+          ) : (
+            logs.map((log) => {
+              const present = log.status === 'present';
+              return (
+                <View
+                  key={log.id}
+                  style={[s.logRow, { borderBottomWidth: 1, borderBottomColor: colors.sky }]}
+                >
+                  <View>
+                    <Text style={s.classCardName}>{formatDate(log.date)}</Text>
+                    <Text style={s.classCardSub}>Session</Text>
+                  </View>
+                  <View style={[s.badge, present ? s.badgeDone : s.badgeDanger]}>
+                    <Text style={[s.badgeText, present ? s.badgeTextDone : s.badgeTextDanger]}>
+                      {present ? 'Present' : 'Absent'}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+      </Card>
+    </ScrollView>
+  );
+}
+
+// ─── S29/S30: Classes Tab ─────────────────────────────────────────────────────
+
+function ClassesTab({
+  selectedChild,
+  onDetail,
+}: {
+  selectedChild: ChildItem | undefined;
+  onDetail: (classId: string, className: string) => void;
+}) {
+  const classes = useQuery({
+    queryKey: ['parentChildClasses', selectedChild?.id],
+    queryFn: () => api.parentChildClasses(selectedChild!.id),
+    enabled: Boolean(selectedChild?.id),
+  });
+
+  const list = classes.data ?? [];
+
+  return (
+    <ScrollView style={s.tabContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
+      <Text style={s.pageTitle}>Classrooms</Text>
+      <Text style={[s.pageSub, { marginBottom: 16 }]}>Enrolled classrooms and subjects</Text>
+
+      <Text style={[s.sectionTitle, { marginBottom: 12 }]}>ENROLLED CLASSES</Text>
+
+      {classes.isLoading ? (
+        <ActivityIndicator color={colors.teal} style={{ marginTop: 24 }} />
+      ) : list.length === 0 ? (
+        <Card style={{ alignItems: 'center', paddingVertical: 32 }}>
+          <Text style={{ fontSize: 32, marginBottom: 8 }}>🏫</Text>
+          <Text style={{ color: colors.teal, fontSize: 13, textAlign: 'center' }}>
+            Not enrolled in any classrooms yet.
+          </Text>
+        </Card>
+      ) : (
+        list.map((cls) => (
+          <Pressable
+            key={cls.id}
+            accessibilityRole="button"
+            style={s.classCard}
+            onPress={() => onDetail(cls.id, cls.name)}
+          >
+            <View style={s.classCardLeft}>
+              <View style={s.classIconBox}>
+                <BookOpen color={colors.teal} size={18} />
+              </View>
+              <View>
+                <Text style={s.classCardName}>{cls.name}</Text>
+                {cls.subject ? <Text style={s.classCardSub}>{cls.subject}</Text> : null}
+              </View>
+            </View>
+            <ChevronRight size={18} color={colors.teal} />
+          </Pressable>
+        ))
+      )}
+    </ScrollView>
+  );
+}
+
+// ─── S30: Child Class Detail ──────────────────────────────────────────────────
+
+function ChildClassDetail({
+  selectedChild,
+  classId,
+  className,
+  onBack,
+}: {
+  selectedChild: ChildItem | undefined;
+  classId: string | null;
+  className: string | null;
+  onBack: () => void;
+}) {
+  const [subTab, setSubTab] = useState<'attendance' | 'info'>('attendance');
+
+  const attendance = useQuery({
+    queryKey: ['parentChildAttendance', selectedChild?.id, classId],
+    queryFn: () => api.parentChildAttendance(selectedChild!.id, classId!),
+    enabled: Boolean(selectedChild?.id && classId),
+  });
+
+  const logs = attendance.data ?? [];
+  const presentCount = logs.filter((l) => l.status === 'present').length;
+  const absentCount = logs.filter((l) => l.status === 'absent').length;
+
+  return (
+    <ScrollView style={s.tabContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
+      <Pressable accessibilityRole="button" style={s.backRow} onPress={onBack}>
+        <ArrowLeft size={14} color={colors.teal} />
+        <Text style={s.backText}>Back to Classes</Text>
+      </Pressable>
+
+      <Text style={s.detailTitle}>{className ?? 'Class'}</Text>
+      <Text style={[s.detailSub, { marginBottom: 16 }]}>
+        {selectedChild?.name ?? 'Student'}
+      </Text>
+
+      {/* Segment tabs using standard component */}
+      <Segmented
+        value={subTab}
+        options={[
+          { value: 'attendance', label: 'Attendance' },
+          { value: 'info', label: 'Info' },
+        ]}
+        onChange={setSubTab}
+      />
+
+      {subTab === 'attendance' && (
+        <View style={{ marginTop: 16 }}>
+          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+            <MetricCard label="Present" value={presentCount} tone="success" />
+            <MetricCard label="Absent" value={absentCount} tone="danger" />
+            <MetricCard label="Total" value={logs.length} tone="primary" />
+          </View>
+
+          {attendance.isLoading ? (
+            <ActivityIndicator color={colors.teal} style={{ marginTop: 24 }} />
+          ) : logs.length === 0 ? (
+            <Card style={{ alignItems: 'center', paddingVertical: 24 }}>
+              <Text style={{ color: colors.teal, fontSize: 13 }}>No records for this class.</Text>
+            </Card>
+          ) : (
+            logs.map((log) => {
+              const present = log.status === 'present';
+              return (
+                <View key={log.id} style={s.classCard}>
+                  <View style={s.classCardLeft}>
+                    <View style={s.classIconBox}>
+                      <CalendarCheck color={colors.teal} size={18} />
+                    </View>
+                    <Text style={s.classCardName}>{formatDate(log.date)}</Text>
+                  </View>
+                  <View style={[s.badge, present ? s.badgeDone : s.badgeDanger]}>
+                    <Text style={[s.badgeText, present ? s.badgeTextDone : s.badgeTextDanger]}>
+                      {present ? 'Present' : 'Absent'}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+      )}
+
+      {subTab === 'info' && (
+        <View style={{ marginTop: 16, gap: 12 }}>
+          <Banner tone="info">
+            Timetable schedules and classes are synchronised live with the main institution hub.
+          </Banner>
+          <Card>
+            <Eyebrow>SCHEDULE</Eyebrow>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+              <Clock size={14} color={colors.teal} />
+              <Text style={{ color: colors.navy, fontSize: 14, fontWeight: '600' }}>
+                View from teacher's timetable
+              </Text>
+            </View>
+          </Card>
+          <View style={s.card}>
+            <Text style={[s.sectionTitle, { marginBottom: 12 }]}>CLASS</Text>
+            <Text style={{ color: colors.navy, fontSize: 14, fontWeight: '600' }}>
+              {className}
+            </Text>
+          </View>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+// ─── S31–S34: Profile Tab ─────────────────────────────────────────────────────
+
+function ProfileTab({
+  childrenList,
+  selectedChild,
+  onSelectChild,
+  onSelectChildPress,
+  onLogout,
+}: {
+  childrenList: ChildItem[];
+  selectedChild: ChildItem | undefined;
+  onSelectChild: (id: string) => void;
+  onSelectChildPress: () => void;
+  onLogout: () => void;
+}) {
+  return (
+    <ScrollView style={s.tabContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
+
+      {/* Active Child */}
+      <Card style={{ marginBottom: 16 }}>
+        <Eyebrow>ACTIVE CHILD</Eyebrow>
+        {selectedChild ? (
+          <Pressable
+            accessibilityRole="button"
+            style={[s.siblingItem, { marginTop: 12 }]}
+            onPress={onSelectChildPress}
+          >
+            <AvatarBadge label={selectedChild.name} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <Text style={s.siblingName}>{selectedChild.name}</Text>
+              {selectedChild.rollNumber
+                ? <Text style={s.classCardSub}>Roll {selectedChild.rollNumber}</Text>
+                : null}
+            </View>
+            <View style={[s.badge, s.badgeDone]}>
+              <Text style={[s.badgeText, s.badgeTextDone]}>Active</Text>
+            </View>
+          </Pressable>
+        ) : (
+          <Text style={{ color: colors.teal, fontSize: 13, textAlign: 'center', paddingVertical: 16 }}>
+            No children linked yet.
+          </Text>
+        )}
+        <Text style={{ color: colors.teal, fontSize: 11, textAlign: 'center', marginTop: 12 }}>
+          Tap the child card above or use the top-right header avatar to switch between registered siblings.
+        </Text>
+      </Card>
+
+      {/* Settings */}
+      <Text style={[s.sectionTitle, { marginBottom: 12 }]}>SETTINGS</Text>
+      <Card style={{ marginBottom: 16 }}>
+        <ProfileLink icon={Bell} label="Alert Notifications" />
+        <ProfileLink icon={Shield} label="Privacy & Data" last />
+      </Card>
+
+      {/* Account */}
+      <Card style={{ marginBottom: 16 }}>
+        <Eyebrow>ACCOUNT TYPE</Eyebrow>
+        <View style={[s.profileRow, { marginTop: 8 }]}>
+          <Text style={s.profileValue}>Verified Family Account</Text>
+          <View style={s.activePill}>
+            <Text style={s.activePillText}>SECURE OTP</Text>
           </View>
         </View>
       </Card>
 
-      <View style={{ flexDirection: "row", gap: spacing.md }}>
-        <MetricCard label="Present" value={presentCount} tone="success" />
-        <MetricCard label="Absent" value={absentCount} tone="danger" />
-      </View>
+      {/* Logout using standard Button */}
+      <Button variant="danger" onPress={onLogout} style={{ marginTop: 8 }}>
+        Log Out
+      </Button>
+    </ScrollView>
+  );
+}
 
-      <Card>
-        <Eyebrow>Children</Eyebrow>
-        {children.data.map((child) => (
-          <Button
-            key={child.id}
-            variant={selectedChild?.id === child.id ? "primary" : "ghost"}
-            onPress={() => setSelectedChildId(child.id)}
-          >
-            {child.name}
-          </Button>
-        ))}
-      </Card>
+// ─── Helper Components ────────────────────────────────────────────────────────
 
-      <Card>
-        <SectionTitle>Classes</SectionTitle>
-        {classes.data?.length ? (
-          classes.data.map((row) => (
-            <View
-              key={row.id}
-              style={{
-                borderBottomColor: colors.border,
-                borderBottomWidth: 1,
-                gap: spacing.xs,
-                paddingVertical: spacing.sm,
-              }}
-            >
-              <Text style={{ color: colors.ink, fontSize: 18, fontWeight: "800" }}>{row.name}</Text>
-              <Muted mono>{row.subject ?? "General"}</Muted>
-            </View>
-          ))
-        ) : (
-          <Muted>No classes linked yet.</Muted>
-        )}
-      </Card>
-
-      <Card>
-        <View style={{ alignItems: "center", flexDirection: "row", gap: spacing.sm }}>
-          <CalendarCheck color={colors.ink} size={20} />
-          <SectionTitle>Attendance</SectionTitle>
-        </View>
-        {attendance.data?.length ? (
-          attendance.data.map((row) => <AttendanceRecord key={row.id} date={row.date} status={row.status} />)
-        ) : (
-          <Muted>No attendance records yet.</Muted>
-        )}
-      </Card>
+function StatPill({ value, label }: { value: number; label: string }) {
+  return (
+    <View style={s.statPill}>
+      <Text style={s.statNumber}>{value}</Text>
+      <Text style={s.statLabel}>{label}</Text>
     </View>
   );
 }
 
-function AttendanceRecord({ date, status }: { date: string; status: string }) {
-  const color =
-    status === "present" ? colors.success : status === "absent" ? colors.danger : colors.warning;
+function ProfileLink({ icon: Icon, label, last }: { icon: LucideIcon; label: string; last?: boolean }) {
   return (
-    <View
-      style={{
-        alignItems: "center",
-        borderBottomColor: colors.border,
-        borderBottomWidth: 1,
-        flexDirection: "row",
-        justifyContent: "space-between",
-        paddingVertical: spacing.sm,
-      }}
+    <Pressable
+      accessibilityRole="button"
+      style={[
+        s.profileLink,
+        !last && { borderBottomWidth: 1, borderBottomColor: colors.sky },
+      ]}
     >
-      <Muted mono>{date}</Muted>
-      <View
-        style={{
-          backgroundColor: `${color}12`,
-          borderRadius: radius.full,
-          paddingHorizontal: spacing.md,
-          paddingVertical: spacing.xs,
-        }}
-      >
-        <Text style={{ color, fontFamily: font.mono, textTransform: "uppercase" }}>{status}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Icon size={18} color={colors.teal} />
+        <Text style={{ color: colors.navy, fontSize: 14, fontWeight: '600' }}>{label}</Text>
       </View>
-    </View>
+      <ChevronRight size={16} color={colors.teal} />
+    </Pressable>
   );
 }
 
-function ProfilePanel({
-  logoutPending,
-  onLogout,
-}: {
-  logoutPending: boolean;
-  onLogout: () => void;
-}) {
-  const notifications = useMutation({
-    mutationFn: registerDeviceForNotifications,
-  });
+// ─── StyleSheet ───────────────────────────────────────────────────────────────
 
-  return (
-    <View style={{ gap: spacing.md }}>
-      <Card>
-        <Eyebrow>Notifications</Eyebrow>
-        <SectionTitle>Absence alerts</SectionTitle>
-        <Muted>Get attendance and announcement updates from the institute.</Muted>
-        {notifications.error ? <Banner tone="danger">{readError(notifications.error)}</Banner> : null}
-        <Button loading={notifications.isPending} onPress={() => notifications.mutate()}>
-          Enable Alerts
-        </Button>
-      </Card>
-      <Card>
-        <Eyebrow>Account</Eyebrow>
-        <SectionTitle>Session</SectionTitle>
-        <Muted mono>Secure OTP session stored on this device.</Muted>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onLogout}
-          style={{
-            alignItems: "center",
-            flexDirection: "row",
-            gap: spacing.sm,
-            justifyContent: "center",
-            opacity: logoutPending ? 0.7 : 1,
-            paddingVertical: spacing.sm,
-          }}
-        >
-          <LogOut color={colors.danger} size={18} />
-          <Text style={{ color: colors.danger, fontFamily: font.mono, fontWeight: "800" }}>
-            LOG OUT
-          </Text>
-        </Pressable>
-      </Card>
-    </View>
-  );
-}
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.paper },
 
-function readError(error: unknown) {
-  if (!error) return "Something went wrong";
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Something went wrong";
-}
+  // Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    height: 64,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.sky,
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  logoBox: {
+    width: 34, height: 34, borderRadius: 8,
+    backgroundColor: colors.navy,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  logoText: { color: colors.white, fontWeight: '900', fontSize: 14 },
+  headerBrand: { color: colors.navy, fontWeight: '900', fontSize: 11, letterSpacing: 2 },
+  headerSub: { color: colors.teal, fontSize: 11 },
+  iconBtn: {
+    width: 34, height: 34, borderRadius: 17,
+    borderWidth: 1.5, borderColor: colors.sky,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  avatarCircle: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: colors.navy,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  avatarText: { color: colors.white, fontWeight: '700', fontSize: 14 },
+
+  // Tab bar
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: colors.white,
+    borderTopWidth: 1,
+    borderTopColor: colors.sky,
+    paddingVertical: 8,
+  },
+  tabItem: { flex: 1, alignItems: 'center', gap: 4 },
+  tabIconWrap: {
+    width: 40, height: 32, borderRadius: 20,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  tabIconActive: { backgroundColor: colors.navy },
+  tabLabel: { color: colors.teal, fontSize: 10, letterSpacing: 0.5 },
+  tabLabelActive: { color: colors.navy, fontWeight: '600' },
+
+  // Content
+  tabContent: { flex: 1, padding: 16 },
+
+  // Welcome Banner
+  welcomeBanner: {
+    backgroundColor: colors.navy,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+  },
+  welcomeGreeting: { color: colors.sky, fontSize: 10, fontWeight: '700', letterSpacing: 1.5 },
+  welcomeName: { color: colors.white, fontSize: 22, fontWeight: '700', marginTop: 4 },
+  welcomeSub: { color: 'rgba(255,255,255,0.55)', fontSize: 12, marginTop: 4 },
+
+  // Alert banner
+  alertBanner: {
+    backgroundColor: colors.navy,
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  alertIconCircle: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: colors.teal,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  alertTitle: { color: colors.white, fontSize: 13, fontWeight: '700' },
+  alertSub: { color: 'rgba(255,255,255,0.6)', fontSize: 11 },
+
+  // Section
+  sectionTitle: {
+    color: colors.navy, fontSize: 11, fontWeight: '700',
+    letterSpacing: 1.5, textTransform: 'uppercase',
+  },
+
+  // Card
+  card: {
+    backgroundColor: colors.white,
+    borderWidth: 1.5, borderColor: colors.sky,
+    borderRadius: 14, padding: 18, marginBottom: 12,
+  },
+  cardTitle: { color: colors.navy, fontSize: 15, fontWeight: '700', marginBottom: 4 },
+  cardDate: { color: colors.teal, fontSize: 11, marginTop: 8 },
+
+  // Announcement extras
+  annInstitutionRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12,
+  },
+  annInstitutionBadge: {
+    width: 22, height: 22, borderRadius: 6, backgroundColor: colors.navy,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  annInstitutionInitial: { color: colors.white, fontSize: 10, fontWeight: '900' },
+  annInstitutionName: { color: colors.teal, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  annFooter: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16,
+  },
+  outlineBtnSmall: {
+    borderWidth: 1.5, borderColor: colors.sky, borderRadius: 20,
+    paddingHorizontal: 12, paddingVertical: 4,
+  },
+  outlineBtnSmallText: { color: colors.teal, fontSize: 10, fontWeight: '700' },
+  pinnedTag: {
+    color: colors.teal, fontSize: 9, fontWeight: '700',
+    letterSpacing: 1.5, marginBottom: 4, textTransform: 'uppercase',
+  },
+
+  // Page titles
+  pageTitle: { color: colors.navy, fontSize: 22, fontWeight: '700', marginBottom: 4 },
+  pageSub: { color: colors.teal, fontSize: 13 },
+
+  // Stats
+  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  statPill: {
+    backgroundColor: colors.white,
+    borderWidth: 1.5, borderColor: colors.sky,
+    borderRadius: 12, padding: 12, flex: 1, alignItems: 'center',
+  },
+  statNumber: { color: colors.navy, fontSize: 24, fontWeight: '900' },
+  statLabel: {
+    color: colors.teal, fontSize: 10, letterSpacing: 1,
+    marginTop: 2, textTransform: 'uppercase',
+  },
+
+  // Class card
+  classCard: {
+    backgroundColor: colors.white,
+    borderWidth: 1.5, borderColor: colors.sky,
+    borderRadius: 12, padding: 14,
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 8,
+  },
+  classCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  classIconBox: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: colors.sky,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  classCardName: { color: colors.navy, fontSize: 14, fontWeight: '600' },
+  classCardSub: { color: colors.teal, fontSize: 12, marginTop: 2 },
+
+  // Badges
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  badgeDone: { backgroundColor: '#DCFCE7' },
+  badgeDanger: { backgroundColor: '#FEE2E2' },
+  badgeText: { fontSize: 11, fontWeight: '600' },
+  badgeTextDone: { color: '#15803D' },
+  badgeTextDanger: { color: colors.danger },
+
+  // Back navigation
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  backText: { color: colors.teal, fontSize: 13, fontWeight: '600' },
+  detailTitle: { color: colors.navy, fontSize: 22, fontWeight: '900' },
+  detailSub: { color: colors.teal, fontSize: 13, marginTop: 4 },
+
+  // Segment tabs
+  segmentRow: { flexDirection: 'row', gap: 6 },
+  segmentPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  segmentActive: { backgroundColor: colors.navy },
+  segmentInactive: { backgroundColor: colors.sky },
+  segmentText: { fontSize: 12 },
+  segmentTextActive: { color: colors.white, fontWeight: '700' },
+  segmentTextInactive: { color: colors.teal, fontWeight: '600' },
+
+  // Calendar placeholder
+  calendarPlaceholder: {
+    height: 180, backgroundColor: colors.paper, borderRadius: 12,
+    justifyContent: 'center', alignItems: 'center',
+  },
+
+  // Log row
+  logRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', paddingVertical: 12,
+  },
+
+  // Profile tab
+  siblingItem: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: 12, borderRadius: 10,
+    backgroundColor: colors.white,
+    borderWidth: 1.5, borderColor: colors.sky,
+    gap: 12, marginBottom: 8,
+  },
+  siblingName: { color: colors.navy, fontSize: 14, fontWeight: '700' },
+  eyebrow: {
+    color: colors.teal, fontSize: 9, fontWeight: '800',
+    letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12,
+  },
+  profileRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  },
+  profileValue: { color: colors.navy, fontSize: 14, fontWeight: '600' },
+  activePill: {
+    backgroundColor: colors.sky, borderRadius: 12,
+    paddingHorizontal: 8, paddingVertical: 4,
+  },
+  activePillText: { color: colors.navy, fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  profileLink: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', paddingVertical: 14,
+  },
+  logoutBtn: {
+    backgroundColor: colors.danger, borderRadius: 12, height: 48,
+    flexDirection: 'row', gap: 8,
+    justifyContent: 'center', alignItems: 'center', marginTop: 4,
+  },
+  logoutBtnText: { color: colors.white, fontSize: 14, fontWeight: '600' },
+});
