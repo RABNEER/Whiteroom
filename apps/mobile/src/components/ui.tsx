@@ -444,7 +444,15 @@ export function BottomNav<T extends string>({
               key={item.value}
               accessibilityRole="button"
               onPress={() => onChange(item.value)}
-              style={styles.bottomItem}
+              android_ripple={{
+                color: "rgba(47, 65, 86, 0.12)",
+                borderless: true,
+                radius: 26,
+              }}
+              style={({ pressed }) => [
+                styles.bottomItem,
+                pressed && { opacity: 0.85 },
+              ]}
             >
               <View style={[
                 styles.navIconBox,
@@ -740,7 +748,7 @@ export const styles = StyleSheet.create({
   },
   heroPanel: {
     backgroundColor: colors.navy,
-    borderRadius: 38,
+    borderRadius: radius.xl,
     minHeight: 210,
     overflow: "hidden",
     position: "relative",
@@ -833,7 +841,7 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderColor: "rgba(86, 124, 141, 0.15)",
     borderWidth: 1.5,
-    borderRadius: 20,
+    borderRadius: radius.md,
     color: colors.navy,
     fontSize: 16,
     minHeight: 56,
@@ -847,7 +855,7 @@ export const styles = StyleSheet.create({
   button: {
     alignItems: "center",
     backgroundColor: colors.navy,
-    borderRadius: 24,
+    borderRadius: radius.md,
     minHeight: 56,
     justifyContent: "center",
     paddingHorizontal: spacing.md,
@@ -904,7 +912,7 @@ export const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.white,
     borderColor: "rgba(86, 124, 141, 0.15)",
-    borderRadius: 38,
+    borderRadius: radius.lg,
     borderWidth: 1.5,
     gap: spacing.sm,
     padding: spacing.md,
@@ -921,7 +929,7 @@ export const styles = StyleSheet.create({
     flexGrow: 1,
     minHeight: 166,
     position: "relative",
-    borderRadius: 40,
+    borderRadius: radius.lg,
   },
   metricIcon: {
     alignItems: "center",
@@ -1006,26 +1014,27 @@ export const styles = StyleSheet.create({
   },
   bottomNavContainer: {
     position: "absolute",
-    bottom: 24,
-    left: 12,
-    right: 12,
+    bottom: 0,
+    left: 0,
+    right: 0,
     zIndex: 1000,
   },
   bottomNav: {
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    borderColor: "#D0DCE6",
-    borderRadius: 40,
-    borderWidth: 1.5,
+    backgroundColor: "rgba(255, 255, 255, 0.98)",
+    borderTopColor: "rgba(86, 124, 141, 0.15)",
+    borderTopWidth: 1.5,
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    height: 86,
+    height: 80,
     paddingHorizontal: spacing.sm,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
   bottomItem: {
     alignItems: "center",
     flex: 1,
-    gap: spacing.xs,
+    gap: 2,
     justifyContent: "center",
   },
   navIconBox: {
@@ -1034,13 +1043,12 @@ export const styles = StyleSheet.create({
     borderRadius: radius.full,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.white,
-    borderColor: "rgba(86, 124, 141, 0.15)",
-    borderWidth: 1.5,
+    backgroundColor: "transparent",
+    overflow: "hidden",
   },
   navIconBoxActive: {
     backgroundColor: colors.navy,
-    borderColor: colors.navy,
+    borderRadius: radius.full,
   },
   bottomLabel: {
     color: colors.teal,
@@ -1108,8 +1116,8 @@ export const styles = StyleSheet.create({
   },
   drawerSheet: {
     backgroundColor: colors.paper,
-    borderTopLeftRadius: 44,
-    borderTopRightRadius: 44,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     padding: spacing.lg,
     paddingBottom: spacing.xl + 20,
     borderColor: "rgba(255, 255, 255, 0.8)",
