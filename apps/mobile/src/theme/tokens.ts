@@ -26,7 +26,10 @@ export const radius = {
 } as const;
 
 export const font = {
-  display: "System",
-  body: "System",
+  display: "Inter_900Black",
+  body: "Inter_400Regular",
+  medium: "Inter_500Medium",
+  semibold: "Inter_600SemiBold",
+  bold: "Inter_700Bold",
   mono: "Courier New",
 } as const;

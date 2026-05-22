@@ -131,20 +131,8 @@ export function AppHeader({
   return (
     <View style={styles.header}>
       <View style={styles.brandLockup}>
-        <View style={styles.brandMark}>
-          <Image
-            source={LogoImage}
-            style={{ width: 34, height: 34, borderRadius: 8 }}
-          />
-        </View>
         <View style={styles.headerText}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text style={styles.navBrand}>WHITEROOM</Text>
-            <View style={styles.brandDot} />
-          </View>
-          <Text style={styles.navContext}>
-            {[eyebrow, title, accent].filter(Boolean).join(" / ")}
-          </Text>
+          <Text style={styles.navBrand}>Whiteroom</Text>
           {meta ? <Text style={styles.navMeta}>{meta}</Text> : null}
         </View>
       </View>
@@ -716,9 +704,10 @@ export const styles = StyleSheet.create({
   },
   navBrand: {
     color: colors.navy,
-    fontSize: 16,
+    fontFamily: font.display,
+    fontSize: 26,
     fontWeight: "900",
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
   brandDot: {
     width: 6,
