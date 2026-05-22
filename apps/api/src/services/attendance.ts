@@ -325,7 +325,7 @@ export async function markAttendanceBatch(
 export async function getStudentAttendanceHistory(
   tenantId: string,
   studentId: string,
-  filters?: { classId?: string; month?: string }
+  filters?: { classId?: string; month?: string; page?: number; limit?: number }
 ) {
   // FIX: Teacher can create attendance session for another tenant's classroom
   const [student] = await db

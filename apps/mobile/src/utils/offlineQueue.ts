@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import { api } from '../api/client';
 
 export interface OfflineAttendance {
   sessionId: string;
@@ -76,7 +77,6 @@ export const offlineQueue = {
       if (queue.length >= MAX_QUEUE_SIZE) {
         // Force sync before adding more
         try {
-          const { api } = await import("../api/client.js");
           await offlineQueue.flush(api.attendanceMark);
         } catch (e) {
           console.error("Failed to auto-sync full offline queue", e);

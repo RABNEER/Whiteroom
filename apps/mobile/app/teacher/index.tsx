@@ -63,7 +63,7 @@ export default function TeacherScreen() {
   const qc = useQueryClient();
 
   const tenant = useQuery({ queryKey: ['tenant'], queryFn: api.tenantMe });
-  const classes = useQuery({ queryKey: ['classes'], queryFn: api.classes });
+  const classes = useQuery({ queryKey: ['classes'], queryFn: () => api.classes() });
 
   // Guard: redirect incomplete onboarding
   useEffect(() => {
@@ -120,7 +120,7 @@ export default function TeacherScreen() {
   });
 
   const tenantName = tenant.data?.name ?? 'My Institution';
-  const classList = classes.data?.data ?? classes.data ?? [];
+  const classList = classes.data?.data ?? [];
 
   // ── Bottom Tab Bar ───────────────────────────────────────────────────────────
   const TABS: { value: Tab; label: string; icon: LucideIcon }[] = [
@@ -209,14 +209,14 @@ function HomeTab({
   onTabChange: (t: Tab) => void;
   onClassPress: (cls: { id: string; name: string; subject?: string | null }) => void;
 }) {
-  const students = useQuery({ queryKey: ['students'], queryFn: api.students });
+  const students = useQuery({ queryKey: ['students'], queryFn: () => api.students() });
   const sessionsQ = useQuery({
     queryKey: ['sessions'],
     queryFn: () => api.attendanceSessions({ date: todayIsoDate() }),
   });
 
-  const todaySessions = sessionsQ.data?.data ?? sessionsQ.data ?? [];
-  const studentCount = students.data?.data?.length ?? students.data?.length ?? 0;
+  const todaySessions = sessionsQ.data?.data ?? [];
+  const studentCount = students.data?.data?.length ?? 0;
   const doneCount = todaySessions.filter((x) => x.totalPresent != null).length;
 
   return (
@@ -443,7 +443,7 @@ function ClassDetailView({
           { value: 'Schedule', label: 'Schedule' },
           { value: 'Invite', label: 'Invite' },
         ]}
-        onChange={setSubTab}
+        onChange={(v) => setSubTab(v as SubTab)}
       />
 
       <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginTop: 16 }}>
@@ -510,7 +510,7 @@ function AttendanceView({ classId }: { classId: string }) {
     onSuccess: (session) => {
       setSessionId(session.id);
       const initial: Record<string, AttendanceStatus> = {};
-      const studentList = students.data?.data ?? students.data ?? [];
+      const studentList = students.data?.data ?? [];
       studentList.forEach((st) => { initial[st.id] = 'present'; });
       setRecords(initial);
     },
@@ -597,12 +597,12 @@ function AttendanceView({ classId }: { classId: string }) {
         )}
         <Text style={s.subViewTitle}>Take Attendance</Text>
         <Text style={s.subViewSub}>
-          {students.isLoading ? 'Loading students...' : `${(students.data?.data ?? students.data ?? []).length} students enrolled`}
+          {students.isLoading ? 'Loading students...' : `${(students.data?.data ?? []).length} students enrolled`}
         </Text>
         <Pressable
           accessibilityRole="button"
-          style={[s.startBtn, (!(students.data?.data ?? students.data ?? []).length || createSession.isPending) && { opacity: 0.5 }]}
-          disabled={!(students.data?.data ?? students.data ?? []).length || createSession.isPending}
+          style={[s.startBtn, (!(students.data?.data ?? []).length || createSession.isPending) && { opacity: 0.5 }]}
+          disabled={!(students.data?.data ?? []).length || createSession.isPending}
           onPress={() => createSession.mutate()}
         >
           {createSession.isPending
@@ -619,17 +619,17 @@ function AttendanceView({ classId }: { classId: string }) {
       <View style={s.statsRow}>
         <StatPill value={presentCount} label="Present" />
         <StatPill value={absentCount} label="Absent" />
-        <StatPill value={(students.data?.data ?? students.data ?? []).length} label="Total" />
+        <StatPill value={(students.data?.data ?? []).length} label="Total" />
       </View>
 
       {/* Donut Chart */}
       <View style={{ alignItems: 'center', marginVertical: 16 }}>
-        <DonutChart3D value={(students.data?.data ?? students.data ?? []).length ? Math.round((presentCount / (students.data?.data ?? students.data ?? []).length) * 100) : 0} />
+        <DonutChart3D value={(students.data?.data ?? []).length ? Math.round((presentCount / (students.data?.data ?? []).length) * 100) : 0} />
       </View>
 
       {/* Student rows */}
       <View style={s.studentList}>
-        {(students.data?.data ?? students.data ?? []).map((student: any) => (
+        {(students.data?.data ?? []).map((student: any) => (
           <StudentRow
             key={student.id}
             name={student.name}
@@ -760,7 +760,7 @@ function StudentsView({ classId }: { classId: string }) {
 
       {students.isLoading ? (
         <ActivityIndicator color={colors.teal} style={{ marginTop: 24 }} />
-      ) : (students.data?.data ?? students.data ?? []).length === 0 ? (
+      ) : (students.data?.data ?? []).length === 0 ? (
         <View style={[s.card, { alignItems: 'center', padding: 24 }]}>
           <Text style={{ fontSize: 32, marginBottom: 8 }}>👥</Text>
           <Text style={{ color: colors.teal, fontSize: 13, textAlign: 'center' }}>
@@ -769,7 +769,7 @@ function StudentsView({ classId }: { classId: string }) {
         </View>
       ) : (
         <View style={s.studentList}>
-          {(students.data?.data ?? students.data ?? []).map((student: any) => (
+          {(students.data?.data ?? []).map((student: any) => (
             <View key={student.id} style={s.studentRow}>
               <View style={s.studentInfo}>
                 <View style={s.studentAvatar}>
@@ -1014,7 +1014,7 @@ function AnnounceTab() {
   const [body, setBody] = useState('');
   const [pinned, setPinned] = useState(false);
 
-  const announcements = useQuery({ queryKey: ['announcements'], queryFn: api.announcements });
+  const announcements = useQuery({ queryKey: ['announcements'], queryFn: () => api.announcements() });
 
   const post = useMutation({
     mutationFn: () => api.announcementCreate({ title: title.trim(), body: body.trim(), isPinned: pinned }),
@@ -1074,14 +1074,14 @@ function AnnounceTab() {
         </Pressable>
       )}
 
-      {(announcements.data?.data ?? announcements.data ?? []).map((ann: any) => (
+      {(announcements.data?.data ?? []).map((ann: any) => (
         <View key={ann.id} style={[s.card, { marginBottom: 12 }, ann.isPinned && { borderColor: colors.teal }]}>
           {ann.isPinned && <Text style={s.pinnedTag}>📌 PINNED</Text>}
           <Text style={s.announcementTitle}>{ann.title}</Text>
           <Text style={s.announcementBody}>{ann.body}</Text>
         </View>
       ))}
-      {!(announcements.data?.data ?? announcements.data ?? []).length && !showCreate && (
+      {!(announcements.data?.data ?? []).length && !showCreate && (
         <View style={[s.card, { alignItems: 'center', padding: 24 }]}>
           <Text style={{ fontSize: 32, marginBottom: 8 }}>📣</Text>
           <Text style={{ color: colors.teal, fontSize: 13, textAlign: 'center' }}>

@@ -56,6 +56,7 @@ interface ChildItem {
   id: string;
   name: string;
   rollNumber?: string | null;
+  tenantId?: string;
 }
 
 const TABS: { value: ParentTab; label: string; icon: LucideIcon }[] = [
@@ -290,7 +291,7 @@ function FeedTab({
   selectedChild: ChildItem | undefined;
   tenantName: string;
 }) {
-  const feed = useQuery({ queryKey: ['parentFeed'], queryFn: api.parentFeed });
+  const feed = useQuery({ queryKey: ['parentFeed'], queryFn: () => api.parentFeed() });
   const announcements = feed.data?.announcements ?? [];
   const unread = feed.data?.unread ?? 0;
 
@@ -634,7 +635,7 @@ function ChildClassDetail({
           { value: 'attendance', label: 'Attendance' },
           { value: 'info', label: 'Info' },
         ]}
-        onChange={setSubTab}
+        onChange={(v) => setSubTab(v as 'attendance' | 'info')}
       />
 
       {subTab === 'attendance' && (
