@@ -30,11 +30,7 @@ export interface OTPSendRequest {
 }
 
 export interface OTPVerifyRequest {
-  phone: string;
-  otp: string;
-  inviteCode?: string; // present if parent joining via invite
-  studentName?: string; // optional parent self-linking input
-  rollNumber?: string; // optional parent self-linking input
+  idToken: string;
 }
 
 export interface AuthTokens {

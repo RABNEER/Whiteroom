@@ -1,5 +1,6 @@
 import type { Context } from "hono";
 import { z } from "zod";
+import { env } from "../../lib/env.js";
 import { db } from "../../lib/db.js";
 import {
   otpAttempts,
@@ -149,7 +150,7 @@ export async function otpVerifyHandler(c: Context) {
 
       // ─── Find Matching OTP ───
       let otpRecord: { id: string } | null | undefined = null;
-      const isDevBypass = process.env.NODE_ENV === "development" && parsed.data.otp === "000000";
+      const isDevBypass = env.NODE_ENV === "development" && env.ENABLE_DEV_BYPASS === "true" && parsed.data.otp === "000000";
 
       if (isDevBypass) {
         otpRecord = { id: "dev-bypass" };

@@ -5,12 +5,14 @@ import { and, count, eq, inArray, isNull } from "@whiteroom/db";
 
 export async function createClass(
   tenantId: string,
+  teacherId: string,
   input: { name: string; subject?: string; teacherName?: string }
 ) {
   const [created] = await db
     .insert(classes)
     .values({
       tenantId,
+      teacherId,
       name: input.name,
       subject: input.subject ?? null,
       teacherName: input.teacherName ?? null,

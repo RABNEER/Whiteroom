@@ -36,9 +36,43 @@ export async function otpSendHandler(c: Context) {
     throw Errors.validation("Invalid phone number. Expected format: +91 followed by 10 digits.");
   }
 
-  // Firebase Auth handles real SMS dispatch client-side.
-  // Backend `/auth/otp/send` acts as a backward-compatible placeholder success route.
-  console.log(`📱 [FIREBASE SMS ROUTER] Bypassing MSG91. Client will trigger Firebase SMS for: ${phone}`);
+  const phoneHash = hashSHA256(phone);
+
+  // ─── Rate Limit Check ───
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const [result] = await db
+    .select({ total: count() })
+    .from(otpAttempts)
+    .where(
+      and(
+        eq(otpAttempts.phoneHash, phoneHash),
+        gte(otpAttempts.createdAt, oneHourAgo)
+      )
+    );
+
+  if (result && result.total >= Limits.OTP_RATE_LIMIT_PER_HOUR) {
+    throw Errors.rateLimited(
+      `OTP limit reached. Try again after ${Math.ceil((60 * 60 * 1000 - (Date.now() - oneHourAgo.getTime())) / 1000 / 60)} minutes.`
+    );
+  }
+
+  // ─── Generate & Store OTP ───
+  const otp = generateOTP();
+  const otpHash = hashSHA256(otp);
+  const expiresAt = new Date(Date.now() + Limits.OTP_EXPIRY_SECONDS * 1000);
+
+  await db.insert(otpAttempts).values({
+    phoneHash,
+    otp: otpHash,
+    expiresAt,
+  });
+
+  // ─── Send SMS ───
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[DEV MODE] Skipping SMS. OTP for ${phone} is: ${otp}`);
+  } else {
+    await sendOTP(phone, otp);
+  }
 
   const response: ApiResponse<OTPSendResponse> = {
     success: true,

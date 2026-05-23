@@ -23,9 +23,10 @@ import {
   Trash2,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-
+import auth from '@react-native-firebase/auth';
 import type { OTPVerifyResponse } from '@whiteroom/shared';
+
+
 import { api, ApiError } from '@/api/client';
 import { useSession } from '@/auth/session-store';
 import { colors, spacing } from '@/theme/tokens';
@@ -41,7 +42,6 @@ export default function AuthScreen() {
   const [step, setStep] = useState<Step>('SPLASH');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
-  const [registrationToken, setRegistrationToken] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role>('teacher');
   const [inviteCode, setInviteCode] = useState('');
@@ -50,6 +50,9 @@ export default function AuthScreen() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [resendTimer, setResendTimer] = useState(45);
   const [attemptsLeft, setAttemptsLeft] = useState(5);
+  const [loading, setLoading] = useState(false);
+  const [confirmation, setConfirmation] = useState<auth.ConfirmationResult | null>(null);
+  const [registrationToken, setRegistrationToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resolvedTenant, setResolvedTenant] = useState<string | null>(null);
 
@@ -78,37 +81,6 @@ export default function AuthScreen() {
   }, [step, resendTimer]);
 
   // Mutations
-  const sendOtpMutation = useMutation({
-    mutationFn: () => api.otpSend(phone),
-    onSuccess: () => {
-      setError(null);
-      setStep('OTP');
-      setResendTimer(45);
-      setAttemptsLeft(5);
-    },
-    onError: (err: unknown) =>
-      setError(err instanceof ApiError ? err.message : 'Failed to send OTP'),
-  });
-
-  const verifyOtpMutation = useMutation({
-    mutationFn: (params: { phone: string; otp: string }) =>
-      api.otpVerify(params),
-    onSuccess: async (data) => {
-      setError(null);
-      if (data.type === 'existing_user') {
-        await setSession(data);
-        router.replace(data.user?.role === 'parent' ? '/parent' : '/teacher');
-      } else {
-        setRegistrationToken(data.registrationToken);
-        setStep('CONSENT');
-      }
-    },
-    onError: (err: unknown) => {
-      setError(err instanceof ApiError ? err.message : 'Verification failed');
-      if (step === 'OTP') setAttemptsLeft((a) => Math.max(0, a - 1));
-    },
-  });
-
   const registerMutation = useMutation({
     mutationFn: (params: {
       registrationToken: string;
@@ -121,7 +93,7 @@ export default function AuthScreen() {
     onSuccess: async (data) => {
       setError(null);
       await setSession(data);
-      router.replace(selectedRole === 'parent' ? '/parent' : '/tenant-init');
+      router.replace(selectedRole === 'parent' ? '/parent' : '/teacher');
     },
     onError: (err: unknown) => {
       setError(err instanceof ApiError ? err.message : 'Registration failed');
@@ -147,16 +119,100 @@ export default function AuthScreen() {
   });
 
   // Handlers
-  const handlePhoneSubmit = () => {
-    if (phone.replace(/\D/g, '').length === 10) sendOtpMutation.mutate();
+  const handleSendOtp = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const formattedPhone = `+91${phone.replace(/\D/g, '')}`;
+      const result = await auth().signInWithPhoneNumber(formattedPhone);
+      setConfirmation(result);
+      setStep('OTP');
+      setResendTimer(45);
+      setAttemptsLeft(5);
+    } catch (err: any) {
+      console.error("[FIREBASE OTP SEND ERROR]", err);
+      switch (err.code) {
+        case 'auth/invalid-phone-number':
+          setError('Invalid phone number format.');
+          break;
+        case 'auth/too-many-requests':
+          setError('Too many attempts. Try again later.');
+          break;
+        case 'auth/missing-phone-number':
+          setError('Please enter your phone number.');
+          break;
+        default:
+          setError('Failed to send OTP. Try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // ── DEV BYPASS ────────────────────────────────────────────────────────────
-  // In development builds only: entering 000000 as OTP skips the API call
-  // and jumps straight to the Consent step (new user flow).
-  // This code is stripped from production bundles by Metro's __DEV__ dead-code
-  // elimination — it will NEVER appear in a release build.
-  const DEV_OTP = '000000';
+  const handleVerifyOtp = async () => {
+    if (!confirmation) {
+      setError('Session expired. Please resend OTP.');
+      setStep('PHONE');
+      return;
+    }
+    if (attemptsLeft <= 0) {
+      setError('Maximum attempts reached. Please resend OTP.');
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Verify OTP with Firebase
+      const credential = await confirmation.confirm(otp);
+      
+      // Get signed idToken from Firebase
+      const idToken = await credential.user.getIdToken();
+      
+      // Send idToken to Whiteroom backend
+      const response = await api.otpVerify({ idToken });
+      
+      if (response.type === 'existing_user') {
+        await setSession(response as any);
+        router.replace('/');
+      } else if (response.type === 'new_user') {
+        setRegistrationToken(response.registrationToken);
+        setStep('CONSENT');
+      }
+    } catch (err: any) {
+      console.error("[FIREBASE OTP VERIFY ERROR]", err);
+      switch (err.code) {
+        case 'auth/invalid-verification-code':
+          setAttemptsLeft(prev => prev - 1);
+          setError(`Wrong OTP. ${attemptsLeft - 1} attempts left.`);
+          break;
+        case 'auth/session-expired':
+          setError('OTP expired. Please request a new one.');
+          setConfirmation(null);
+          setStep('PHONE');
+          break;
+        case 'auth/too-many-requests':
+          setError('Too many attempts. Try again later.');
+          break;
+        default:
+          setError('Verification failed. Try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setConfirmation(null);
+    setOtp('');
+    setError(null);
+    setAttemptsLeft(5);
+    await handleSendOtp();
+  };
+
+  const handlePhoneSubmit = () => {
+    if (phone.replace(/\D/g, '').length === 10) handleSendOtp();
+  };
 
   const handleOtpChange = (value: string) => {
     const numeric = value.replace(/\D/g, '');
@@ -166,13 +222,7 @@ export default function AuthScreen() {
         setError('Maximum attempts reached. Please resend OTP.');
         return;
       }
-      if (__DEV__ && numeric === DEV_OTP) {
-        // Bypass: skip network — jump to Consent (simulating new user)
-        setError(null);
-        setStep('CONSENT');
-        return;
-      }
-      verifyOtpMutation.mutate({ phone, otp: numeric });
+      handleVerifyOtp();
     }
   };
 
@@ -383,11 +433,11 @@ export default function AuthScreen() {
                 ]}
                 disabled={
                   phone.replace(/\D/g, '').length !== 10 ||
-                  sendOtpMutation.isPending
+                  loading
                 }
                 onPress={handlePhoneSubmit}
               >
-                {sendOtpMutation.isPending ? (
+                {loading ? (
                   <ActivityIndicator color="#FFF" />
                 ) : (
                   <Text style={styles.buttonText}>SEND OTP →</Text>
@@ -465,8 +515,7 @@ export default function AuthScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={() => {
-                      sendOtpMutation.mutate();
-                      setOtp('');
+                      handleResend();
                     }}
                   >
                     <Text style={[styles.timerText, styles.resendLink]}>
@@ -495,12 +544,7 @@ export default function AuthScreen() {
                 </Text>
               </View>
 
-              {/* DEV-only bypass hint */}
-              {__DEV__ && (
-                <View style={styles.devBypassHint}>
-                  <Text style={styles.devBypassText}>🛠 DEV MODE · Enter 000000 to skip OTP</Text>
-                </View>
-              )}
+
 
               <Pressable
                 accessibilityRole="button"
@@ -508,18 +552,13 @@ export default function AuthScreen() {
                   styles.primaryButton,
                   (otp.length !== 6 || attemptsLeft <= 0) && { opacity: 0.5 },
                 ]}
-                disabled={otp.length !== 6 || verifyOtpMutation.isPending || attemptsLeft <= 0}
+                disabled={otp.length !== 6 || loading || attemptsLeft <= 0}
                 onPress={() => {
                   if (attemptsLeft <= 0) return;
-                  if (__DEV__ && otp === DEV_OTP) {
-                    setError(null);
-                    setStep('CONSENT');
-                    return;
-                  }
-                  verifyOtpMutation.mutate({ phone, otp });
+                  handleVerifyOtp();
                 }}
               >
-                {verifyOtpMutation.isPending ? (
+                {loading ? (
                   <ActivityIndicator color="#FFF" />
                 ) : (
                   <Text style={styles.buttonText}>VERIFY & CONTINUE →</Text>

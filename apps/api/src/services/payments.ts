@@ -67,7 +67,9 @@ export async function createSubscriptionOrder(
 
 export async function handleRazorpayWebhook(body: string, signature?: string) {
   if (!verifyRazorpaySignature(body, signature)) {
-    throw Errors.validation("Invalid Razorpay webhook signature");
+    throw Errors.validation(
+      "Invalid Razorpay webhook signature"
+    );
   }
 
   const event = JSON.parse(body) as {
