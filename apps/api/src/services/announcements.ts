@@ -152,9 +152,13 @@ export async function softDeleteAnnouncement(
 // ─── Mark Read ───
 
 export async function markAnnouncementRead(
+  tenantId: string,
   announcementId: string,
   userId: string
 ) {
+  // Enforce tenant boundary validation to block IDOR leakage (Finding 3 in plan 4)
+  await getAnnouncement(tenantId, announcementId);
+
   await db
     .insert(announcementReads)
     .values({

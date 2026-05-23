@@ -34,7 +34,7 @@ export async function signRefreshToken(payload: JWTPayload): Promise<string> {
  * Throws on invalid or expired tokens.
  */
 export async function verifyAccessToken(token: string): Promise<JWTPayload> {
-  const { payload } = await jwtVerify(token, accessSecret);
+  const { payload } = await jwtVerify(token, accessSecret, { algorithms: ["HS256"] });
   return payload as unknown as JWTPayload;
 }
 
@@ -43,6 +43,6 @@ export async function verifyAccessToken(token: string): Promise<JWTPayload> {
  * Throws on invalid or expired tokens.
  */
 export async function verifyRefreshToken(token: string): Promise<JWTPayload> {
-  const { payload } = await jwtVerify(token, refreshSecret);
+  const { payload } = await jwtVerify(token, refreshSecret, { algorithms: ["HS256"] });
   return payload as unknown as JWTPayload;
 }

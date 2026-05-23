@@ -1,8 +1,8 @@
 import { db } from "../lib/db.js";
 import { getRazorpayClient, verifyRazorpaySignature } from "../lib/razorpay.js";
-import { subscriptions } from "@whiteroom/db";
+import { subscriptions, eq, lt, and } from "@whiteroom/db";
 import { Errors, PlanTier } from "@whiteroom/shared";
-import { eq } from "@whiteroom/db";
+import { env } from "../lib/env.js";
 
 export const SubscriptionPlanKey = {
   PRO_YEARLY: "pro_yearly",
@@ -31,6 +31,23 @@ export async function createSubscriptionOrder(
   const catalogEntry = subscriptionCatalog[input.plan];
   if (!catalogEntry) {
     throw Errors.validation("Unsupported subscription plan.");
+  }
+
+  // Gracefully fallback to simulated mock order if credentials are not set
+  if (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET) {
+    console.log(`💳 [PAYMENTS MOCK FALLBACK] Razorpay not configured. Simulating order for Tenant: ${tenantId}`);
+    return {
+      id: `mock_order_${Math.random().toString(36).substring(2, 9)}`,
+      amount: catalogEntry.amount,
+      currency: catalogEntry.currency,
+      receipt: `tenant_${tenantId}_${Date.now()}`,
+      status: "created",
+      notes: {
+        tenantId,
+        userId,
+        plan: input.plan,
+      },
+    };
   }
 
   const razorpay = getRazorpayClient();
@@ -120,21 +137,17 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
 
 export async function downgradeExpiredSubscriptions() {
   const now = new Date();
-  const rows = await db
-    .select()
-    .from(subscriptions)
-    .where(eq(subscriptions.plan, PlanTier.PRO));
+  // Enforce optimized single batched query to avoid N+1 queries (Finding 5 in plan 4)
+  const result = await db
+    .update(subscriptions)
+    .set({ plan: PlanTier.FREE, updatedAt: now })
+    .where(
+      and(
+        eq(subscriptions.plan, PlanTier.PRO),
+        lt(subscriptions.endDate, now)
+      )
+    )
+    .returning();
 
-  let downgraded = 0;
-  for (const row of rows) {
-    if (row.endDate && row.endDate < now) {
-      await db
-        .update(subscriptions)
-        .set({ plan: PlanTier.FREE, updatedAt: now })
-        .where(eq(subscriptions.id, row.id));
-      downgraded += 1;
-    }
-  }
-
-  return { downgraded };
+  return { downgraded: result.length };
 }

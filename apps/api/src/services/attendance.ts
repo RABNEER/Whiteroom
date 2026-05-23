@@ -272,15 +272,26 @@ export async function markAttendanceBatch(
       if (row) upserted.push(row);
     }
 
-    const presentCount = records.filter((r) => r.status === "present").length;
-    const absentCount = records.filter((r) => r.status === "absent").length;
+    // Secure aggregate counts query inside transaction to prevent TOCTOU race conditions (Finding 2)
+    const [counts] = await tx
+      .select({
+        present: sql<number>`count(*) filter (where ${attendanceRecords.status} = 'present')`,
+        absent: sql<number>`count(*) filter (where ${attendanceRecords.status} = 'absent')`,
+        total: sql<number>`count(*)`,
+      })
+      .from(attendanceRecords)
+      .where(eq(attendanceRecords.sessionId, sessionId));
+
+    const presentCount = Number(counts?.present ?? 0);
+    const absentCount = Number(counts?.absent ?? 0);
+    const totalStudents = Number(counts?.total ?? 0);
 
     await tx
       .update(attendanceSessions)
       .set({
         totalPresent: presentCount,
         totalAbsent: absentCount,
-        totalStudents: records.length,
+        totalStudents: totalStudents,
       })
       .where(eq(attendanceSessions.id, sessionId));
 

@@ -19,6 +19,7 @@ export { otpAttempts, otpLockouts } from "./schema/otp-attempts.js";
 export { userTenants } from "./schema/user-tenants.js";
 export { reportsCache } from "./schema/reports-cache.js";
 export { idempotencyKeys } from "./schema/idempotency-keys.js";
+export { registrationTokens } from "./schema/registration-tokens.js";
 
 // ─── Utilities ───
 export { createId } from "./utils.js";

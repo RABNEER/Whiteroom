@@ -88,6 +88,29 @@ export interface OTPVerifyResponse {
   isNewUser: boolean;
 }
 
+export type OTPVerifyResult =
+  | {
+      type: "existing_user";
+      accessToken: string;
+      refreshToken: string;
+      user: {
+        id: string;
+        role: string;
+        tenantId: string;
+        tenants?: {
+          tenantId: string;
+          role: string;
+          status: string;
+          tenantName: string;
+        }[];
+      };
+      isNewUser: boolean;
+    }
+  | {
+      type: "new_user";
+      registrationToken: string;
+    };
+
 export interface RefreshResponse {
   accessToken: string;
 }

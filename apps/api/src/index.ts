@@ -20,6 +20,7 @@ import { announcementRoutes } from "./routes/announcements/index.js";
 import { paymentRoutes } from "./routes/payments/index.js";
 import { reportRoutes } from "./routes/reports/index.js";
 import { adminRoutes } from "./routes/admin/index.js";
+import { secureHeaders } from "hono/secure-headers";
 import { startJobs } from "./jobs/index.js";
 
 const app = new Hono();
@@ -48,6 +49,7 @@ app.use(
 );
 
 // ─── Global Middleware ───
+app.use("*", secureHeaders());
 app.use("*", logger());
 app.use("*", corsMiddleware());
 

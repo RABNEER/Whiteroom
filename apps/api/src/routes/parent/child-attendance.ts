@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import type { ApiResponse, JWTPayload } from "@whiteroom/shared";
 import { getStudentAttendanceHistory } from "../../services/attendance.js";
 import { assertParentOwnsStudent } from "../../services/students.js";
+import { parsePagination } from "../../lib/pagination.js";
 
 /**
  * Parent: view child's monthly attendance.
@@ -15,9 +16,7 @@ export async function childAttendanceHandler(c: Context) {
 
   await assertParentOwnsStudent(user.tenantId, user.userId, childId);
 
-  // FIX: No pagination on list endpoints — will OOM at 1000+ students
-  const page = Math.max(1, Number(c.req.query("page") ?? 1));
-  const limit = Math.min(100, Math.max(1, Number(c.req.query("limit") ?? 20)));
+  const { page, limit } = parsePagination(c, 20);
 
   const result = await getStudentAttendanceHistory(
     user.tenantId,

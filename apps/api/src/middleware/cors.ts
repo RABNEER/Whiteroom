@@ -5,8 +5,6 @@ export function corsMiddleware() {
   return honoCors({
     origin: (origin) => {
       const allowed = [
-        "https://*.web.app",
-        "https://*.firebaseapp.com",
         "exp://localhost:8081",
         "exp://192.168.1.*:8081",
         process.env.MOBILE_WEB_URL,
@@ -17,7 +15,8 @@ export function corsMiddleware() {
 
       const isAllowed = allowed.some((pattern) => {
         if (pattern.includes("*")) {
-          const regex = new RegExp(pattern.replace(/\*/g, ".*"));
+          const escaped = pattern.replace(/\./g, "\\.").replace(/\*/g, ".*");
+          const regex = new RegExp("^" + escaped + "$");
           return regex.test(origin);
         }
         return pattern === origin;

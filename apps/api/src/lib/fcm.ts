@@ -2,47 +2,12 @@ import { db } from "./db.js";
 import { env } from "./env.js";
 import { deviceTokens, notifications } from "@whiteroom/db";
 import { eq, and, inArray } from "@whiteroom/db";
-import { cert, getApps, initializeApp } from "firebase-admin/app";
-import { getMessaging } from "firebase-admin/messaging";
-
-/**
- * FCM push notification helper.
- *
- * Phase 4 uses a fire-and-forget pattern:
- * 1. Look up FCM tokens for target user(s)
- * 2. Write a notification record to the DB
- * 3. If Firebase Admin is configured, send via FCM.
- *    Otherwise, keep the notification unsent for local/dev environments.
- *
- * Constitution: No external state stores. Notification state lives in PostgreSQL.
- */
+import { getFirebaseMessaging } from "./firebase.js";
 
 interface PushPayload {
   title: string;
   body: string;
   type: "absence" | "reminder" | "announcement";
-}
-
-function getFirebaseMessaging() {
-  if (
-    !env.FIREBASE_PROJECT_ID ||
-    !env.FIREBASE_CLIENT_EMAIL ||
-    !env.FIREBASE_PRIVATE_KEY
-  ) {
-    return null;
-  }
-
-  if (getApps().length === 0) {
-    initializeApp({
-      credential: cert({
-        projectId: env.FIREBASE_PROJECT_ID,
-        clientEmail: env.FIREBASE_CLIENT_EMAIL,
-        privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-      }),
-    });
-  }
-
-  return getMessaging();
 }
 
 /**
@@ -123,7 +88,7 @@ export async function sendPushToUsers(
   );
 
   // Don't await — fire-and-forget per constitution
-  Promise.allSettled(promises).catch(() => {});
+  Promise.allSettled(promises).catch(() => { });
 }
 
 /**

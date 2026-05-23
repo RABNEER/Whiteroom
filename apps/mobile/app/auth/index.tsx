@@ -25,6 +25,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 
+import type { OTPVerifyResponse } from '@whiteroom/shared';
 import { api, ApiError } from '@/api/client';
 import { useSession } from '@/auth/session-store';
 import { colors, spacing } from '@/theme/tokens';
@@ -40,6 +41,7 @@ export default function AuthScreen() {
   const [step, setStep] = useState<Step>('SPLASH');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
+  const [registrationToken, setRegistrationToken] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role>('teacher');
   const [inviteCode, setInviteCode] = useState('');
@@ -82,29 +84,53 @@ export default function AuthScreen() {
       setError(null);
       setStep('OTP');
       setResendTimer(45);
+      setAttemptsLeft(5);
     },
     onError: (err: unknown) =>
       setError(err instanceof ApiError ? err.message : 'Failed to send OTP'),
   });
 
   const verifyOtpMutation = useMutation({
-    mutationFn: (params: { phone: string; otp: string; inviteCode?: string; studentName?: string; rollNumber?: string }) =>
+    mutationFn: (params: { phone: string; otp: string }) =>
       api.otpVerify(params),
     onSuccess: async (data) => {
       setError(null);
-      if (!data.isNewUser) {
+      if (data.type === 'existing_user') {
         await setSession(data);
         router.replace(data.user?.role === 'parent' ? '/parent' : '/teacher');
-      } else if (step === 'OTP') {
+      } else {
+        setRegistrationToken(data.registrationToken);
         setStep('CONSENT');
-      } else if (step === 'ROLE_SELECT') {
-        await setSession(data);
-        router.replace(selectedRole === 'parent' ? '/parent' : '/tenant-init');
       }
     },
     onError: (err: unknown) => {
       setError(err instanceof ApiError ? err.message : 'Verification failed');
       if (step === 'OTP') setAttemptsLeft((a) => Math.max(0, a - 1));
+    },
+  });
+
+  const registerMutation = useMutation({
+    mutationFn: (params: {
+      registrationToken: string;
+      role: Role;
+      consentAccepted: boolean;
+      inviteCode?: string;
+      studentName?: string;
+      rollNumber?: string;
+    }) => api.register(params),
+    onSuccess: async (data) => {
+      setError(null);
+      await setSession(data);
+      router.replace(selectedRole === 'parent' ? '/parent' : '/tenant-init');
+    },
+    onError: (err: unknown) => {
+      setError(err instanceof ApiError ? err.message : 'Registration failed');
+      if (err instanceof ApiError && err.code === 'OTP_EXPIRED') {
+        setRegistrationToken(null);
+        setOtp('');
+        setStep('PHONE');
+        setError('Session expired. Please verify OTP again.');
+      }
     },
   });
 
@@ -136,6 +162,10 @@ export default function AuthScreen() {
     const numeric = value.replace(/\D/g, '');
     setOtp(numeric);
     if (numeric.length === 6) {
+      if (attemptsLeft <= 0) {
+        setError('Maximum attempts reached. Please resend OTP.');
+        return;
+      }
       if (__DEV__ && numeric === DEV_OTP) {
         // Bypass: skip network — jump to Consent (simulating new user)
         setError(null);
@@ -157,9 +187,38 @@ export default function AuthScreen() {
   };
 
   const handleFinalSubmit = () => {
-    verifyOtpMutation.mutate({
-      phone,
-      otp,
+    if (registrationToken === 'dev-bypass-token') {
+      const mockSession: OTPVerifyResponse = {
+        accessToken: 'mock-access-token',
+        refreshToken: 'mock-refresh-token',
+        user: {
+          id: 'mock-user-id',
+          role: selectedRole,
+          tenantId: 'mock-tenant-id',
+          tenants: [{
+            tenantId: 'mock-tenant-id',
+            role: selectedRole,
+            status: 'active',
+            tenantName: resolvedTenant || 'Mock Institute',
+          }],
+        },
+        isNewUser: true,
+      };
+      setSession(mockSession).then(() => {
+        router.replace(selectedRole === 'parent' ? '/parent' : '/tenant-init');
+      });
+      return;
+    }
+
+    if (!registrationToken) {
+      setError('Registration session not found. Please restart.');
+      return;
+    }
+
+    registerMutation.mutate({
+      registrationToken,
+      role: selectedRole,
+      consentAccepted: agreed,
       inviteCode: selectedRole === 'parent' ? inviteCode : undefined,
       studentName: selectedRole === 'parent' ? studentName : undefined,
       rollNumber: selectedRole === 'parent' ? rollNumber : undefined,
@@ -447,10 +506,11 @@ export default function AuthScreen() {
                 accessibilityRole="button"
                 style={[
                   styles.primaryButton,
-                  otp.length !== 6 && { opacity: 0.5 },
+                  (otp.length !== 6 || attemptsLeft <= 0) && { opacity: 0.5 },
                 ]}
-                disabled={otp.length !== 6 || verifyOtpMutation.isPending}
+                disabled={otp.length !== 6 || verifyOtpMutation.isPending || attemptsLeft <= 0}
                 onPress={() => {
+                  if (attemptsLeft <= 0) return;
                   if (__DEV__ && otp === DEV_OTP) {
                     setError(null);
                     setStep('CONSENT');
@@ -671,17 +731,17 @@ export default function AuthScreen() {
                   styles.primaryButton,
                   { marginTop: spacing.md },
                   (selectedRole === 'parent' && !resolvedTenant) ||
-                    verifyOtpMutation.isPending
+                    registerMutation.isPending
                     ? { opacity: 0.5 }
                     : {},
                 ]}
                 disabled={
                   (selectedRole === 'parent' && !resolvedTenant) ||
-                  verifyOtpMutation.isPending
+                  registerMutation.isPending
                 }
                 onPress={handleFinalSubmit}
               >
-                {verifyOtpMutation.isPending ? (
+                {registerMutation.isPending ? (
                   <ActivityIndicator color="#FFF" />
                 ) : (
                   <Text style={styles.buttonText}>

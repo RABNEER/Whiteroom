@@ -10,6 +10,7 @@ import type {
   InviteGenerateResponse,
   InviteResolveResponse,
   OTPVerifyResponse,
+  OTPVerifyResult,
   OTPSendResponse,
   ParentFeedResponse,
   RefreshResponse,
@@ -108,11 +109,24 @@ export const api = {
     inviteCode?: string;
     studentName?: string;
     rollNumber?: string;
-  }): Promise<OTPVerifyResponse> =>
-    request<OTPVerifyResponse>("/auth/otp/verify", {
+  }): Promise<OTPVerifyResult> =>
+    request<OTPVerifyResult>("/auth/otp/verify", {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  register: (input: {
+    registrationToken: string;
+    role: "teacher" | "parent";
+    consentAccepted: boolean;
+    inviteCode?: string;
+    studentName?: string;
+    rollNumber?: string;
+  }): Promise<OTPVerifyResponse> =>
+    request<OTPVerifyResponse>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
   logout: (deviceToken?: string) =>
     request<{ loggedOut: boolean }>("/auth/logout", {
       method: "POST",

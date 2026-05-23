@@ -5,6 +5,10 @@ import {
 } from "./attendance-reminder.job.js";
 import { registerAbsentNotificationWorker } from "./absent-notification.job.js";
 import { registerSubscriptionExpiryWorker } from "./subscription-expiry.job.js";
+import {
+  registerRegistrationTokenCleanupWorker,
+  scheduleRegistrationTokenCleanup,
+} from "./registration-token-cleanup.job.js";
 
 let started = false;
 
@@ -22,13 +26,19 @@ export async function startJobs() {
     boss.createQueue("attendance-auto-close"),
     boss.createQueue("absent-follow-up"),
     boss.createQueue("subscription-expiry"),
+    boss.createQueue("registration-token-cleanup"),
   ]);
 
   await Promise.all([
     registerAttendanceReminderWorker(),
     registerAbsentNotificationWorker(),
     registerSubscriptionExpiryWorker(),
+    registerRegistrationTokenCleanupWorker(),
   ]);
+
+  await scheduleRegistrationTokenCleanup().catch((err) => {
+    console.error("[jobs] Failed to schedule token cleanup:", err);
+  });
 
   await enqueueAttendanceRemindersForNextWeek();
 }

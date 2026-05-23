@@ -6,7 +6,7 @@ export async function markReadHandler(c: Context) {
   const user = c.get("user") as JWTPayload;
   const announcementId = c.req.param("id")!;
 
-  const result = await markAnnouncementRead(announcementId, user.userId);
+  const result = await markAnnouncementRead(user.tenantId, announcementId, user.userId);
 
   const response: ApiResponse = {
     success: true,

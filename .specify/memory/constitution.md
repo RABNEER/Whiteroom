@@ -1,25 +1,13 @@
 <!--
   Sync Impact Report
   ============================================================================
-  Version change: 0.0.0 → 1.0.0 (initial ratification)
-  Modified principles: N/A (initial creation from template)
-  Added sections:
-    - I. Monorepo-First (principle)
-    - II. Shared Types as Contract (principle)
-    - III. Tenant Isolation is Non-Negotiable (principle)
-    - IV. Schema-Before-Code (principle)
-    - V. Offline-Safe by Default (principle)
-    - VI. No PII Beyond Minimum (principle)
-    - VII. Phase-Gated Delivery (principle)
-    - Technology Stack (section)
-    - Development Workflow (section)
-    - Governance (section)
+  Version change: 1.0.0 → 1.1.0 (Firebase Auth Amendment)
+  Modified principles:
+    - Allowed Firebase Admin SDK for cryptographic ID token verification of Phone Auth.
+    - Retired MSG91 REST API version lock in favor of Firebase Phone Auth.
+  Added sections: None
   Removed sections: None
-  Templates requiring updates:
-    - plan-template.md: ✅ compatible (Constitution Check section exists)
-    - spec-template.md: ✅ compatible (Requirements section supports MUST keywords)
-    - tasks-template.md: ✅ compatible (Phase structure matches phase-gated principle)
-    - checklist-template.md: ✅ compatible (no constitution-specific references)
+  Templates requiring updates: None
   Follow-up TODOs: None
   ============================================================================
 -->
@@ -149,7 +137,7 @@ Changes require a constitution amendment with migration plan.
 | Database | PostgreSQL (Supabase) | 15+ |
 | Background Jobs | pg-boss | ^10 |
 | Push Notifications | Firebase Admin (FCM) | ^13 |
-| OTP Provider | MSG91 | REST API |
+| OTP Provider | Firebase Phone Auth | Firebase Admin SDK |
 | Payments | Razorpay | Node SDK |
 | Deployment (API) | Railway | Docker |
 | Mobile Framework | Expo (React Native) | SDK 52+ |
@@ -160,7 +148,6 @@ Changes require a constitution amendment with migration plan.
 - No Redis — use PostgreSQL for caching (pg-boss already requires it).
 - No Prisma — Drizzle is the sole ORM; no dual-ORM setups.
 - No Express/Fastify — Hono is the sole HTTP framework.
-- No Firebase Auth — OTP is handled via MSG91 + custom JWT.
 - No Supabase Auth — custom auth layer with JWT sign/verify.
 - No external state stores — PostgreSQL is the only data store.
 - No WebSockets in v1 — polling or push notifications only.
@@ -203,7 +190,7 @@ Changes require a constitution amendment with migration plan.
   `AppError` instances and formats them into the `ApiResponse`
   envelope.
 - Unhandled errors MUST return 500 with `INTERNAL_ERROR` code.
-  The original error message MUST NOT leak to the client in
+- The original error message MUST NOT leak to the client in
   production.
 
 ## Governance
@@ -226,4 +213,4 @@ behavior MUST comply with these principles.
   flag the conflict and propose an amendment rather than silently
   violating.
 
-**Version**: 1.0.0 | **Ratified**: 2026-05-19 | **Last Amended**: 2026-05-19
+**Version**: 1.1.0 | **Ratified**: 2026-05-19 | **Last Amended**: 2026-05-23
