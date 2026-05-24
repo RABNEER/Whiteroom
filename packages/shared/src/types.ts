@@ -30,7 +30,9 @@ export interface OTPSendRequest {
 }
 
 export interface OTPVerifyRequest {
-  idToken: string;
+  idToken?: string;
+  phone?: string;
+  otp?: string;
 }
 
 export interface AuthTokens {

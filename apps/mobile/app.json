@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "app.whiteroom.mobile",
-      "googleServicesFile": "./android/app/google-services.json",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#F5F0E6"
       }

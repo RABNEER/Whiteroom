@@ -23,8 +23,16 @@ import {
   Trash2,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import auth from '@react-native-firebase/auth';
 import type { OTPVerifyResponse } from '@whiteroom/shared';
+
+let firebaseAuth: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    firebaseAuth = require('@react-native-firebase/auth').default;
+  } catch (e) {
+    // Graceful fallback when native modules are missing (Web/Expo Go)
+  }
+}
 
 
 import { api, ApiError } from '@/api/client';
@@ -120,17 +128,56 @@ export default function AuthScreen() {
 
   // Handlers
   const handleSendOtp = async () => {
+    if (!firebaseAuth) {
+      // ─── Graceful Database-Driven Fallback Mode ───
+      try {
+        setLoading(true);
+        setError(null);
+        await api.otpSend(phone);
+        setStep('OTP');
+        setResendTimer(45);
+        setAttemptsLeft(5);
+      } catch (err: any) {
+        setError(err instanceof ApiError ? err.message : 'Failed to send OTP. Try again.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // ─── Real Firebase Phone Auth Flow ───
     try {
       setLoading(true);
       setError(null);
       const formattedPhone = `+91${phone.replace(/\D/g, '')}`;
-      const result = await auth().signInWithPhoneNumber(formattedPhone);
+      const result = await firebaseAuth().signInWithPhoneNumber(formattedPhone);
       setConfirmation(result);
       setStep('OTP');
       setResendTimer(45);
       setAttemptsLeft(5);
     } catch (err: any) {
       console.error("[FIREBASE OTP SEND ERROR]", err);
+      const isInitializationError =
+        err.message?.includes("No Firebase App") ||
+        err.message?.includes("not found") ||
+        err.message?.includes("RNFBAppModule") ||
+        err.message?.includes("firebase.initializeApp") ||
+        err.code === 'app/no-app';
+
+      if (isInitializationError) {
+        console.warn("⚠️ Firebase Auth failed to initialize. Falling back to local OTP database mock.");
+        firebaseAuth = null;
+        setLoading(false);
+        await handleSendOtp();
+        return;
+      }
+
+      if (err.code?.includes("billing-not") || err.message?.includes("BILLING_NOT_ENABLED")) {
+        setError("Firebase Billing required for live SMS. Please upgrade to the Blaze plan or add this number as a 'Phone number for testing' in your Firebase Console.");
+        setLoading(false);
+        return;
+      }
+
       switch (err.code) {
         case 'auth/invalid-phone-number':
           setError('Invalid phone number format.');
@@ -150,6 +197,34 @@ export default function AuthScreen() {
   };
 
   const handleVerifyOtp = async () => {
+    if (!firebaseAuth) {
+      // ─── Graceful Database-Driven Fallback Mode ───
+      if (attemptsLeft <= 0) {
+        setError('Maximum attempts reached. Please resend OTP.');
+        return;
+      }
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await api.otpVerify({ phone, otp });
+        
+        if (response.type === 'existing_user') {
+          await setSession(response as any);
+          router.replace('/');
+        } else if (response.type === 'new_user') {
+          setRegistrationToken(response.registrationToken);
+          setStep('CONSENT');
+        }
+      } catch (err: any) {
+        setError(err instanceof ApiError ? err.message : 'Verification failed. Try again.');
+        setAttemptsLeft(prev => Math.max(0, prev - 1));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // ─── Real Firebase Phone Auth Flow ───
     if (!confirmation) {
       setError('Session expired. Please resend OTP.');
       setStep('PHONE');
@@ -181,6 +256,21 @@ export default function AuthScreen() {
       }
     } catch (err: any) {
       console.error("[FIREBASE OTP VERIFY ERROR]", err);
+      const isInitializationError =
+        err.message?.includes("No Firebase App") ||
+        err.message?.includes("not found") ||
+        err.message?.includes("RNFBAppModule") ||
+        err.message?.includes("firebase.initializeApp") ||
+        err.code === 'app/no-app';
+
+      if (isInitializationError) {
+        console.warn("⚠️ Firebase Auth failed to initialize during verification. Falling back to local OTP database mock.");
+        firebaseAuth = null;
+        setLoading(false);
+        await handleVerifyOtp();
+        return;
+      }
+
       switch (err.code) {
         case 'auth/invalid-verification-code':
           setAttemptsLeft(prev => prev - 1);

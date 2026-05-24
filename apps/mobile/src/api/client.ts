@@ -107,7 +107,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ phone }),
     }),
-  otpVerify: (input: { idToken: string }): Promise<OTPVerifyResult> =>
+  otpVerify: (input: {
+    idToken?: string;
+    phone?: string;
+    otp?: string;
+  }): Promise<OTPVerifyResult> =>
     request<OTPVerifyResult>("/auth/otp/verify", {
       method: "POST",
       body: JSON.stringify(input),
