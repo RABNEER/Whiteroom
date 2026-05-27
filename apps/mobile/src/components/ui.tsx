@@ -29,7 +29,7 @@ const colors = {
   muted: tokensColors.teal,
   ink: tokensColors.navy,
 };
-import Svg, { Path, Circle } from "react-native-svg";
+import Svg, { Defs, LinearGradient, Stop, Rect, Path, Circle } from "react-native-svg";
 
 export type NavItem<T extends string> = {
   value: T;
@@ -162,12 +162,26 @@ export function HeroPanel({
 }) {
   return (
     <View style={[styles.heroPanel, compact && styles.heroPanelCompact]}>
-      <View style={styles.heroWaveContainer} pointerEvents="none">
-        <Svg height="100%" width="100%" viewBox="0 0 400 200" preserveAspectRatio="none">
+      {/* 1. Pure SVG Gradient Absolute Background */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Svg height="100%" width="100%" style={StyleSheet.absoluteFill}>
+          <Defs>
+            <LinearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <Stop offset="0%" stopColor="#2A385C" /> {/* Deep Royal Navy */}
+              <Stop offset="50%" stopColor="#3E4F84" /> {/* Electric Indigo-Blue */}
+              <Stop offset="100%" stopColor="#256B85" /> {/* Premium Deep Teal */}
+            </LinearGradient>
+          </Defs>
+          <Rect width="100%" height="100%" fill="url(#heroGrad)" />
+          
+          {/* Abstract overlay lighting paths to give organic depth */}
           <Path
-            d="M0,130 C120,160 280,100 400,140 L400,200 L0,200 Z"
-            fill={colors.sky}
-            opacity="0.32"
+            d="M0,80 C120,40 240,160 400,90 L400,200 L0,200 Z"
+            fill="rgba(255, 255, 255, 0.05)"
+          />
+          <Path
+            d="M-50,130 C100,180 250,90 450,140 L450,200 L-50,200 Z"
+            fill="rgba(255, 255, 255, 0.03)"
           />
         </Svg>
       </View>
@@ -367,8 +381,10 @@ export function MetricCard({
           <Text style={[styles.pillText, { color: toneColor }]}>{note}</Text>
         </View>
       ) : null}
-      <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
+      <View style={{ flex: 1, justifyContent: "center", marginTop: spacing.sm }}>
+        <Text style={[styles.metricValue, { marginTop: 0 }]}>{value}</Text>
+        <Text style={styles.metricLabel}>{label}</Text>
+      </View>
     </Card>
   );
 }
@@ -531,22 +547,48 @@ export function LayeredChart({
   value,
   size = 150,
   strokeWidth = 24,
-  strokeColor = colors.navy,
-  bgColor = colors.sky,
+  strokeColor = colors.white,
+  bgColor = "rgba(255, 255, 255, 0.18)",
+  textColor = colors.white,
+  innerBgColor = "rgba(255, 255, 255, 0.15)",
 }: {
   value: number;
   size?: number;
   strokeWidth?: number;
   strokeColor?: string;
   bgColor?: string;
+  textColor?: string;
+  innerBgColor?: string;
 }) {
   const radiusVal = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radiusVal;
   const strokeDashoffset = circumference - (value / 100) * circumference;
 
+  // Thin outer track radius
+  const outerTrackRadius = radiusVal + strokeWidth / 2 + 3;
+
   return (
     <View style={[styles.layeredContainer, { width: size, height: size }]}>
       <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <Defs>
+          <LinearGradient id="glowingStrokeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <Stop offset="0%" stopColor="#00F2FE" /> {/* Vibrant neon cyan */}
+            <Stop offset="100%" stopColor="#4FACFE" /> {/* Neon electric blue */}
+          </LinearGradient>
+        </Defs>
+
+        {/* 1. Thin technical dotted outer track */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={outerTrackRadius}
+          stroke="rgba(255, 255, 255, 0.15)"
+          strokeWidth={1}
+          strokeDasharray="2, 3"
+          fill="transparent"
+        />
+
+        {/* 2. Main background track */}
         <Circle
           cx={size / 2}
           cy={size / 2}
@@ -555,11 +597,30 @@ export function LayeredChart({
           strokeWidth={strokeWidth}
           fill="transparent"
         />
+
+        {/* 3. Glowing drop shadow ring behind the progress ring */}
+        {value > 0 && (
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radiusVal}
+            stroke={strokeColor === colors.white ? "url(#glowingStrokeGrad)" : strokeColor}
+            strokeWidth={strokeWidth + 5}
+            fill="transparent"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            opacity={0.3}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+        )}
+
+        {/* 4. Active Progress Ring */}
         <Circle
           cx={size / 2}
           cy={size / 2}
           r={radiusVal}
-          stroke={strokeColor}
+          stroke={strokeColor === colors.white ? "url(#glowingStrokeGrad)" : strokeColor}
           strokeWidth={strokeWidth}
           fill="transparent"
           strokeDasharray={circumference}
@@ -568,8 +629,16 @@ export function LayeredChart({
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
-      <View style={[styles.layeredInner, { width: size - strokeWidth * 2 - 8, height: size - strokeWidth * 2 - 8 }]}>
-        <Text style={styles.layeredVal}>{value}</Text>
+      
+      {/* 5. Center glass bubble value display */}
+      <View style={[styles.layeredInner, { 
+        width: size - strokeWidth * 2 - 4, 
+        height: size - strokeWidth * 2 - 4,
+        backgroundColor: innerBgColor === "transparent" ? "rgba(255, 255, 255, 0.08)" : innerBgColor,
+        borderWidth: 1,
+        borderColor: "rgba(255, 255, 255, 0.22)",
+      }]}>
+        <Text style={[styles.layeredVal, { color: textColor }]}>{value}%</Text>
       </View>
     </View>
   );
@@ -747,13 +816,18 @@ export const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   heroPanel: {
-    backgroundColor: colors.navy,
+    backgroundColor: "transparent",
     borderRadius: radius.xl,
     minHeight: 210,
     overflow: "hidden",
     position: "relative",
-    borderColor: "rgba(86, 124, 141, 0.15)",
+    borderColor: "rgba(255, 255, 255, 0.22)",
     borderWidth: 1.5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
   },
   heroPanelCompact: {
     minHeight: 150,

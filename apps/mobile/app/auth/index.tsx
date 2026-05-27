@@ -24,6 +24,7 @@ import {
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { OTPVerifyResponse } from '@whiteroom/shared';
+import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 let firebaseAuth: any = null;
 if (Platform.OS !== 'web') {
@@ -59,7 +60,7 @@ export default function AuthScreen() {
   const [resendTimer, setResendTimer] = useState(45);
   const [attemptsLeft, setAttemptsLeft] = useState(5);
   const [loading, setLoading] = useState(false);
-  const [confirmation, setConfirmation] = useState<auth.ConfirmationResult | null>(null);
+  const [confirmation, setConfirmation] = useState<FirebaseAuthTypes.ConfirmationResult | null>(null);
   const [registrationToken, setRegistrationToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resolvedTenant, setResolvedTenant] = useState<string | null>(null);
@@ -561,37 +562,39 @@ export default function AuthScreen() {
                 </View>
               )}
 
-              <Pressable
-                onPress={() => otpInputRef.current?.focus()}
-                style={styles.otpGrid}
-              >
-                {[0, 1, 2, 3, 4, 5].map((i) => {
-                  const isFocused = otp.length === i;
-                  const isFilled = otp.length > i;
-                  return (
-                    <View
-                      key={i}
-                      style={[
-                        styles.otpBox,
-                        isFocused && styles.otpBoxActive,
-                        isFilled && styles.otpBoxFilled,
-                      ]}
-                    >
-                      <Text style={styles.otpDigit}>{otp[i] || ''}</Text>
-                    </View>
-                  );
-                })}
-              </Pressable>
+              <View style={{ position: 'relative', width: '100%' }}>
+                <Pressable
+                  onPress={() => otpInputRef.current?.focus()}
+                  style={styles.otpGrid}
+                >
+                  {[0, 1, 2, 3, 4, 5].map((i) => {
+                    const isFocused = otp.length === i;
+                    const isFilled = otp.length > i;
+                    return (
+                      <View
+                        key={i}
+                        style={[
+                          styles.otpBox,
+                          isFocused && styles.otpBoxActive,
+                          isFilled && styles.otpBoxFilled,
+                        ]}
+                      >
+                        <Text style={styles.otpDigit}>{otp[i] || ''}</Text>
+                      </View>
+                    );
+                  })}
+                </Pressable>
 
-              <TextInput
-                ref={otpInputRef}
-                style={styles.hiddenInput}
-                keyboardType="number-pad"
-                maxLength={6}
-                value={otp}
-                onChangeText={handleOtpChange}
-                autoFocus
-              />
+                <TextInput
+                  ref={otpInputRef}
+                  style={styles.hiddenInput}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  value={otp}
+                  onChangeText={handleOtpChange}
+                  autoFocus
+                />
+              </View>
 
               <View style={styles.timerRow}>
                 {resendTimer > 0 ? (
@@ -1166,9 +1169,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   hiddenInput: {
-    height: 0,
-    opacity: 0,
     position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    opacity: 0,
+    height: 52,
   },
   timerRow: {
     alignItems: 'center',

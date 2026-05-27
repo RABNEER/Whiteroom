@@ -401,6 +401,8 @@ function AttendTab({
               strokeWidth={16}
               strokeColor={colors.white}
               bgColor="rgba(255, 255, 255, 0.2)"
+              textColor={colors.white}
+              innerBgColor="transparent"
             />
           </View>
         </HeroPanel>
