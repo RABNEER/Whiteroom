@@ -666,6 +666,8 @@ function StudentRow({
   status: AttendanceStatus;
   onToggle: (s: AttendanceStatus) => void;
 }) {
+  const isPresent = status === 'present';
+  const isAbsent = status === 'absent';
   return (
     <View style={s.studentRow}>
       <View style={s.studentInfo}>
@@ -680,17 +682,17 @@ function StudentRow({
       <View style={s.togglePair}>
         <Pressable
           accessibilityRole="button"
-          style={[s.toggleBtn, status === 'present' ? s.toggleActiveP : s.toggleInactive]}
+          style={[s.toggleBtn, isPresent ? s.toggleActiveP : s.toggleInactive]}
           onPress={() => onToggle('present')}
         >
-          <Text style={[s.toggleBtnText, status === 'present' ? { color: colors.white } : { color: colors.teal }]}>P</Text>
+          <Text style={[s.toggleBtnText, isPresent ? { color: '#15803D' } : { color: colors.teal }]}>P</Text>
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          style={[s.toggleBtn, status === 'absent' ? s.toggleActiveA : s.toggleInactive]}
+          style={[s.toggleBtn, isAbsent ? s.toggleActiveA : s.toggleInactive]}
           onPress={() => onToggle('absent')}
         >
-          <Text style={[s.toggleBtnText, status === 'absent' ? { color: colors.white } : { color: colors.teal }]}>A</Text>
+          <Text style={[s.toggleBtnText, isAbsent ? { color: '#EF4444' } : { color: colors.teal }]}>A</Text>
         </Pressable>
       </View>
     </View>
@@ -1375,10 +1377,27 @@ const s = StyleSheet.create({
   studentName: { color: colors.navy, fontSize: 14, fontWeight: '600' },
   studentRoll: { color: colors.teal, fontSize: 12, marginTop: 2 },
   togglePair: { flexDirection: 'row', gap: 8 },
-  toggleBtn: { width: 36, height: 36, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-  toggleInactive: { backgroundColor: colors.sky },
-  toggleActiveP: { backgroundColor: colors.navy },
-  toggleActiveA: { backgroundColor: colors.danger },
+  toggleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  toggleInactive: {
+    backgroundColor: '#F1F5F9',
+    borderColor: 'rgba(47, 65, 86, 0.08)',
+  },
+  toggleActiveP: {
+    backgroundColor: '#DCFCE7',
+    borderColor: 'rgba(21, 128, 61, 0.15)',
+  },
+  toggleActiveA: {
+    backgroundColor: '#FEE2E2',
+    borderColor: 'rgba(239, 68, 68, 0.15)',
+  },
   toggleBtnText: { fontSize: 14, fontWeight: '700' },
   saveBtn: {
     backgroundColor: colors.navy, borderRadius: 10, height: 48,

@@ -1,4 +1,4 @@
-import { ComponentType, ReactNode } from "react";
+import { ComponentType, ReactNode, useState } from "react";
 import {
   ActivityIndicator,
   DimensionValue,
@@ -167,9 +167,9 @@ export function HeroPanel({
         <Svg height="100%" width="100%" style={StyleSheet.absoluteFill}>
           <Defs>
             <LinearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <Stop offset="0%" stopColor="#2A385C" /> {/* Deep Royal Navy */}
-              <Stop offset="50%" stopColor="#3E4F84" /> {/* Electric Indigo-Blue */}
-              <Stop offset="100%" stopColor="#256B85" /> {/* Premium Deep Teal */}
+              <Stop offset="0%" stopColor="#2A385C" />
+              <Stop offset="50%" stopColor="#3E4F84" />
+              <Stop offset="100%" stopColor="#256B85" />
             </LinearGradient>
           </Defs>
           <Rect width="100%" height="100%" fill="url(#heroGrad)" />
@@ -210,17 +210,17 @@ export function AvatarBadge({
     const code = label.toUpperCase().charCodeAt(0);
     const slot = code % 4;
     if (slot === 0) {
-      bgColor = colors.navy;
-      textColor = colors.white;
+      bgColor = "#F4DCD6"; // Soft Muted Rose-Peach
+      textColor = "#7A4D43";
     } else if (slot === 1) {
-      bgColor = colors.teal;
-      textColor = colors.white;
+      bgColor = "#D4E2D4"; // Soft Sage
+      textColor = "#3C5249";
     } else if (slot === 2) {
-      bgColor = colors.sky;
-      textColor = colors.navy;
+      bgColor = "#D5E0EA"; // Muted Ice Blue
+      textColor = "#2D4B63";
     } else {
-      bgColor = colors.paper;
-      textColor = colors.navy;
+      bgColor = "#EFE1D1"; // Soft Oatmeal / Sand
+      textColor = "#6B5A49";
     }
   }
 
@@ -265,12 +265,19 @@ export function Muted({
 }
 
 export function Field({ label, ...props }: TextInputProps & { label: string }) {
+  const [focused, setFocused] = useState(false);
   return (
     <View style={styles.fieldWrap}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, focused && { color: colors.primary }]}>{label}</Text>
       <TextInput
         placeholderTextColor={colors.muted}
-        style={[styles.input, props.multiline && styles.inputMultiline]}
+        style={[
+          styles.input,
+          props.multiline && styles.inputMultiline,
+          focused && { borderColor: colors.primary, borderWidth: 1.5 },
+        ]}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         {...props}
       />
     </View>
@@ -572,8 +579,8 @@ export function LayeredChart({
       <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <Defs>
           <LinearGradient id="glowingStrokeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#00F2FE" /> {/* Vibrant neon cyan */}
-            <Stop offset="100%" stopColor="#4FACFE" /> {/* Neon electric blue */}
+            <Stop offset="0%" stopColor="#00F2FE" />
+            <Stop offset="100%" stopColor="#4FACFE" />
           </LinearGradient>
         </Defs>
 
@@ -913,12 +920,12 @@ export const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: colors.white,
-    borderColor: "rgba(86, 124, 141, 0.15)",
-    borderWidth: 1.5,
+    borderColor: "rgba(47, 65, 86, 0.12)",
+    borderWidth: 1,
     borderRadius: radius.md,
     color: colors.navy,
-    fontSize: 16,
-    minHeight: 56,
+    fontSize: 15,
+    minHeight: 52,
     paddingHorizontal: spacing.md,
   },
   inputMultiline: {
@@ -985,11 +992,16 @@ export const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.white,
-    borderColor: "rgba(86, 124, 141, 0.15)",
+    borderColor: "rgba(47, 65, 86, 0.08)",
     borderRadius: radius.lg,
-    borderWidth: 1.5,
+    borderWidth: 1,
     gap: spacing.sm,
     padding: spacing.md,
+    shadowColor: "#2F4156",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 2,
   },
   cardInset: {
     backgroundColor: "rgba(86, 124, 141, 0.06)",
@@ -1058,33 +1070,37 @@ export const styles = StyleSheet.create({
     lineHeight: 20,
   },
   segmented: {
-    backgroundColor: colors.white,
+    backgroundColor: "rgba(47, 65, 86, 0.05)",
     borderRadius: radius.full,
     flexDirection: "row",
     gap: spacing.xs,
-    padding: spacing.xs,
-    borderColor: "rgba(86, 124, 141, 0.15)",
-    borderWidth: 1.5,
+    padding: 3,
   },
   segment: {
     borderRadius: radius.full,
     flex: 1,
-    minHeight: 40,
+    minHeight: 36,
     justifyContent: "center",
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   segmentActive: {
-    backgroundColor: colors.navy,
+    backgroundColor: colors.white,
+    shadowColor: "#2F4156",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   segmentText: {
     color: colors.teal,
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "700",
     textAlign: "center",
   },
   segmentActiveText: {
-    color: colors.white,
+    color: colors.navy,
+    fontWeight: "900",
   },
   bottomNavContainer: {
     position: "absolute",
