@@ -3,6 +3,9 @@ node_modules/
 
 # Build output
 dist/
+build/
+.gradle/
+.gradle_home/
 
 # Environment
 .env

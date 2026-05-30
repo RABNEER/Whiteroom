@@ -2,7 +2,7 @@
   "name": "@whiteroom/mobile",
   "version": "0.0.1",
   "private": true,
-  "main": "expo-router/entry",
+  "main": "index.js",
   "scripts": {
     "dev": "expo start",
     "android": "expo run:android",
@@ -20,6 +20,7 @@
     "@tanstack/react-query": "^5.90.12",
     "@whiteroom/shared": "workspace:*",
     "expo": "~52.0.47",
+    "expo-asset": "~11.0.5",
     "expo-constants": "~17.0.8",
     "expo-font": "~13.0.4",
     "expo-linking": "~7.0.5",

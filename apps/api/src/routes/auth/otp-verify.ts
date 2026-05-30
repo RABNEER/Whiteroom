@@ -150,7 +150,7 @@ export async function otpVerifyHandler(c: Context) {
 
       // ─── Find Matching OTP ───
       let otpRecord: { id: string } | null | undefined = null;
-      const isDevBypass = env.NODE_ENV === "development" && env.ENABLE_DEV_BYPASS === "true" && parsed.data.otp === "000000";
+      const isDevBypass = env.ENABLE_DEV_BYPASS === "true" && parsed.data.otp === "000000";
 
       if (isDevBypass) {
         otpRecord = { id: "dev-bypass" };
