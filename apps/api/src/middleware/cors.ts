@@ -5,6 +5,7 @@ export function corsMiddleware() {
   return honoCors({
     origin: (origin) => {
       const allowed = [
+        "http://localhost:3001",
         "exp://localhost:8081",
         "exp://192.168.1.*:8081",
         process.env.MOBILE_WEB_URL,
