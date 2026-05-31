@@ -31,6 +31,15 @@ interface Tenant {
   subscriptionEndDate: string | null;
 }
 
+interface User {
+  id: string;
+  phone: string;
+  name: string | null;
+  role: string;
+  createdAt: string;
+  tenantName: string | null;
+}
+
 const API_BASE_URL = "https://whiteroomapi-production.up.railway.app/api/v1";
 
 export default function App() {
@@ -41,11 +50,16 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
+  // Tab control state
+  const [activeTab, setActiveTab] = useState<"MONITOR" | "USERS">("MONITOR");
+
   // Dashboard Data State
   const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
   const [tenantsList, setTenantsList] = useState<Tenant[]>([]);
+  const [usersList, setUsersList] = useState<User[]>([]);
   const [loadingData, setLoadingData] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [userSearchTerm, setUserSearchTerm] = useState("");
   const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [syncingPulse, setSyncingPulse] = useState(false);
 
@@ -124,6 +138,7 @@ export default function App() {
     setToken(null);
     setMetrics(null);
     setTenantsList([]);
+    setUsersList([]);
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
   };
 
@@ -134,23 +149,27 @@ export default function App() {
     setSyncingPulse(true);
 
     try {
-      // 1. Fetch live metrics
-      const metricsRes = await fetch(`${API_BASE_URL}/admin/metrics`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const metricsResult = await metricsRes.json();
+      const headers = { Authorization: `Bearer ${token}` };
+      const [metricsRes, tenantsRes, usersRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/admin/metrics`, { headers }),
+        fetch(`${API_BASE_URL}/admin/tenants`, { headers }),
+        fetch(`${API_BASE_URL}/admin/users`, { headers })
+      ]);
 
-      // 2. Fetch live tenants
-      const tenantsRes = await fetch(`${API_BASE_URL}/admin/tenants`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const tenantsResult = await tenantsRes.json();
+      const [metricsResult, tenantsResult, usersResult] = await Promise.all([
+        metricsRes.json(),
+        tenantsRes.json(),
+        usersRes.json()
+      ]);
 
       if (metricsRes.ok && metricsResult.success) {
         setMetrics(metricsResult.data);
       }
       if (tenantsRes.ok && tenantsResult.success) {
         setTenantsList(tenantsResult.data);
+      }
+      if (usersRes.ok && usersResult.success) {
+        setUsersList(usersResult.data);
       }
 
       setLastSynced(new Date().toLocaleTimeString());
@@ -181,6 +200,16 @@ export default function App() {
     tenant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     tenant.slug.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const filteredUsers = usersList.filter((user) => {
+    const searchLower = userSearchTerm.toLowerCase();
+    return (
+      (user.name || "").toLowerCase().includes(searchLower) ||
+      user.phone.toLowerCase().includes(searchLower) ||
+      user.role.toLowerCase().includes(searchLower) ||
+      (user.tenantName || "").toLowerCase().includes(searchLower)
+    );
+  });
 
   // ─── Render Initializer ───
   if (isInitializing) {
@@ -260,12 +289,22 @@ export default function App() {
           </div>
 
           <nav>
-            <div className="nav-link active">
+            <div 
+              className={`nav-link ${activeTab === "MONITOR" ? "active" : ""}`}
+              onClick={() => setActiveTab("MONITOR")}
+            >
               <Compass size={18} />
               <span>Real-Time Monitor</span>
             </div>
+            <div 
+              className={`nav-link ${activeTab === "USERS" ? "active" : ""}`}
+              onClick={() => setActiveTab("USERS")}
+            >
+              <Users size={18} />
+              <span>Users Directory</span>
+            </div>
             <a 
-              href="https://database.supabase.com/" 
+              href="https://supabase.com/dashboard/project/pcioxampulptqaegsqlw" 
               target="_blank" 
               rel="noreferrer" 
               className="nav-link"
@@ -296,8 +335,14 @@ export default function App() {
         {/* Top Navbar */}
         <header className="top-nav">
           <div>
-            <h1 style={{ fontSize: 32 }}>Real-Time Monitor</h1>
-            <p style={{ color: "var(--text-muted)", fontSize: 14 }}>Live operational statistics and registered educational institutions.</p>
+            <h1 style={{ fontSize: 32 }}>
+              {activeTab === "MONITOR" ? "Real-Time Monitor" : "Users Directory"}
+            </h1>
+            <p style={{ color: "var(--text-muted)", fontSize: 14 }}>
+              {activeTab === "MONITOR" 
+                ? "Live operational statistics and registered educational institutions."
+                : "Real-time user accounts and access control roles loaded directly from Supabase."}
+            </p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -353,85 +398,182 @@ export default function App() {
           </div>
         </section>
 
-        {/* Registered Schools list Table */}
-        <section className="glass-panel" style={{ padding: "32px", display: 'flex', flexDirection: 'column', gap: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-            <div style={{ flex: 1, minWidth: 280 }}>
-              <h2 style={{ fontSize: 20, marginBottom: 4 }}>Educational Institutions</h2>
-              <p style={{ color: "var(--text-muted)", fontSize: 13 }}>List of schools, academies, and coaching centers registered on your platform.</p>
+        {activeTab === "MONITOR" ? (
+          /* Registered Schools list Table */
+          <section className="glass-panel" style={{ padding: "32px", display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+              <div style={{ flex: 1, minWidth: 280 }}>
+                <h2 style={{ fontSize: 20, marginBottom: 4 }}>Educational Institutions</h2>
+                <p style={{ color: "var(--text-muted)", fontSize: 13 }}>List of schools, academies, and coaching centers registered on your platform.</p>
+              </div>
+
+              <div style={{ position: 'relative', width: '100%', maxWidth: 360 }}>
+                <Search size={16} style={{ position: 'absolute', left: 16, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
+                <input
+                  type="text"
+                  className="glowing-input"
+                  style={{ paddingLeft: 44, paddingRight: 16 }}
+                  placeholder="Filter by school name or slug..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
             </div>
 
-            <div style={{ position: 'relative', width: '100%', maxWidth: 360 }}>
-              <Search size={16} style={{ position: 'absolute', left: 16, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
-              <input
-                type="text"
-                className="glowing-input"
-                style={{ paddingLeft: 44, paddingRight: 16 }}
-                placeholder="Filter by school name or slug..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="table-container">
-            {loadingData && tenantsList.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: "64px", gap: 16 }}>
-                <RefreshCw className="animate-spin" size={32} style={{ color: "var(--primary)" }} />
-                <p style={{ color: "var(--text-muted)" }}>Connecting to Whiteroom core database...</p>
-              </div>
-            ) : filteredTenants.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: "64px", textCenter: 'center' }}>
-                <Building size={48} style={{ color: "var(--text-dim)", marginBottom: 16 }} />
-                <p style={{ color: "var(--text-muted)", fontWeight: 500 }}>No schools found.</p>
-                <p style={{ color: "var(--text-dim)", fontSize: 12 }}>Try adjusting your search criteria or register a new school.</p>
-              </div>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>School Name</th>
-                    <th>Database ID</th>
-                    <th>Unique Slug</th>
-                    <th>Subscription Plan</th>
-                    <th>Status</th>
-                    <th>Created On</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTenants.map((tenant) => (
-                    <tr key={tenant.id}>
-                      <td style={{ fontWeight: 600 }}>{tenant.name}</td>
-                      <td style={{ fontFamily: "monospace", fontSize: 12, color: "var(--text-muted)" }}>{tenant.id}</td>
-                      <td>
-                        <span style={{ background: "rgba(255,255,255,0.03)", padding: "4px 8px", borderRadius: 6, fontSize: 12, border: "1px solid var(--border-color)", color: "var(--text-muted)" }}>
-                          {tenant.slug}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge ${tenant.plan === "pro" ? "violet" : "primary"}`}>
-                          {tenant.plan === "pro" ? "Pro Plan" : "Free Tier"}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge ${tenant.isActive ? "success" : "error"}`}>
-                          {tenant.isActive ? "Active" : "Suspended"}
-                        </span>
-                      </td>
-                      <td style={{ color: "var(--text-muted)", fontSize: 13 }}>
-                        {new Date(tenant.createdAt).toLocaleDateString(undefined, {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
-                      </td>
+            <div className="table-container">
+              {loadingData && tenantsList.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: "64px", gap: 16 }}>
+                  <RefreshCw className="animate-spin" size={32} style={{ color: "var(--primary)" }} />
+                  <p style={{ color: "var(--text-muted)" }}>Connecting to Whiteroom core database...</p>
+                </div>
+              ) : filteredTenants.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: "64px", textCenter: 'center' }}>
+                  <Building size={48} style={{ color: "var(--text-dim)", marginBottom: 16 }} />
+                  <p style={{ color: "var(--text-muted)", fontWeight: 500 }}>No schools found.</p>
+                  <p style={{ color: "var(--text-dim)", fontSize: 12 }}>Try adjusting your search criteria or register a new school.</p>
+                </div>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>School Name</th>
+                      <th>Database ID</th>
+                      <th>Unique Slug</th>
+                      <th>Subscription Plan</th>
+                      <th>Status</th>
+                      <th>Created On</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </section>
+                  </thead>
+                  <tbody>
+                    {filteredTenants.map((tenant) => (
+                      <tr key={tenant.id}>
+                        <td style={{ fontWeight: 600 }}>{tenant.name}</td>
+                        <td style={{ fontFamily: "monospace", fontSize: 12, color: "var(--text-muted)" }}>{tenant.id}</td>
+                        <td>
+                          <span style={{ background: "rgba(255,255,255,0.03)", padding: "4px 8px", borderRadius: 6, fontSize: 12, border: "1px solid var(--border-color)", color: "var(--text-muted)" }}>
+                            {tenant.slug}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`badge ${tenant.plan === "pro" ? "violet" : "primary"}`}>
+                            {tenant.plan === "pro" ? "Pro Plan" : "Free Tier"}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`badge ${tenant.isActive ? "success" : "error"}`}>
+                            {tenant.isActive ? "Active" : "Suspended"}
+                          </span>
+                        </td>
+                        <td style={{ color: "var(--text-muted)", fontSize: 13 }}>
+                          {new Date(tenant.createdAt).toLocaleDateString(undefined, {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </section>
+        ) : (
+          /* Users Directory list Table */
+          <section className="glass-panel" style={{ padding: "32px", display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+              <div style={{ flex: 1, minWidth: 280 }}>
+                <h2 style={{ fontSize: 20, marginBottom: 4 }}>Registered Accounts</h2>
+                <p style={{ color: "var(--text-muted)", fontSize: 13 }}>View and search all registered accounts across all tenant institutions.</p>
+              </div>
+
+              <div style={{ position: 'relative', width: '100%', maxWidth: 360 }}>
+                <Search size={16} style={{ position: 'absolute', left: 16, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
+                <input
+                  type="text"
+                  className="glowing-input"
+                  style={{ paddingLeft: 44, paddingRight: 16 }}
+                  placeholder="Filter users by name, phone, role..."
+                  value={userSearchTerm}
+                  onChange={(e) => setUserSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="table-container">
+              {loadingData && usersList.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: "64px", gap: 16 }}>
+                  <RefreshCw className="animate-spin" size={32} style={{ color: "var(--primary)" }} />
+                  <p style={{ color: "var(--text-muted)" }}>Connecting to Whiteroom core database...</p>
+                </div>
+              ) : filteredUsers.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: "64px", textCenter: 'center' }}>
+                  <Users size={48} style={{ color: "var(--text-dim)", marginBottom: 16 }} />
+                  <p style={{ color: "var(--text-muted)", fontWeight: 500 }}>No users found.</p>
+                  <p style={{ color: "var(--text-dim)", fontSize: 12 }}>Try adjusting your search criteria.</p>
+                </div>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Phone Number</th>
+                      <th>System Role</th>
+                      <th>Associated School</th>
+                      <th>User ID</th>
+                      <th>Registered On</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map((user) => {
+                      let roleBadgeClass = "primary";
+                      if (user.role === "super_admin") roleBadgeClass = "violet";
+                      else if (user.role === "admin") roleBadgeClass = "teal";
+                      else if (user.role === "parent") roleBadgeClass = "success";
+                      
+                      return (
+                        <tr key={user.id}>
+                          <td style={{ fontWeight: 600 }}>{user.name || "Anonymous User"}</td>
+                          <td>
+                            <span style={{ color: "var(--text-main)", fontWeight: 500 }}>
+                              {user.phone}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`badge ${roleBadgeClass}`}>
+                              {user.role}
+                            </span>
+                          </td>
+                          <td>
+                            {user.tenantName ? (
+                              <span style={{ background: "rgba(255,255,255,0.03)", padding: "4px 8px", borderRadius: 6, fontSize: 12, border: "1px solid var(--border-color)", color: "var(--text-main)", fontWeight: 500 }}>
+                                {user.tenantName}
+                              </span>
+                            ) : (
+                              <span style={{ color: "var(--text-dim)", fontSize: 12 }}>
+                                N/A (Global)
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ fontFamily: "monospace", fontSize: 12, color: "var(--text-muted)" }}>
+                            {user.id}
+                          </td>
+                          <td style={{ color: "var(--text-muted)", fontSize: 13 }}>
+                            {new Date(user.createdAt).toLocaleDateString(undefined, {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );

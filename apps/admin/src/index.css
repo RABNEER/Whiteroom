@@ -290,6 +290,7 @@ tr:hover td {
 .badge.error { background: rgba(239, 68, 68, 0.12); color: var(--error); border: 1px solid rgba(239, 68, 68, 0.2); }
 .badge.primary { background: rgba(99, 102, 241, 0.12); color: var(--primary); border: 1px solid rgba(99, 102, 241, 0.2); }
 .badge.violet { background: rgba(139, 92, 246, 0.12); color: var(--accent-violet); border: 1px solid rgba(139, 92, 246, 0.2); }
+.badge.teal { background: rgba(14, 165, 233, 0.12); color: var(--accent-teal); border: 1px solid rgba(14, 165, 233, 0.2); }
 
 /* Authentication Shield Guard */
 .auth-wrapper {

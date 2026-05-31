@@ -17,6 +17,21 @@ export async function listAdminTenants() {
     .leftJoin(subscriptions, eq(subscriptions.tenantId, tenants.id));
 }
 
+export async function listAdminUsers() {
+  return db
+    .select({
+      id: users.id,
+      phone: users.phone,
+      name: users.name,
+      role: users.role,
+      createdAt: users.createdAt,
+      tenantName: tenants.name,
+    })
+    .from(users)
+    .leftJoin(tenants, eq(users.tenantId, tenants.id))
+    .orderBy(sql`${users.createdAt} desc`);
+}
+
 export async function getPlatformMetrics() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
