@@ -40,8 +40,6 @@ interface User {
   tenantName: string | null;
 }
 
-const API_BASE_URL = "https://whiteroomapi-production.up.railway.app/api/v1";
-
 export default function App() {
   const [token, setToken] = useState<string | null>(localStorage.getItem("admin_token"));
   const [isInitializing, setIsInitializing] = useState(true);
@@ -49,6 +47,22 @@ export default function App() {
   const [otp, setOtp] = useState("000000");
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
+
+  // API base URL configuration (Production Cloud or Local Dev)
+  const [apiBaseUrl, setApiBaseUrl] = useState<string>(
+    localStorage.getItem("admin_api_url") || "https://whiteroomapi-production.up.railway.app/api/v1"
+  );
+
+  const handleApiChange = (url: string) => {
+    localStorage.setItem("admin_api_url", url);
+    setApiBaseUrl(url);
+    // Clear credentials to re-authenticate on the new gateway environment!
+    localStorage.removeItem("admin_token");
+    setToken(null);
+    setMetrics(null);
+    setTenantsList([]);
+    setUsersList([]);
+  };
 
   // Tab control state
   const [activeTab, setActiveTab] = useState<"MONITOR" | "USERS">("MONITOR");
@@ -74,8 +88,9 @@ export default function App() {
         return;
       }
 
+      setIsInitializing(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/auth/otp/verify`, {
+        const response = await fetch(`${apiBaseUrl}/auth/otp/verify`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ phone: "+919999999999", otp: "000000" }),
@@ -87,6 +102,8 @@ export default function App() {
           const accessToken = result.data.accessToken;
           localStorage.setItem("admin_token", accessToken);
           setToken(accessToken);
+        } else {
+          console.warn("Auto bypass login verification unsuccessful, credentials required.");
         }
       } catch (err) {
         console.error("Auto bypass login failed, falling back to manual credentials entry:", err);
@@ -96,7 +113,7 @@ export default function App() {
     };
 
     attemptAutoLogin();
-  }, [token]);
+  }, [token, apiBaseUrl]);
 
 
   // ─── Login Logic ───
@@ -106,7 +123,7 @@ export default function App() {
     setAuthError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/otp/verify`, {
+      const response = await fetch(`${apiBaseUrl}/auth/otp/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, otp }),
@@ -151,9 +168,9 @@ export default function App() {
     try {
       const headers = { Authorization: `Bearer ${token}` };
       const [metricsRes, tenantsRes, usersRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/admin/metrics`, { headers }),
-        fetch(`${API_BASE_URL}/admin/tenants`, { headers }),
-        fetch(`${API_BASE_URL}/admin/users`, { headers })
+        fetch(`${apiBaseUrl}/admin/metrics`, { headers }),
+        fetch(`${apiBaseUrl}/admin/tenants`, { headers }),
+        fetch(`${apiBaseUrl}/admin/users`, { headers })
       ]);
 
       const [metricsResult, tenantsResult, usersResult] = await Promise.all([
@@ -194,7 +211,7 @@ export default function App() {
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
-  }, [token]);
+  }, [token, apiBaseUrl]);
 
   const filteredTenants = tenantsList.filter((tenant) =>
     tenant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -239,7 +256,7 @@ export default function App() {
 
           {authError && <div className="auth-error">{authError}</div>}
 
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleLogin} style={{ marginBottom: 20 }}>
             <div className="input-group">
               <label className="input-label">Admin Phone Number</label>
               <input
@@ -269,6 +286,52 @@ export default function App() {
               {authLoading ? "Decrypting Session..." : "Authorize Access"}
             </button>
           </form>
+
+          {/* Environment Selector under Auth Form */}
+          <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid var(--border-color)" }}>
+            <label className="input-label" style={{ fontSize: 10, textAlign: 'center', marginBottom: 8, letterSpacing: '0.05em' }}>TARGET API GATEWAY</label>
+            <div style={{ display: 'flex', gap: 6, background: "rgba(0,0,0,0.2)", padding: 4, borderRadius: 8, border: "1px solid var(--border-color)" }}>
+              <button 
+                type="button"
+                onClick={() => handleApiChange("https://whiteroomapi-production.up.railway.app/api/v1")}
+                style={{
+                  flex: 1,
+                  padding: "8px",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  borderRadius: 6,
+                  border: "none",
+                  background: apiBaseUrl.includes("production") ? "rgba(99, 102, 241, 0.15)" : "transparent",
+                  color: apiBaseUrl.includes("production") ? "var(--primary)" : "var(--text-muted)",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}
+              >
+                🌐 Cloud API
+              </button>
+              <button 
+                type="button"
+                onClick={() => handleApiChange("http://localhost:3000/api/v1")}
+                style={{
+                  flex: 1,
+                  padding: "8px",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  borderRadius: 6,
+                  border: "none",
+                  background: apiBaseUrl.includes("localhost") ? "rgba(14, 165, 233, 0.15)" : "transparent",
+                  color: apiBaseUrl.includes("localhost") ? "var(--accent-teal)" : "var(--text-muted)",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}
+              >
+                💻 Local API
+              </button>
+            </div>
+            <div style={{ fontSize: 9, color: "var(--text-dim)", marginTop: 10, textAlign: 'center', fontFamily: 'monospace', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+              {apiBaseUrl}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -316,6 +379,50 @@ export default function App() {
         </div>
 
         <div>
+          {/* Dynamic Environment Gateway Selector */}
+          <div style={{ marginBottom: 20 }}>
+            <label className="input-label" style={{ fontSize: 10, marginBottom: 8, display: 'block', letterSpacing: '0.05em' }}>GATEWAY ENVIRONMENT</label>
+            <div style={{ display: 'flex', gap: 4, background: "rgba(0,0,0,0.25)", padding: 4, borderRadius: 8, border: "1px solid var(--border-color)" }}>
+              <button 
+                onClick={() => handleApiChange("https://whiteroomapi-production.up.railway.app/api/v1")}
+                style={{
+                  flex: 1,
+                  padding: "6px 4px",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  borderRadius: 6,
+                  border: "none",
+                  background: apiBaseUrl.includes("production") ? "rgba(99, 102, 241, 0.15)" : "transparent",
+                  color: apiBaseUrl.includes("production") ? "var(--primary)" : "var(--text-muted)",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}
+              >
+                Production
+              </button>
+              <button 
+                onClick={() => handleApiChange("http://localhost:3000/api/v1")}
+                style={{
+                  flex: 1,
+                  padding: "6px 4px",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  borderRadius: 6,
+                  border: "none",
+                  background: apiBaseUrl.includes("localhost") ? "rgba(14, 165, 233, 0.15)" : "transparent",
+                  color: apiBaseUrl.includes("localhost") ? "var(--accent-teal)" : "var(--text-muted)",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}
+              >
+                Local Dev
+              </button>
+            </div>
+            <div style={{ fontSize: 9, color: "var(--text-dim)", marginTop: 6, fontFamily: 'monospace', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+              {apiBaseUrl}
+            </div>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: "16px", background: "rgba(255,255,255,0.02)", borderRadius: 12, border: "1px solid var(--border-color)", marginBottom: 16 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--success)" }} />
             <div>
