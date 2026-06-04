@@ -27,7 +27,7 @@ import type { OTPVerifyResponse } from '@whiteroom/shared';
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 let firebaseAuth: any = null;
-if (Platform.OS !== 'web') {
+if (Platform.OS !== 'web' && process.env.EXPO_PUBLIC_DISABLE_FIREBASE_AUTH !== 'true') {
   try {
     firebaseAuth = require('@react-native-firebase/auth').default;
   } catch (e) {
@@ -176,6 +176,7 @@ export default function AuthScreen() {
       if (err.code?.includes("billing-not") || err.message?.includes("BILLING_NOT_ENABLED")) {
         setError("Firebase Billing required for live SMS. Please upgrade to the Blaze plan or add this number as a 'Phone number for testing' in your Firebase Console.");
         setLoading(false);
+        await handleSendOtp();
         return;
       }
 
@@ -208,7 +209,7 @@ export default function AuthScreen() {
         setLoading(true);
         setError(null);
         const response = await api.otpVerify({ phone, otp });
-        
+
         if (response.type === 'existing_user') {
           await setSession(response as any);
           router.replace('/');
@@ -238,16 +239,16 @@ export default function AuthScreen() {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Verify OTP with Firebase
       const credential = await confirmation.confirm(otp);
-      
+
       // Get signed idToken from Firebase
       const idToken = await credential.user.getIdToken();
-      
+
       // Send idToken to Whiteroom backend
       const response = await api.otpVerify({ idToken });
-      
+
       if (response.type === 'existing_user') {
         await setSession(response as any);
         router.replace('/');

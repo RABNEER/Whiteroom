@@ -20,6 +20,13 @@ const envSchema = z.object({
   MSG91_TEMPLATE_ID: z.string().min(1).optional(),
   MSG91_SENDER_ID: z.string().min(1).optional(),
 
+  // ─── SMS Gateway 24 (SIM Gateway) ───
+  SMSGATEWAY24_TOKEN: z.string().optional(),
+  SMSGATEWAY24_DEVICE_ID: z.string().optional(),
+
+  // ─── Termux Custom SMS Gateway ───
+  TERMUX_SMS_GATEWAY_URL: z.string().optional(),
+
   FIREBASE_PROJECT_ID: z.string().min(1).optional(),
   FIREBASE_CLIENT_EMAIL: z.string().min(1).optional(),
   FIREBASE_PRIVATE_KEY: z.string().min(1).optional(),
