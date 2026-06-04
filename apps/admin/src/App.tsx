@@ -76,6 +76,7 @@ export default function App() {
   const [userSearchTerm, setUserSearchTerm] = useState("");
   const [lastSynced, setLastSynced] = useState<string | null>(null);
   const [syncingPulse, setSyncingPulse] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Poll controller
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -156,6 +157,7 @@ export default function App() {
     setMetrics(null);
     setTenantsList([]);
     setUsersList([]);
+    setFetchError(null);
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
   };
 
@@ -173,25 +175,50 @@ export default function App() {
         fetch(`${apiBaseUrl}/admin/users`, { headers })
       ]);
 
+      // Detect expired or unauthorized token (401/403) and self-heal by triggering auto-login
+      if (
+        metricsRes.status === 401 || tenantsRes.status === 401 || usersRes.status === 401 ||
+        metricsRes.status === 403 || tenantsRes.status === 403 || usersRes.status === 403
+      ) {
+        console.warn("API token is expired or unauthorized. Re-authenticating automatically...");
+        localStorage.removeItem("admin_token");
+        setToken(null);
+        setFetchError("Session credentials expired. Attempting secure re-authentication...");
+        return;
+      }
+
+      if (!metricsRes.ok || !tenantsRes.ok || !usersRes.ok) {
+        throw new Error(
+          `Gateway API error (Metrics: ${metricsRes.status}, Tenants: ${tenantsRes.status}, Users: ${usersRes.status})`
+        );
+      }
+
       const [metricsResult, tenantsResult, usersResult] = await Promise.all([
         metricsRes.json(),
         tenantsRes.json(),
         usersRes.json()
       ]);
 
-      if (metricsRes.ok && metricsResult.success) {
+      if (metricsResult.success) {
         setMetrics(metricsResult.data);
       }
-      if (tenantsRes.ok && tenantsResult.success) {
+      if (tenantsResult.success) {
         setTenantsList(tenantsResult.data);
       }
-      if (usersRes.ok && usersResult.success) {
+      if (usersResult.success) {
         setUsersList(usersResult.data);
       }
 
+      // Success, clear any previous connection errors
+      setFetchError(null);
       setLastSynced(new Date().toLocaleTimeString());
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to poll dashboard statistics:", err);
+      setFetchError(
+        err.message && err.message.includes("Gateway API error")
+          ? err.message
+          : "Could not connect to the API Gateway. Ensure the backend server is running and CORS is configured."
+      );
     } finally {
       setLoadingData(false);
       setTimeout(() => setSyncingPulse(false), 800);
@@ -465,6 +492,17 @@ export default function App() {
             </div>
           </div>
         </header>
+
+        {/* Connection Error Banner */}
+        {fetchError && (
+          <div className="auth-error" style={{ margin: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12, padding: "16px 20px", borderRadius: 12 }}>
+            <ShieldAlert size={20} style={{ flexShrink: 0 }} />
+            <div>
+              <p style={{ fontWeight: 600, fontSize: 14 }}>Connection Alert</p>
+              <p style={{ fontSize: 12, opacity: 0.9, marginTop: 2 }}>{fetchError}</p>
+            </div>
+          </div>
+        )}
 
         {/* Dashboard Performance Metrics Grid */}
         <section className="stats-grid">

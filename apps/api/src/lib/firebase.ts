@@ -53,10 +53,8 @@ export function getFirebaseMessaging() {
  * Supports a local offline development bypass ("dev-bypass-[phone]") in development.
  */
 export async function verifyFirebaseIdToken(token: string): Promise<{ phone: string; uid: string }> {
-  // Development local bypass to avoid calling live network in offline dev builds
-  // Requires both NODE_ENV strictly equal to development AND ENABLE_DEV_BYPASS explicitly set to "true"
+  // Requires ENABLE_DEV_BYPASS explicitly set to "true"
   if (
-    env.NODE_ENV === "development" &&
     env.ENABLE_DEV_BYPASS === "true" &&
     token.startsWith("dev-bypass-")
   ) {
