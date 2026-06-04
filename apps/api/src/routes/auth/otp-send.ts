@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { z } from "zod";
 import { db } from "../../lib/db.js";
+import { env } from "../../lib/env.js";
 import { otpAttempts } from "@whiteroom/db";
 import { normalizePhone, isValidIndianPhone, hashSHA256, generateOTP } from "../../lib/otp.js";
 import { sendOTP } from "../../lib/msg91.js";
@@ -50,7 +51,7 @@ export async function otpSendHandler(c: Context) {
       )
     );
 
-  if (result && result.total >= Limits.OTP_RATE_LIMIT_PER_HOUR) {
+  if (result && result.total >= Limits.OTP_RATE_LIMIT_PER_HOUR && env.ENABLE_DEV_BYPASS !== "true") {
     throw Errors.rateLimited(
       `OTP limit reached. Try again after ${Math.ceil((60 * 60 * 1000 - (Date.now() - oneHourAgo.getTime())) / 1000 / 60)} minutes.`
     );
