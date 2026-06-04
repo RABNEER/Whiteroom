@@ -69,7 +69,7 @@ export async function otpSendHandler(c: Context) {
   });
 
   // ─── Send SMS ───
-  if (process.env.NODE_ENV === "development") {
+  if (process.env.NODE_ENV === "development" && !env.TERMUX_SMS_GATEWAY_URL && !env.SMSGATEWAY24_TOKEN) {
     console.log(`[DEV MODE] Skipping SMS. OTP for ${phone} is: ${otp}`);
   } else {
     await sendOTP(phone, otp);
