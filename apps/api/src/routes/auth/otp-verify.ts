@@ -63,6 +63,10 @@ export async function otpVerifyHandler(c: Context) {
   const parsed = verifySchema.safeParse(body);
 
   if (!parsed.success) {
+    console.error("❌ [OTP VERIFY VALIDATION FAILED]", {
+      body,
+      errors: parsed.error.format(),
+    });
     throw Errors.validation("Invalid request body", {
       issues: parsed.error.flatten().fieldErrors,
     });
