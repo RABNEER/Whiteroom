@@ -23,7 +23,7 @@ export async function sendOTP(phone: string, otp: string): Promise<void> {
         },
         body: JSON.stringify({
           phone,
-          message: `Your Whiteroom verification code is: ${otp}. Valid for 5 minutes.`,
+          message: `Whiteroom code: ${otp}`,
         }),
       });
 
@@ -54,7 +54,7 @@ export async function sendOTP(phone: string, otp: string): Promise<void> {
     const params = new URLSearchParams();
     params.append("token", env.SMSGATEWAY24_TOKEN);
     params.append("sendto", phone);
-    params.append("body", `Your Whiteroom verification code is: ${otp}. Valid for 5 minutes.`);
+    params.append("body", `Whiteroom code: ${otp}`);
     params.append("device_id", env.SMSGATEWAY24_DEVICE_ID);
     params.append("sim", "0");
     params.append("urgent", "1");
