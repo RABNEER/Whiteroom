@@ -198,7 +198,8 @@ export default function AuthScreen() {
     }
   };
 
-  const handleVerifyOtp = async () => {
+  const handleVerifyOtp = async (overrideOtp?: string) => {
+    const activeOtp = overrideOtp || otp;
     if (!firebaseAuth) {
       // ─── Graceful Database-Driven Fallback Mode ───
       if (attemptsLeft <= 0) {
@@ -208,7 +209,7 @@ export default function AuthScreen() {
       try {
         setLoading(true);
         setError(null);
-        const response = await api.otpVerify({ phone, otp });
+        const response = await api.otpVerify({ phone, otp: activeOtp });
 
         if (response.type === 'existing_user') {
           await setSession(response as any);
@@ -241,7 +242,7 @@ export default function AuthScreen() {
       setError(null);
 
       // Verify OTP with Firebase
-      const credential = await confirmation.confirm(otp);
+      const credential = await confirmation.confirm(activeOtp);
 
       // Get signed idToken from Firebase
       const idToken = await credential.user.getIdToken();
@@ -269,7 +270,7 @@ export default function AuthScreen() {
         console.warn("⚠️ Firebase Auth failed to initialize during verification. Falling back to local OTP database mock.");
         firebaseAuth = null;
         setLoading(false);
-        await handleVerifyOtp();
+        await handleVerifyOtp(overrideOtp);
         return;
       }
 
@@ -314,7 +315,7 @@ export default function AuthScreen() {
         setError('Maximum attempts reached. Please resend OTP.');
         return;
       }
-      handleVerifyOtp();
+      handleVerifyOtp(numeric);
     }
   };
 

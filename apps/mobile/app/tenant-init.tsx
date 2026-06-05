@@ -35,7 +35,8 @@ export default function TenantInitScreen() {
 
   const initMutation = useMutation({
     mutationFn: () => api.tenantUpdate({ name: name.trim(), publicSearch }),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      qc.setQueryData(['tenant'], data);
       qc.invalidateQueries({ queryKey: ['tenant'] });
       qc.invalidateQueries({ queryKey: ['classes'] });
       router.replace('/teacher');

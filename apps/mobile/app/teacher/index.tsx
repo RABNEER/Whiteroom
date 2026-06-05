@@ -1104,7 +1104,8 @@ function ProfileTab({ tenantName, onLogout }: { tenantName: string; onLogout: ()
 
   const update = useMutation({
     mutationFn: () => api.tenantUpdate({ name: newName.trim() }),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      qc.setQueryData(['tenant'], data);
       qc.invalidateQueries({ queryKey: ['tenant'] });
       setEditing(false);
     },
