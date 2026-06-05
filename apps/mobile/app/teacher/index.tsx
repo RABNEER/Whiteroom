@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   StyleSheet,
+  Alert,
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -65,12 +66,12 @@ export default function TeacherScreen() {
   const tenant = useQuery({ queryKey: ['tenant'], queryFn: api.tenantMe });
   const classes = useQuery({ queryKey: ['classes'], queryFn: () => api.classes() });
 
-  // Guard: redirect incomplete onboarding
+  // Guard: redirect incomplete onboarding (only when data has loaded, not while fetching)
   useEffect(() => {
-    if (tenant.data && tenant.data.name === 'My Institute') {
+    if (!tenant.isLoading && tenant.data && tenant.data.name === 'My Institute') {
       router.replace('/tenant-init');
     }
-  }, [tenant.data]);
+  }, [tenant.isLoading, tenant.data]);
 
   const logout = useMutation({
     mutationFn: async () => {
@@ -324,6 +325,9 @@ function ClassroomsTab({
       setSubject('');
       onToggleCreate(false);
     },
+    onError: (err: unknown) => {
+      Alert.alert('Error', err instanceof ApiError ? err.message : 'Failed to create classroom. Please try again.');
+    },
   });
 
   if (view === 'DETAIL' && selectedClass) {
@@ -513,6 +517,12 @@ function AttendanceView({ classId }: { classId: string }) {
       const studentList = students.data?.data ?? [];
       studentList.forEach((st) => { initial[st.id] = 'present'; });
       setRecords(initial);
+    },
+    onError: (err: unknown) => {
+      Alert.alert(
+        'Cannot Start Session',
+        err instanceof ApiError ? err.message : 'Failed to start session. A session may already exist for today.',
+      );
     },
   });
 
@@ -713,12 +723,21 @@ function StudentsView({ classId }: { classId: string }) {
   });
 
   const addStudent = useMutation({
-    mutationFn: () => api.studentCreate({ name: newName.trim(), rollNumber: newRoll.trim() || undefined }),
+    mutationFn: async () => {
+      // Create the student globally, then enroll them into this specific class
+      const student = await api.studentCreate({ name: newName.trim(), rollNumber: newRoll.trim() || undefined });
+      await api.classAddStudents(classId, [student.id]);
+      return student;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['classStudents', classId] });
+      qc.invalidateQueries({ queryKey: ['students'] });
       setNewName('');
       setNewRoll('');
       setShowAdd(false);
+    },
+    onError: (err: unknown) => {
+      Alert.alert('Error', err instanceof ApiError ? err.message : 'Failed to add student.');
     },
   });
 
@@ -1023,6 +1042,9 @@ function AnnounceTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['announcements'] });
       setTitle(''); setBody(''); setPinned(false); setShowCreate(false);
+    },
+    onError: (err: unknown) => {
+      Alert.alert('Post Failed', err instanceof ApiError ? err.message : 'Failed to post announcement. Please try again.');
     },
   });
 

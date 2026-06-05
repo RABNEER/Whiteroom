@@ -162,7 +162,12 @@ export default function ParentScreen() {
         accent={selectedChild?.rollNumber ? `Roll ${selectedChild.rollNumber}` : undefined}
         avatarName={selectedChild?.name ?? 'Parent'}
         onAvatarPress={() => setIsSiblingDrawerOpen(true)}
-        trailing={<IconButton icon={LogOut} onPress={() => logout.mutate()} />}
+        trailing={<IconButton icon={LogOut} onPress={() => {
+          Alert.alert('Log Out', 'Are you sure you want to log out?', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Log Out', style: 'destructive', onPress: () => logout.mutate() },
+          ]);
+        }} />}
       />
 
       {/* ── Content ────────────────────────────────────────────────── */}

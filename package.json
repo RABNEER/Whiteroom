@@ -10,7 +10,9 @@
     "seed": "pnpm --filter @whiteroom/api seed",
     "db:generate": "turbo run db:generate --filter=@whiteroom/db",
     "db:migrate": "turbo run db:migrate --filter=@whiteroom/db",
-    "db:studio": "turbo run db:studio --filter=@whiteroom/db"
+    "db:studio": "turbo run db:studio --filter=@whiteroom/db",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "devDependencies": {
     "turbo": "^2.5.0",
@@ -19,5 +21,6 @@
   "packageManager": "pnpm@10.11.0",
   "engines": {
     "node": ">=20"
-  }
+  },
+  "version": "1.0.0"
 }
