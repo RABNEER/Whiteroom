@@ -6,8 +6,10 @@ export function corsMiddleware() {
     origin: (origin) => {
       const allowed = [
         "http://localhost:3001",
-        "exp://localhost:8081",
-        "exp://192.168.1.*:8081",
+        "http://localhost:8081",
+        "http://127.0.0.1:8081",
+        "http://192.168.*:8081",
+        "https://*.netlify.app",
         process.env.MOBILE_WEB_URL,
         process.env.ADMIN_URL,
       ].filter(Boolean) as string[];

@@ -37,7 +37,7 @@ import { verifyFirebaseIdToken } from "../../lib/firebase.js";
 const verifySchema = z.object({
   idToken: z.string().min(1).optional(),
   phone: z.string().min(10).max(15).optional(),
-  otp: z.string().length(6).optional(),
+  otp: z.string().min(5).max(6).optional(),
   inviteCode: z.string().length(6).optional(),
   studentName: z.string().trim().min(1).max(120).optional(),
   rollNumber: z.string().trim().min(1).max(40).optional(),
