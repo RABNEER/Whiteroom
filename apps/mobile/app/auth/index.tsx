@@ -177,11 +177,18 @@ export default function AuthScreen() {
   });
 
   const handleStartWhatsAppFlow = async () => {
+    const rawPhone = phone.replace(/\D/g, '');
+    if (rawPhone.length !== 10) {
+      setError('Please enter a valid 10-digit mobile number first.');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      const session = await api.whatsappSessionCreate();
+      const formattedPhone = `+91${rawPhone}`;
+      const session = await api.whatsappSessionCreate(formattedPhone);
       setWhatsappSessionId(session.id);
       setWhatsappToken(session.token);
       setWhatsappTimer(session.expiresIn || 300);
@@ -604,31 +611,8 @@ export default function AuthScreen() {
               <Text style={styles.eyebrow}>STEP 1 OF 2</Text>
               <Text style={styles.pageTitle}>Verify your identity</Text>
               <Text style={styles.pageSub}>
-                Choose a verification method to sign in or get started.
+                Enter your mobile number to get started.
               </Text>
-
-              {/* WhatsApp Verification Option */}
-              <Pressable
-                accessibilityRole="button"
-                style={[styles.primaryButton, { backgroundColor: '#25D366', flexDirection: 'row', gap: 8 }]}
-                disabled={loading}
-                onPress={handleStartWhatsAppFlow}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
-                  <>
-                    <MessageCircle color="#FFF" size={20} />
-                    <Text style={styles.buttonText}>VERIFY VIA WHATSAPP (1-TAP)</Text>
-                  </>
-                )}
-              </Pressable>
-              
-              <View style={styles.orDivider}>
-                <View style={styles.orLine} />
-                <Text style={styles.orText}>OR CHOOSE SMS OTP</Text>
-                <View style={styles.orLine} />
-              </View>
 
               <Text style={[styles.fieldLabel, { marginTop: spacing.sm }]}>
                 MOBILE NUMBER
@@ -655,23 +639,24 @@ export default function AuthScreen() {
                 </View>
               )}
 
+              {/* WhatsApp Verification Option */}
               <Pressable
                 accessibilityRole="button"
                 style={[
                   styles.primaryButton,
-                  { marginTop: spacing.md, backgroundColor: colors.navy },
+                  { backgroundColor: '#25D366', flexDirection: 'row', gap: 8, marginTop: spacing.lg },
                   phone.replace(/\D/g, '').length !== 10 && { opacity: 0.5 },
                 ]}
-                disabled={
-                  phone.replace(/\D/g, '').length !== 10 ||
-                  loading
-                }
-                onPress={handlePhoneSubmit}
+                disabled={phone.replace(/\D/g, '').length !== 10 || loading}
+                onPress={handleStartWhatsAppFlow}
               >
                 {loading ? (
                   <ActivityIndicator color="#FFF" />
                 ) : (
-                  <Text style={styles.buttonText}>SEND SMS OTP →</Text>
+                  <>
+                    <MessageCircle color="#FFF" size={20} />
+                    <Text style={styles.buttonText}>VERIFY VIA WHATSAPP (1-TAP)</Text>
+                  </>
                 )}
               </Pressable>
 
@@ -738,7 +723,7 @@ export default function AuthScreen() {
                   }}
                 >
                   <Text style={[styles.skipText, { color: colors.danger, fontWeight: '600' }]}>
-                    CANCEL & USE SMS
+                    CANCEL
                   </Text>
                 </Pressable>
               </View>

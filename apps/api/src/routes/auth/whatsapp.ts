@@ -49,8 +49,26 @@ const sessionLimiter = rateLimitMiddleware({
   max: 10, // Max 10 session creations per hour per IP to prevent spam
 });
 
+const sessionSchema = z.object({
+  phone: z.string().min(10).max(15),
+});
+
 // 1. POST /api/v1/auth/whatsapp/session
 whatsappRoutes.post("/session", sessionLimiter, async (c: Context) => {
+  const body = await c.req.json();
+  const parsed = sessionSchema.safeParse(body);
+
+  if (!parsed.success) {
+    throw Errors.validation("Invalid request body", {
+      issues: parsed.error.flatten().fieldErrors,
+    });
+  }
+
+  const phone = normalizePhone(parsed.data.phone);
+  if (!isValidIndianPhone(phone)) {
+    throw Errors.validation("Invalid phone number format. Only Indian numbers (+91) are supported.");
+  }
+
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // Valid for 5 minutes
   const token = crypto.randomUUID();
   let id = "";
@@ -63,6 +81,7 @@ whatsappRoutes.post("/session", sessionLimiter, async (c: Context) => {
       await db.insert(whatsappSessions).values({
         id,
         token,
+        phone,
         expiresAt,
         verified: false,
       });
@@ -109,11 +128,10 @@ whatsappRoutes.get("/session/:id", async (c: Context) => {
   const now = new Date();
   const isExpired = session.expiresAt < now;
 
-  const response: ApiResponse<{ verified: boolean; phone: string | null; isExpired: boolean }> = {
+  const response: ApiResponse<{ verified: boolean; isExpired: boolean }> = {
     success: true,
     data: {
       verified: session.verified && !isExpired,
-      phone: session.verified && !isExpired ? session.phone : null,
       isExpired,
     },
   };
@@ -165,30 +183,6 @@ whatsappRoutes.post("/webhook", async (c: Context) => {
   const code = match[0].toUpperCase();
   const now = new Date();
 
-  // Find active, unverified session
-  const [session] = await db
-    .select()
-    .from(whatsappSessions)
-    .where(
-      and(
-        eq(whatsappSessions.id, code),
-        eq(whatsappSessions.verified, false),
-        gte(whatsappSessions.expiresAt, now)
-      )
-    )
-    .limit(1);
-
-  if (!session) {
-    console.warn(`⚠️ [WHATSAPP WEBHOOK] Session code ${code} not active, already verified, or expired.`);
-    return c.json(
-      {
-        success: false,
-        error: "Verification session not active, already verified, or expired",
-      },
-      400
-    );
-  }
-
   const phone = normalizePhone(from);
   if (!isValidIndianPhone(phone)) {
     return c.json(
@@ -200,12 +194,36 @@ whatsappRoutes.post("/webhook", async (c: Context) => {
     );
   }
 
+  // Find active, unverified session with matching phone number to prevent session fixation
+  const [session] = await db
+    .select()
+    .from(whatsappSessions)
+    .where(
+      and(
+        eq(whatsappSessions.id, code),
+        eq(whatsappSessions.phone, phone),
+        eq(whatsappSessions.verified, false),
+        gte(whatsappSessions.expiresAt, now)
+      )
+    )
+    .limit(1);
+
+  if (!session) {
+    console.warn(`⚠️ [WHATSAPP WEBHOOK] Session code ${code} not active, already verified, expired, or phone mismatch for sender: ${phone}.`);
+    return c.json(
+      {
+        success: false,
+        error: "Verification session not active, already verified, or expired",
+      },
+      400
+    );
+  }
+
   // Update session
   await db
     .update(whatsappSessions)
     .set({
       verified: true,
-      phone,
     })
     .where(eq(whatsappSessions.id, code));
 

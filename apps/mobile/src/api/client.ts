@@ -311,12 +311,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ plan: "pro_yearly" }),
     }),
-  whatsappSessionCreate: (): Promise<{ id: string; token: string; expiresIn: number }> =>
+  whatsappSessionCreate: (phone: string): Promise<{ id: string; token: string; expiresIn: number }> =>
     request<{ id: string; token: string; expiresIn: number }>("/auth/whatsapp/session", {
       method: "POST",
+      body: JSON.stringify({ phone }),
     }),
-  whatsappSessionGet: (id: string): Promise<{ verified: boolean; phone: string | null; isExpired: boolean }> =>
-    request<{ verified: boolean; phone: string | null; isExpired: boolean }>(`/auth/whatsapp/session/${id}`),
+  whatsappSessionGet: (id: string): Promise<{ verified: boolean; isExpired: boolean }> =>
+    request<{ verified: boolean; isExpired: boolean }>(`/auth/whatsapp/session/${id}`),
   whatsappVerify: (input: { id: string; token: string; inviteCode?: string }): Promise<OTPVerifyResult> =>
     request<OTPVerifyResult>("/auth/whatsapp/verify", {
       method: "POST",
