@@ -7,6 +7,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "icon": "./src/assets/logo.png",
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
@@ -16,6 +17,7 @@
       "package": "app.whiteroom.mobile",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
+        "foregroundImage": "./src/assets/logo.png",
         "backgroundColor": "#F5F0E6"
       }
     },
