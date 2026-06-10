@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Image,
+  Linking,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
@@ -21,6 +22,7 @@ import {
   Check,
   EyeOff,
   Trash2,
+  MessageCircle,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { OTPVerifyResponse } from '@whiteroom/shared';
@@ -41,7 +43,7 @@ import { useSession } from '@/auth/session-store';
 import { colors, spacing } from '@/theme/tokens';
 import LogoImage from '../../src/assets/logo.png';
 
-type Step = 'SPLASH' | 'WELCOME' | 'PHONE' | 'OTP' | 'CONSENT' | 'ROLE_SELECT';
+type Step = 'SPLASH' | 'WELCOME' | 'PHONE' | 'OTP' | 'CONSENT' | 'ROLE_SELECT' | 'WHATSAPP_POLL';
 type Role = 'teacher' | 'parent';
 
 export default function AuthScreen() {
@@ -64,6 +66,11 @@ export default function AuthScreen() {
   const [registrationToken, setRegistrationToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resolvedTenant, setResolvedTenant] = useState<string | null>(null);
+
+  // WhatsApp verification state
+  const [whatsappSessionId, setWhatsappSessionId] = useState<string | null>(null);
+  const [whatsappToken, setWhatsappToken] = useState<string | null>(null);
+  const [whatsappTimer, setWhatsappTimer] = useState(300);
 
   const otpInputRef = useRef<TextInput>(null);
 
@@ -88,6 +95,48 @@ export default function AuthScreen() {
     const interval = setInterval(() => setResendTimer((t) => t - 1), 1000);
     return () => clearInterval(interval);
   }, [step, resendTimer]);
+
+  // WhatsApp countdown timer
+  useEffect(() => {
+    if (step !== 'WHATSAPP_POLL' || whatsappTimer <= 0) {
+      if (step === 'WHATSAPP_POLL' && whatsappTimer <= 0) {
+        setError('Verification session expired. Please try again.');
+        setStep('PHONE');
+      }
+      return;
+    }
+    const interval = setInterval(() => setWhatsappTimer((t) => t - 1), 1000);
+    return () => clearInterval(interval);
+  }, [step, whatsappTimer]);
+
+  // WhatsApp verification polling
+  useEffect(() => {
+    if (step !== 'WHATSAPP_POLL' || !whatsappSessionId || !whatsappToken || whatsappTimer <= 0) return;
+
+    let active = true;
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await api.whatsappSessionGet(whatsappSessionId);
+        if (!active) return;
+
+        if (response.verified) {
+          clearInterval(pollInterval);
+          handleVerifyWhatsApp();
+        } else if (response.isExpired) {
+          clearInterval(pollInterval);
+          setError("Verification session expired. Please try again.");
+          setStep('PHONE');
+        }
+      } catch (err) {
+        console.error("[WHATSAPP POLL ERROR]", err);
+      }
+    }, 2000);
+
+    return () => {
+      active = false;
+      clearInterval(pollInterval);
+    };
+  }, [step, whatsappSessionId, whatsappToken, whatsappTimer]);
 
   // Mutations
   const registerMutation = useMutation({
@@ -126,6 +175,71 @@ export default function AuthScreen() {
       setError(err instanceof ApiError ? err.message : 'Invalid invite code');
     },
   });
+
+  const handleStartWhatsAppFlow = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const session = await api.whatsappSessionCreate();
+      setWhatsappSessionId(session.id);
+      setWhatsappToken(session.token);
+      setWhatsappTimer(session.expiresIn || 300);
+      setStep('WHATSAPP_POLL');
+
+      const botNumber = process.env.EXPO_PUBLIC_WHATSAPP_BOT_NUMBER || "+919999999999";
+      const cleanBotNumber = botNumber.replace(/\+/g, '');
+      const messageText = `Verify my device: ${session.id}`;
+      const url = `https://wa.me/${cleanBotNumber}?text=${encodeURIComponent(messageText)}`;
+
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        // Fallback if Linking fails (like on some Web / simulator environments)
+        await Linking.openURL(url);
+      }
+    } catch (err: any) {
+      setError(err instanceof ApiError ? err.message : 'Failed to start WhatsApp verification.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyWhatsApp = async () => {
+    if (!whatsappSessionId || !whatsappToken) return;
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await api.whatsappVerify({
+        id: whatsappSessionId,
+        token: whatsappToken,
+        inviteCode: inviteCode || undefined,
+      });
+
+      if (response.type === 'existing_user') {
+        await setSession(response as any);
+        router.replace('/');
+      } else if (response.type === 'new_user') {
+        setRegistrationToken(response.registrationToken);
+        setStep('CONSENT');
+      }
+    } catch (err: any) {
+      setError(err instanceof ApiError ? err.message : 'WhatsApp verification failed. Please try again.');
+      setStep('PHONE');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReopenWhatsApp = async () => {
+    if (!whatsappSessionId) return;
+    const botNumber = process.env.EXPO_PUBLIC_WHATSAPP_BOT_NUMBER || "+919999999999";
+    const cleanBotNumber = botNumber.replace(/\+/g, '');
+    const url = `https://wa.me/${cleanBotNumber}?text=${encodeURIComponent(`Verify my device: ${whatsappSessionId}`)}`;
+    await Linking.openURL(url);
+  };
 
   // Handlers
   const handleSendOtp = async () => {
@@ -476,6 +590,7 @@ export default function AuthScreen() {
               onPress={() => {
                 if (step === 'PHONE') setStep('WELCOME');
                 else if (step === 'OTP') setStep('PHONE');
+                else if (step === 'WHATSAPP_POLL') setStep('PHONE');
                 else if (step === 'ROLE_SELECT') setStep('CONSENT');
               }}
             >
@@ -487,12 +602,35 @@ export default function AuthScreen() {
           {step === 'PHONE' && (
             <>
               <Text style={styles.eyebrow}>STEP 1 OF 2</Text>
-              <Text style={styles.pageTitle}>Enter your phone number</Text>
+              <Text style={styles.pageTitle}>Verify your identity</Text>
               <Text style={styles.pageSub}>
-                We'll send a 6-digit OTP. No password needed.
+                Choose a verification method to sign in or get started.
               </Text>
 
-              <Text style={[styles.fieldLabel, { marginTop: spacing.lg }]}>
+              {/* WhatsApp Verification Option */}
+              <Pressable
+                accessibilityRole="button"
+                style={[styles.primaryButton, { backgroundColor: '#25D366', flexDirection: 'row', gap: 8 }]}
+                disabled={loading}
+                onPress={handleStartWhatsAppFlow}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <>
+                    <MessageCircle color="#FFF" size={20} />
+                    <Text style={styles.buttonText}>VERIFY VIA WHATSAPP (1-TAP)</Text>
+                  </>
+                )}
+              </Pressable>
+              
+              <View style={styles.orDivider}>
+                <View style={styles.orLine} />
+                <Text style={styles.orText}>OR CHOOSE SMS OTP</Text>
+                <View style={styles.orLine} />
+              </View>
+
+              <Text style={[styles.fieldLabel, { marginTop: spacing.sm }]}>
                 MOBILE NUMBER
               </Text>
               <View style={styles.phoneRow}>
@@ -521,7 +659,7 @@ export default function AuthScreen() {
                 accessibilityRole="button"
                 style={[
                   styles.primaryButton,
-                  { marginTop: spacing.md },
+                  { marginTop: spacing.md, backgroundColor: colors.navy },
                   phone.replace(/\D/g, '').length !== 10 && { opacity: 0.5 },
                 ]}
                 disabled={
@@ -533,7 +671,7 @@ export default function AuthScreen() {
                 {loading ? (
                   <ActivityIndicator color="#FFF" />
                 ) : (
-                  <Text style={styles.buttonText}>SEND OTP →</Text>
+                  <Text style={styles.buttonText}>SEND SMS OTP →</Text>
                 )}
               </Pressable>
 
@@ -545,6 +683,64 @@ export default function AuthScreen() {
               <View style={styles.trustStrip}>
                 <Shield color={colors.teal} size={14} />
                 <Text style={styles.trustText}>DPDP Act 2023 Compliant</Text>
+              </View>
+            </>
+          )}
+
+          {/* ─── WhatsApp Poll Step ─── */}
+          {step === 'WHATSAPP_POLL' && (
+            <>
+              <View style={styles.whatsappPollCard}>
+                <View style={styles.whatsappIconCircle}>
+                  <MessageCircle color="#FFF" size={36} />
+                </View>
+                <Text style={styles.pollTitle}>Verifying your number...</Text>
+                <Text style={styles.pollSub}>
+                  We opened WhatsApp. Send the pre-filled verification code message from your phone.
+                </Text>
+                
+                <View style={styles.codeBanner}>
+                  <Text style={styles.codeText}>Code: {whatsappSessionId}</Text>
+                </View>
+
+                {error && (
+                  <View style={[styles.errorStrip, { marginTop: spacing.md, width: '100%' }]}>
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                )}
+
+                <View style={styles.pollLoaderRow}>
+                  <ActivityIndicator color={colors.navy} size="small" />
+                  <Text style={styles.pollLoaderText}>
+                    Waiting for you to send the message...
+                  </Text>
+                </View>
+
+                <Text style={styles.pollTimerText}>
+                  Valid for: {Math.floor(whatsappTimer / 60)}:{(whatsappTimer % 60).toString().padStart(2, '0')}
+                </Text>
+
+                <Pressable
+                  accessibilityRole="button"
+                  style={[styles.primaryButton, { backgroundColor: '#25D366', marginTop: spacing.lg, flexDirection: 'row', gap: 8 }]}
+                  onPress={handleReopenWhatsApp}
+                >
+                  <MessageCircle color="#FFF" size={20} />
+                  <Text style={styles.buttonText}>REOPEN WHATSAPP 📱</Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  style={[styles.skipLink, { marginTop: spacing.md }]}
+                  onPress={() => {
+                    setError(null);
+                    setStep('PHONE');
+                  }}
+                >
+                  <Text style={[styles.skipText, { color: colors.danger, fontWeight: '600' }]}>
+                    CANCEL & USE SMS
+                  </Text>
+                </Pressable>
               </View>
             </>
           )}
@@ -1413,5 +1609,88 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.3,
+  },
+  // ─── WhatsApp verification UI styles ───
+  orDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  orLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.sky,
+  },
+  orText: {
+    color: colors.teal,
+    fontSize: 10,
+    fontWeight: '600',
+    paddingHorizontal: 10,
+    letterSpacing: 1,
+  },
+  whatsappPollCard: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: colors.sky,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    elevation: 2,
+  },
+  whatsappIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#25D366',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  pollTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.navy,
+    marginBottom: 8,
+  },
+  pollSub: {
+    fontSize: 13,
+    color: colors.teal,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  codeBanner: {
+    backgroundColor: colors.sky,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: 20,
+  },
+  codeText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.navy,
+    letterSpacing: 1,
+  },
+  pollLoaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  pollLoaderText: {
+    fontSize: 12,
+    color: colors.teal,
+  },
+  pollTimerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.navy,
+    marginBottom: 16,
   },
 });

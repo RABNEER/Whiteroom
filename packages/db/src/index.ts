@@ -20,6 +20,7 @@ export { userTenants } from "./schema/user-tenants.js";
 export { reportsCache } from "./schema/reports-cache.js";
 export { idempotencyKeys } from "./schema/idempotency-keys.js";
 export { registrationTokens } from "./schema/registration-tokens.js";
+export { whatsappSessions } from "./schema/whatsapp-sessions.js";
 
 // ─── Utilities ───
 export { createId } from "./utils.js";

@@ -7,6 +7,7 @@ import { logoutHandler } from "./logout.js";
 import { switchTenantHandler } from "./switch-tenant.js";
 import { authMiddleware } from "../../middleware/auth.js";
 import { rateLimitMiddleware } from "../../middleware/rate-limit.js";
+import { whatsappRoutes } from "./whatsapp.js";
 
 const authRoutes = new Hono();
 
@@ -20,6 +21,7 @@ authRoutes.post("/otp/send", otpSendLimiter, otpSendHandler);
 authRoutes.post("/otp/verify", otpVerifyHandler);
 authRoutes.post("/register", registerHandler);
 authRoutes.post("/refresh", refreshHandler);
+authRoutes.route("/whatsapp", whatsappRoutes);
 
 // Protected — requires valid access token
 authRoutes.post("/logout", authMiddleware, logoutHandler);

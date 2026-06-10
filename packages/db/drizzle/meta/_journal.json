@@ -43,6 +43,13 @@
       "when": 1779364539480,
       "tag": "0005_normal_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781105536766,
+      "tag": "0006_bright_cobalt_man",
+      "breakpoints": true
     }
   ]
 }
