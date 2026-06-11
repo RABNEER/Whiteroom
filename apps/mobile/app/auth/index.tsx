@@ -133,9 +133,8 @@ export default function AuthScreen() {
       setError(err instanceof ApiError ? err.message : 'Registration failed');
       if (err instanceof ApiError && err.code === 'OTP_EXPIRED') {
         setRegistrationToken(null);
-        setOtp('');
         setStep('PHONE');
-        setError('Session expired. Please verify OTP again.');
+        setError('Session expired. Please verify again.');
       }
     },
   });
