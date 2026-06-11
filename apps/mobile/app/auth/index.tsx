@@ -26,24 +26,13 @@ import {
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { OTPVerifyResponse } from '@whiteroom/shared';
-import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
-
-let firebaseAuth: any = null;
-if (Platform.OS !== 'web' && process.env.EXPO_PUBLIC_DISABLE_FIREBASE_AUTH !== 'true') {
-  try {
-    firebaseAuth = require('@react-native-firebase/auth').default;
-  } catch (e) {
-    // Graceful fallback when native modules are missing (Web/Expo Go)
-  }
-}
-
 
 import { api, ApiError } from '@/api/client';
 import { useSession } from '@/auth/session-store';
 import { colors, spacing } from '@/theme/tokens';
 import LogoImage from '../../src/assets/logo.png';
 
-type Step = 'SPLASH' | 'WELCOME' | 'PHONE' | 'OTP' | 'CONSENT' | 'ROLE_SELECT' | 'WHATSAPP_POLL';
+type Step = 'SPLASH' | 'WELCOME' | 'PHONE' | 'CONSENT' | 'ROLE_SELECT' | 'WHATSAPP_POLL';
 type Role = 'teacher' | 'parent';
 
 export default function AuthScreen() {
@@ -52,17 +41,13 @@ export default function AuthScreen() {
   // State Machine
   const [step, setStep] = useState<Step>('SPLASH');
   const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role>('teacher');
   const [inviteCode, setInviteCode] = useState('');
   const [studentName, setStudentName] = useState('');
   const [rollNumber, setRollNumber] = useState('');
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [resendTimer, setResendTimer] = useState(45);
-  const [attemptsLeft, setAttemptsLeft] = useState(5);
   const [loading, setLoading] = useState(false);
-  const [confirmation, setConfirmation] = useState<FirebaseAuthTypes.ConfirmationResult | null>(null);
   const [registrationToken, setRegistrationToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [resolvedTenant, setResolvedTenant] = useState<string | null>(null);
@@ -71,8 +56,6 @@ export default function AuthScreen() {
   const [whatsappSessionId, setWhatsappSessionId] = useState<string | null>(null);
   const [whatsappToken, setWhatsappToken] = useState<string | null>(null);
   const [whatsappTimer, setWhatsappTimer] = useState(300);
-
-  const otpInputRef = useRef<TextInput>(null);
 
   // Splash dot animations (plain state — no reanimated needed)
   const [activeDot, setActiveDot] = useState(0);
@@ -88,13 +71,6 @@ export default function AuthScreen() {
       clearTimeout(timer);
     };
   }, [step]);
-
-  // OTP countdown timer
-  useEffect(() => {
-    if (step !== 'OTP' || resendTimer <= 0) return;
-    const interval = setInterval(() => setResendTimer((t) => t - 1), 1000);
-    return () => clearInterval(interval);
-  }, [step, resendTimer]);
 
   // WhatsApp countdown timer
   useEffect(() => {
@@ -249,197 +225,6 @@ export default function AuthScreen() {
   };
 
   // Handlers
-  const handleSendOtp = async () => {
-    if (!firebaseAuth) {
-      // ─── Graceful Database-Driven Fallback Mode ───
-      try {
-        setLoading(true);
-        setError(null);
-        await api.otpSend(phone);
-        setStep('OTP');
-        setResendTimer(45);
-        setAttemptsLeft(5);
-      } catch (err: any) {
-        setError(err instanceof ApiError ? err.message : 'Failed to send OTP. Try again.');
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
-    // ─── Real Firebase Phone Auth Flow ───
-    try {
-      setLoading(true);
-      setError(null);
-      const formattedPhone = `+91${phone.replace(/\D/g, '')}`;
-      const result = await firebaseAuth().signInWithPhoneNumber(formattedPhone);
-      setConfirmation(result);
-      setStep('OTP');
-      setResendTimer(45);
-      setAttemptsLeft(5);
-    } catch (err: any) {
-      console.error("[FIREBASE OTP SEND ERROR]", err);
-      const isInitializationError =
-        err.message?.includes("No Firebase App") ||
-        err.message?.includes("not found") ||
-        err.message?.includes("RNFBAppModule") ||
-        err.message?.includes("firebase.initializeApp") ||
-        err.code === 'app/no-app';
-
-      if (isInitializationError) {
-        console.warn("⚠️ Firebase Auth failed to initialize. Falling back to local OTP database mock.");
-        firebaseAuth = null;
-        setLoading(false);
-        await handleSendOtp();
-        return;
-      }
-
-      if (err.code?.includes("billing-not") || err.message?.includes("BILLING_NOT_ENABLED")) {
-        setError("Firebase Billing required for live SMS. Please upgrade to the Blaze plan or add this number as a 'Phone number for testing' in your Firebase Console.");
-        setLoading(false);
-        await handleSendOtp();
-        return;
-      }
-
-      switch (err.code) {
-        case 'auth/invalid-phone-number':
-          setError('Invalid phone number format.');
-          break;
-        case 'auth/too-many-requests':
-          setError('Too many attempts. Try again later.');
-          break;
-        case 'auth/missing-phone-number':
-          setError('Please enter your phone number.');
-          break;
-        default:
-          setError('Failed to send OTP. Try again.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (overrideOtp?: string) => {
-    const activeOtp = overrideOtp || otp;
-    if (!firebaseAuth) {
-      // ─── Graceful Database-Driven Fallback Mode ───
-      if (attemptsLeft <= 0) {
-        setError('Maximum attempts reached. Please resend OTP.');
-        return;
-      }
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await api.otpVerify({ phone, otp: activeOtp });
-
-        if (response.type === 'existing_user') {
-          await setSession(response as any);
-          router.replace('/');
-        } else if (response.type === 'new_user') {
-          setRegistrationToken(response.registrationToken);
-          setStep('CONSENT');
-        }
-      } catch (err: any) {
-        setError(err instanceof ApiError ? err.message : 'Verification failed. Try again.');
-        setAttemptsLeft(prev => Math.max(0, prev - 1));
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
-
-    // ─── Real Firebase Phone Auth Flow ───
-    if (!confirmation) {
-      setError('Session expired. Please resend OTP.');
-      setStep('PHONE');
-      return;
-    }
-    if (attemptsLeft <= 0) {
-      setError('Maximum attempts reached. Please resend OTP.');
-      return;
-    }
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Verify OTP with Firebase
-      const credential = await confirmation.confirm(activeOtp);
-
-      // Get signed idToken from Firebase
-      const idToken = await credential.user.getIdToken();
-
-      // Send idToken to Whiteroom backend
-      const response = await api.otpVerify({ idToken });
-
-      if (response.type === 'existing_user') {
-        await setSession(response as any);
-        router.replace('/');
-      } else if (response.type === 'new_user') {
-        setRegistrationToken(response.registrationToken);
-        setStep('CONSENT');
-      }
-    } catch (err: any) {
-      console.error("[FIREBASE OTP VERIFY ERROR]", err);
-      const isInitializationError =
-        err.message?.includes("No Firebase App") ||
-        err.message?.includes("not found") ||
-        err.message?.includes("RNFBAppModule") ||
-        err.message?.includes("firebase.initializeApp") ||
-        err.code === 'app/no-app';
-
-      if (isInitializationError) {
-        console.warn("⚠️ Firebase Auth failed to initialize during verification. Falling back to local OTP database mock.");
-        firebaseAuth = null;
-        setLoading(false);
-        await handleVerifyOtp(overrideOtp);
-        return;
-      }
-
-      switch (err.code) {
-        case 'auth/invalid-verification-code':
-          setAttemptsLeft(prev => prev - 1);
-          setError(`Wrong OTP. ${attemptsLeft - 1} attempts left.`);
-          break;
-        case 'auth/session-expired':
-          setError('OTP expired. Please request a new one.');
-          setConfirmation(null);
-          setStep('PHONE');
-          break;
-        case 'auth/too-many-requests':
-          setError('Too many attempts. Try again later.');
-          break;
-        default:
-          setError('Verification failed. Try again.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResend = async () => {
-    setConfirmation(null);
-    setOtp('');
-    setError(null);
-    setAttemptsLeft(5);
-    await handleSendOtp();
-  };
-
-  const handlePhoneSubmit = () => {
-    if (phone.replace(/\D/g, '').length === 10) handleSendOtp();
-  };
-
-  const handleOtpChange = (value: string) => {
-    const numeric = value.replace(/\D/g, '');
-    setOtp(numeric);
-    if (numeric.length === 6) {
-      if (attemptsLeft <= 0) {
-        setError('Maximum attempts reached. Please resend OTP.');
-        return;
-      }
-      handleVerifyOtp(numeric);
-    }
-  };
-
   const handleInviteCodeChange = (code: string) => {
     const upper = code.toUpperCase();
     setInviteCode(upper);
@@ -596,7 +381,6 @@ export default function AuthScreen() {
               style={styles.backButton}
               onPress={() => {
                 if (step === 'PHONE') setStep('WELCOME');
-                else if (step === 'OTP') setStep('PHONE');
                 else if (step === 'WHATSAPP_POLL') setStep('PHONE');
                 else if (step === 'ROLE_SELECT') setStep('CONSENT');
               }}
@@ -730,118 +514,7 @@ export default function AuthScreen() {
             </>
           )}
 
-          {/* ─── S4: OTP ───────────────────────────────────────────────────── */}
-          {step === 'OTP' && (
-            <>
-              <Text style={styles.eyebrow}>STEP 2 OF 2</Text>
-              <Text style={styles.pageTitle}>Verify your OTP</Text>
-              <Text style={styles.pageSub}>
-                Sent to +91 {phone.slice(0, 5)} {phone.slice(5)}
-              </Text>
 
-              {error && (
-                <View style={styles.errorStrip}>
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              )}
-
-              <View style={{ position: 'relative', width: '100%' }}>
-                <Pressable
-                  onPress={() => otpInputRef.current?.focus()}
-                  style={styles.otpGrid}
-                >
-                  {[0, 1, 2, 3, 4, 5].map((i) => {
-                    const isFocused = otp.length === i;
-                    const isFilled = otp.length > i;
-                    return (
-                      <View
-                        key={i}
-                        style={[
-                          styles.otpBox,
-                          isFocused && styles.otpBoxActive,
-                          isFilled && styles.otpBoxFilled,
-                        ]}
-                      >
-                        <Text style={styles.otpDigit}>{otp[i] || ''}</Text>
-                      </View>
-                    );
-                  })}
-                </Pressable>
-
-                <TextInput
-                  ref={otpInputRef}
-                  style={styles.hiddenInput}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  value={otp}
-                  onChangeText={handleOtpChange}
-                  autoFocus
-                />
-              </View>
-
-              <View style={styles.timerRow}>
-                {resendTimer > 0 ? (
-                  <Text style={styles.timerText}>
-                    Resend in{' '}
-                    <Text style={{ color: colors.navy, fontWeight: '600' }}>
-                      00:{resendTimer < 10 ? `0${resendTimer}` : resendTimer}
-                    </Text>
-                  </Text>
-                ) : (
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => {
-                      handleResend();
-                    }}
-                  >
-                    <Text style={[styles.timerText, styles.resendLink]}>
-                      RESEND OTP
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-
-              <View style={styles.attemptsRow}>
-                <View style={styles.attemptDots}>
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <View
-                      key={i}
-                      style={[
-                        styles.attemptDot,
-                        i <= 5 - attemptsLeft
-                          ? { backgroundColor: colors.navy }
-                          : styles.attemptDotEmpty,
-                      ]}
-                    />
-                  ))}
-                </View>
-                <Text style={styles.attemptsLabel}>
-                  {5 - attemptsLeft} of 5 attempts used
-                </Text>
-              </View>
-
-
-
-              <Pressable
-                accessibilityRole="button"
-                style={[
-                  styles.primaryButton,
-                  (otp.length !== 6 || attemptsLeft <= 0) && { opacity: 0.5 },
-                ]}
-                disabled={otp.length !== 6 || loading || attemptsLeft <= 0}
-                onPress={() => {
-                  if (attemptsLeft <= 0) return;
-                  handleVerifyOtp();
-                }}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
-                  <Text style={styles.buttonText}>VERIFY & CONTINUE →</Text>
-                )}
-              </Pressable>
-            </>
-          )}
 
           {/* ─── S5: Consent ───────────────────────────────────────────────── */}
           {step === 'CONSENT' && (

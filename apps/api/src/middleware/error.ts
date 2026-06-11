@@ -6,6 +6,11 @@ import { AppError, Errors } from "@whiteroom/shared";
  * returns consistent JSON shape.
  */
 export async function errorHandler(err: Error, c: Context) {
+  if (err instanceof SyntaxError) {
+    const validationError = Errors.validation("Invalid or empty JSON request body");
+    return c.json(validationError.toJSON(), 400);
+  }
+
   if (err instanceof AppError) {
     return c.json(err.toJSON(), err.statusCode as any);
   }
