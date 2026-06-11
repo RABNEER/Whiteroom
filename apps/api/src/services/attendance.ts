@@ -249,7 +249,7 @@ export async function markAttendanceBatch(
       throw Errors.validation("All attendance records must belong to enrolled students in this class.");
     }
 
-    const upserted = [];
+    const upserted: any[] = [];
     for (const record of records) {
       const [row] = await tx
         .insert(attendanceRecords)

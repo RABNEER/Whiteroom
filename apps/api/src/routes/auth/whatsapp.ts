@@ -113,7 +113,7 @@ whatsappRoutes.post("/session", sessionLimiter, async (c: Context) => {
 
 // 2. GET /api/v1/auth/whatsapp/session/:id
 whatsappRoutes.get("/session/:id", async (c: Context) => {
-  const id = c.req.param("id").toUpperCase();
+  const id = (c.req.param("id") || "").toUpperCase();
 
   const [session] = await db
     .select()
