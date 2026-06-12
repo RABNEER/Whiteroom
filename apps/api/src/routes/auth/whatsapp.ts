@@ -139,6 +139,50 @@ whatsappRoutes.get("/session/:id", async (c: Context) => {
   return c.json(response, 200);
 });
 
+// Internal endpoint for WhatsApp bot to retrieve the registered phone of a pending session
+whatsappRoutes.get("/session/:id/phone", async (c: Context) => {
+  const secret = c.req.header("x-webhook-secret");
+  const configSecret = env.WHATSAPP_WEBHOOK_SECRET;
+
+  if (!configSecret) {
+    console.error("❌ [WHATSAPP] WHATSAPP_WEBHOOK_SECRET is not configured in .env");
+    throw Errors.unauthorized("Webhook secret not configured on server");
+  }
+
+  if (secret !== configSecret) {
+    throw Errors.unauthorized("Invalid webhook secret");
+  }
+
+  const id = (c.req.param("id") || "").toUpperCase();
+  const now = new Date();
+
+  const [session] = await db
+    .select()
+    .from(whatsappSessions)
+    .where(
+      and(
+        eq(whatsappSessions.id, id),
+        eq(whatsappSessions.verified, false),
+        gte(whatsappSessions.expiresAt, now)
+      )
+    )
+    .limit(1);
+
+  if (!session) {
+    throw Errors.notFound("Active verification session");
+  }
+
+  const response: ApiResponse<{ phone: string }> = {
+    success: true,
+    data: {
+      phone: session.phone ?? "",
+    },
+  };
+
+  return c.json(response, 200);
+});
+
+
 // 3. POST /api/v1/auth/whatsapp/webhook
 const webhookSchema = z.object({
   from: z.string().min(1),
@@ -288,7 +332,7 @@ whatsappRoutes.post("/verify", async (c: Context) => {
     );
   }
 
-  const phone = session.phone;
+  const phone = session.phone as string;
 
   // ─── Find or Create User (similar to otp-verify.ts) ───
   const [existingUser] = await db

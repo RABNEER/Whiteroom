@@ -572,7 +572,7 @@ export default function App() {
                   <p style={{ color: "var(--text-muted)" }}>Connecting to Whiteroom core database...</p>
                 </div>
               ) : filteredTenants.length === 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: "64px", textCenter: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: "64px", textAlign: 'center' }}>
                   <Building size={48} style={{ color: "var(--text-dim)", marginBottom: 16 }} />
                   <p style={{ color: "var(--text-muted)", fontWeight: 500 }}>No schools found.</p>
                   <p style={{ color: "var(--text-dim)", fontSize: 12 }}>Try adjusting your search criteria or register a new school.</p>
@@ -652,7 +652,7 @@ export default function App() {
                   <p style={{ color: "var(--text-muted)" }}>Connecting to Whiteroom core database...</p>
                 </div>
               ) : filteredUsers.length === 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: "64px", textCenter: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: "64px", textAlign: 'center' }}>
                   <Users size={48} style={{ color: "var(--text-dim)", marginBottom: 16 }} />
                   <p style={{ color: "var(--text-muted)", fontWeight: 500 }}>No users found.</p>
                   <p style={{ color: "var(--text-dim)", fontSize: 12 }}>Try adjusting your search criteria.</p>
