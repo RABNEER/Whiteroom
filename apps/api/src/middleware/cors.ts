@@ -4,6 +4,12 @@ export function corsMiddleware() {
   // FIX: CORS wildcard allows requests from any website
   return honoCors({
     origin: (origin) => {
+      if (!origin) return "";
+
+      if (process.env.NODE_ENV === "development") {
+        return origin;
+      }
+
       const allowed = [
         "http://localhost:3001",
         "http://localhost:8081",

@@ -11,6 +11,7 @@ import {
   ScrollView,
   Image,
   Linking,
+  AppState,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
@@ -57,6 +58,7 @@ export default function AuthScreen() {
   const [whatsappSessionId, setWhatsappSessionId] = useState<string | null>(null);
   const [whatsappToken, setWhatsappToken] = useState<string | null>(null);
   const [whatsappTimer, setWhatsappTimer] = useState(300);
+  const verifyingRef = useRef(false);
 
   // Pending WhatsApp session persistence keys
   const PENDING_WHATSAPP_SESSION_ID_KEY = 'whiteroom.pendingWhatsappSessionId';
@@ -158,6 +160,8 @@ export default function AuthScreen() {
 
   const handleVerifyWhatsApp = useCallback(async () => {
     if (!whatsappSessionId || !whatsappToken) return;
+    if (verifyingRef.current) return;
+    verifyingRef.current = true;
     try {
       setLoading(true);
       setError(null);
@@ -183,8 +187,46 @@ export default function AuthScreen() {
       setStep('PHONE');
     } finally {
       setLoading(false);
+      verifyingRef.current = false;
     }
   }, [whatsappSessionId, whatsappToken, inviteCode, setSession]);
+
+  // Check active session status once
+  const checkActiveSession = useCallback(async () => {
+    if (!whatsappSessionId || !whatsappToken) return false;
+    try {
+      const response = await api.whatsappSessionGet(whatsappSessionId);
+      if (response.verified) {
+        setError(null);
+        await handleVerifyWhatsApp();
+        return true;
+      } else if (response.isExpired) {
+        setError("Verification session expired. Please try again.");
+        await clearPendingSession();
+        setStep('PHONE');
+        return true;
+      }
+    } catch (err) {
+      console.error("[WHATSAPP CHECK ERROR]", err);
+      setError("Connection error. Checking status again soon...");
+    }
+    return false;
+  }, [whatsappSessionId, whatsappToken, handleVerifyWhatsApp]);
+
+  // AppState listener to check status immediately when returning to foreground
+  useEffect(() => {
+    if (step !== 'WHATSAPP_POLL' || !whatsappSessionId) return;
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        checkActiveSession();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [step, whatsappSessionId, checkActiveSession]);
 
   // WhatsApp verification polling
   useEffect(() => {
@@ -192,21 +234,10 @@ export default function AuthScreen() {
 
     let active = true;
     const pollInterval = setInterval(async () => {
-      try {
-        const response = await api.whatsappSessionGet(whatsappSessionId);
-        if (!active) return;
-
-        if (response.verified) {
-          clearInterval(pollInterval);
-          handleVerifyWhatsApp();
-        } else if (response.isExpired) {
-          clearInterval(pollInterval);
-          setError("Verification session expired. Please try again.");
-          clearPendingSession();
-          setStep('PHONE');
-        }
-      } catch (err) {
-        console.error("[WHATSAPP POLL ERROR]", err);
+      if (!active) return;
+      const finished = await checkActiveSession();
+      if (finished) {
+        clearInterval(pollInterval);
       }
     }, 2000);
 
@@ -214,7 +245,7 @@ export default function AuthScreen() {
       active = false;
       clearInterval(pollInterval);
     };
-  }, [step, whatsappSessionId, whatsappToken, handleVerifyWhatsApp]);
+  }, [step, whatsappSessionId, whatsappToken, checkActiveSession]);
 
   // Mutations
   const registerMutation = useMutation({

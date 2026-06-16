@@ -31,3 +31,12 @@ drizzle/meta/
 # Logs
 *.log
 npm-debug.log*
+
+# WhatsApp Bot / Baileys session data
+auth_info_baileys/
+pre-key-*.json
+session-*.json
+sender-key-*.json
+app-state-sync-key-*.json
+app-state-sync-version-*.json
+creds.json

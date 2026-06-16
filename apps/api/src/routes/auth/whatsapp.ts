@@ -86,7 +86,7 @@ whatsappRoutes.post("/session", sessionLimiter, async (c: Context) => {
         verified: false,
       });
       inserted = true;
-    } catch (err) {
+    } catch {
       attempts++;
     }
   }
@@ -370,7 +370,7 @@ whatsappRoutes.post("/verify", async (c: Context) => {
   const userId = existingUser.id;
   let tenantId = "";
   let role = "";
-  let isNewUser = false;
+  const isNewUser = false;
 
   if (inviteCode) {
     const [tenant] = await db
