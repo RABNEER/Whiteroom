@@ -136,6 +136,7 @@ whatsappRoutes.get("/session/:id", async (c: Context) => {
     },
   };
 
+  c.header("Cache-Control", "no-store, no-cache, must-revalidate");
   return c.json(response, 200);
 });
 
@@ -179,6 +180,7 @@ whatsappRoutes.get("/session/:id/phone", async (c: Context) => {
     },
   };
 
+  c.header("Cache-Control", "no-store, no-cache, must-revalidate");
   return c.json(response, 200);
 });
 

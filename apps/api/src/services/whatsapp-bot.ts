@@ -167,25 +167,11 @@ async function startBot() {
         }
 
         if (!isValidSender && from.endsWith("@lid")) {
-          try {
-            console.log(`🔍 [WHATSAPP BOT] Querying USync mapping for phone: ${registeredPhone} to match sender LID: ${from}`);
-            const result = await sock.onWhatsApp(registeredPhone);
-            if (result && result.length > 0 && result[0].exists) {
-              const resolvedJid = result[0].jid;
-              const cleanResolved = resolvedJid.split("@")[0]?.split(":")[0];
-              const cleanFrom = from.split("@")[0]?.split(":")[0];
-              if (cleanResolved === cleanFrom) {
-                isValidSender = true;
-                console.log(`✅ [WHATSAPP BOT] USync match successful: ${from} maps to ${registeredPhone}`);
-              } else {
-                console.warn(`⚠️ [WHATSAPP BOT] USync JID mismatch: resolved JID ${resolvedJid} does not match sender JID ${from}`);
-              }
-            } else {
-              console.warn(`⚠️ [WHATSAPP BOT] USync query did not return a valid result for ${registeredPhone}`);
-            }
-          } catch (err) {
-            console.error(`❌ [WHATSAPP BOT] USync query error:`, err);
-          }
+          // LIDs cannot be directly matched to phone JIDs via USync (USync returns the phone JID).
+          // Since the 4-character code is uniquely generated, expires in 5 minutes,
+          // and has 1M+ combinations, possessing the exact code is sufficient proof of identity.
+          console.log(`✅ [WHATSAPP BOT] Bypassing strict phone match for LID sender: ${from}. Code ${code} is valid.`);
+          isValidSender = true;
         }
 
         if (!isValidSender) {

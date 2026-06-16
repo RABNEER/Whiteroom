@@ -317,7 +317,7 @@ export const api = {
       body: JSON.stringify({ phone }),
     }),
   whatsappSessionGet: (id: string): Promise<{ verified: boolean; isExpired: boolean }> =>
-    request<{ verified: boolean; isExpired: boolean }>(`/auth/whatsapp/session/${id}`),
+    request<{ verified: boolean; isExpired: boolean }>(`/auth/whatsapp/session/${id}?t=${Date.now()}`),
   whatsappVerify: (input: { id: string; token: string; inviteCode?: string }): Promise<OTPVerifyResult> =>
     request<OTPVerifyResult>("/auth/whatsapp/verify", {
       method: "POST",

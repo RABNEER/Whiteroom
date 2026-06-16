@@ -11,8 +11,8 @@
     "db:generate": "turbo run db:generate --filter=@whiteroom/db",
     "db:migrate": "turbo run db:migrate --filter=@whiteroom/db",
     "db:studio": "turbo run db:studio --filter=@whiteroom/db",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
+    "android": "pnpm --filter @whiteroom/mobile android",
+    "ios": "pnpm --filter @whiteroom/mobile ios",
     "whatsapp:bot": "pnpm --filter @whiteroom/api whatsapp:bot"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Image,
   Linking,
 } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import {
@@ -57,6 +58,46 @@ export default function AuthScreen() {
   const [whatsappToken, setWhatsappToken] = useState<string | null>(null);
   const [whatsappTimer, setWhatsappTimer] = useState(300);
 
+  // Pending WhatsApp session persistence keys
+  const PENDING_WHATSAPP_SESSION_ID_KEY = 'whiteroom.pendingWhatsappSessionId';
+  const PENDING_WHATSAPP_SESSION_TOKEN_KEY = 'whiteroom.pendingWhatsappSessionToken';
+  const PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY = 'whiteroom.pendingWhatsappSessionExpiresAt';
+
+  const secureStorage = {
+    async getItem(key: string) {
+      if (Platform.OS !== 'web') {
+        return SecureStore.getItemAsync(key);
+      }
+      return globalThis.localStorage?.getItem(key) ?? null;
+    },
+    async setItem(key: string, value: string) {
+      if (Platform.OS !== 'web') {
+        await SecureStore.setItemAsync(key, value);
+        return;
+      }
+      globalThis.localStorage?.setItem(key, value);
+    },
+    async deleteItem(key: string) {
+      if (Platform.OS !== 'web') {
+        await SecureStore.deleteItemAsync(key);
+        return;
+      }
+      globalThis.localStorage?.removeItem(key);
+    },
+  };
+
+  const clearPendingSession = async () => {
+    try {
+      await Promise.all([
+        secureStorage.deleteItem(PENDING_WHATSAPP_SESSION_ID_KEY),
+        secureStorage.deleteItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY),
+        secureStorage.deleteItem(PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY),
+      ]);
+    } catch (err) {
+      console.error("Failed to clear pending WhatsApp session:", err);
+    }
+  };
+
   // Splash dot animations (plain state — no reanimated needed)
   const [activeDot, setActiveDot] = useState(0);
 
@@ -72,11 +113,41 @@ export default function AuthScreen() {
     };
   }, [step]);
 
+  // Load pending WhatsApp session on mount
+  useEffect(() => {
+    const loadPendingSession = async () => {
+      try {
+        const id = await secureStorage.getItem(PENDING_WHATSAPP_SESSION_ID_KEY);
+        const token = await secureStorage.getItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY);
+        const expiresAtStr = await secureStorage.getItem(PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY);
+
+        if (id && token && expiresAtStr) {
+          const expiresAt = parseInt(expiresAtStr, 10);
+          const now = Date.now();
+          if (expiresAt > now) {
+            const remaining = Math.floor((expiresAt - now) / 1000);
+            setWhatsappSessionId(id);
+            setWhatsappToken(token);
+            setWhatsappTimer(remaining);
+            setStep('WHATSAPP_POLL');
+          } else {
+            await clearPendingSession();
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load pending WhatsApp session:", err);
+      }
+    };
+
+    loadPendingSession();
+  }, []);
+
   // WhatsApp countdown timer
   useEffect(() => {
     if (step !== 'WHATSAPP_POLL' || whatsappTimer <= 0) {
       if (step === 'WHATSAPP_POLL' && whatsappTimer <= 0) {
         setError('Verification session expired. Please try again.');
+        clearPendingSession();
         setStep('PHONE');
       }
       return;
@@ -85,9 +156,39 @@ export default function AuthScreen() {
     return () => clearInterval(interval);
   }, [step, whatsappTimer]);
 
+  const handleVerifyWhatsApp = useCallback(async () => {
+    if (!whatsappSessionId || !whatsappToken) return;
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await api.whatsappVerify({
+        id: whatsappSessionId,
+        token: whatsappToken,
+        inviteCode: inviteCode || undefined,
+      });
+
+      await clearPendingSession();
+
+      if (response.type === 'existing_user') {
+        await setSession(response as any);
+        router.replace('/');
+      } else if (response.type === 'new_user') {
+        setRegistrationToken(response.registrationToken);
+        setStep('CONSENT');
+      }
+    } catch (err: any) {
+      setError(err instanceof ApiError ? err.message : 'WhatsApp verification failed. Please try again.');
+      await clearPendingSession();
+      setStep('PHONE');
+    } finally {
+      setLoading(false);
+    }
+  }, [whatsappSessionId, whatsappToken, inviteCode, setSession]);
+
   // WhatsApp verification polling
   useEffect(() => {
-    if (step !== 'WHATSAPP_POLL' || !whatsappSessionId || !whatsappToken || whatsappTimer <= 0) return;
+    if (step !== 'WHATSAPP_POLL' || !whatsappSessionId || !whatsappToken) return;
 
     let active = true;
     const pollInterval = setInterval(async () => {
@@ -101,6 +202,7 @@ export default function AuthScreen() {
         } else if (response.isExpired) {
           clearInterval(pollInterval);
           setError("Verification session expired. Please try again.");
+          clearPendingSession();
           setStep('PHONE');
         }
       } catch (err) {
@@ -112,7 +214,7 @@ export default function AuthScreen() {
       active = false;
       clearInterval(pollInterval);
     };
-  }, [step, whatsappSessionId, whatsappToken, whatsappTimer]);
+  }, [step, whatsappSessionId, whatsappToken, handleVerifyWhatsApp]);
 
   // Mutations
   const registerMutation = useMutation({
@@ -167,6 +269,15 @@ export default function AuthScreen() {
       setWhatsappSessionId(session.id);
       setWhatsappToken(session.token);
       setWhatsappTimer(session.expiresIn || 300);
+
+      // Persist pending session
+      const expiresAt = Date.now() + (session.expiresIn || 300) * 1000;
+      await Promise.all([
+        secureStorage.setItem(PENDING_WHATSAPP_SESSION_ID_KEY, session.id),
+        secureStorage.setItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY, session.token),
+        secureStorage.setItem(PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY, expiresAt.toString()),
+      ]).catch(err => console.error("Failed to save pending WhatsApp session:", err));
+
       setStep('WHATSAPP_POLL');
 
       const botNumber = process.env.EXPO_PUBLIC_WHATSAPP_BOT_NUMBER || "+919999999999";
@@ -183,33 +294,6 @@ export default function AuthScreen() {
       }
     } catch (err: any) {
       setError(err instanceof ApiError ? err.message : 'Failed to start WhatsApp verification.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyWhatsApp = async () => {
-    if (!whatsappSessionId || !whatsappToken) return;
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await api.whatsappVerify({
-        id: whatsappSessionId,
-        token: whatsappToken,
-        inviteCode: inviteCode || undefined,
-      });
-
-      if (response.type === 'existing_user') {
-        await setSession(response as any);
-        router.replace('/');
-      } else if (response.type === 'new_user') {
-        setRegistrationToken(response.registrationToken);
-        setStep('CONSENT');
-      }
-    } catch (err: any) {
-      setError(err instanceof ApiError ? err.message : 'WhatsApp verification failed. Please try again.');
-      setStep('PHONE');
     } finally {
       setLoading(false);
     }
@@ -500,8 +584,9 @@ export default function AuthScreen() {
                 <Pressable
                   accessibilityRole="button"
                   style={[styles.skipLink, { marginTop: spacing.md }]}
-                  onPress={() => {
+                  onPress={async () => {
                     setError(null);
+                    await clearPendingSession();
                     setStep('PHONE');
                   }}
                 >
