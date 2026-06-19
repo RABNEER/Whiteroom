@@ -11,17 +11,17 @@ const attendanceRoutes = new Hono();
 
 attendanceRoutes.use("*", authMiddleware);
 
-// Teacher-only: manage sessions and mark attendance
-attendanceRoutes.post("/sessions", requireRole(UserRole.TEACHER), createSessionHandler);
-attendanceRoutes.get("/sessions", requireRole(UserRole.TEACHER), listSessionsHandler);
-attendanceRoutes.get("/sessions/:id", requireRole(UserRole.TEACHER), getSessionHandler);
-attendanceRoutes.post("/sessions/:id/mark", requireRole(UserRole.TEACHER), markBatchHandler);
+// Teacher and Admin: manage sessions and mark attendance
+attendanceRoutes.post("/sessions", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN), createSessionHandler);
+attendanceRoutes.get("/sessions", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN), listSessionsHandler);
+attendanceRoutes.get("/sessions/:id", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN), getSessionHandler);
+attendanceRoutes.post("/sessions/:id/mark", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN), markBatchHandler);
 
-// Teachers can view any student in their tenant. Parents use /parent/children/:id/attendance,
+// Teachers/Admins can view any student in their tenant. Parents use /parent/children/:id/attendance,
 // which verifies child ownership before returning records.
 attendanceRoutes.get(
   "/students/:id/history",
-  requireRole(UserRole.TEACHER),
+  requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN),
   studentHistoryHandler
 );
 

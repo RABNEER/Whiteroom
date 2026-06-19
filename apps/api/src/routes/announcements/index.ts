@@ -12,32 +12,32 @@ const announcementRoutes = new Hono();
 
 announcementRoutes.use("*", authMiddleware);
 
-// Teacher-only: create, update, delete
+// Teacher and Admin: create, update, delete
 announcementRoutes.post(
   "/",
-  requireRole(UserRole.TEACHER),
+  requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN),
   createAnnouncementHandler
 );
 announcementRoutes.patch(
   "/:id",
-  requireRole(UserRole.TEACHER),
+  requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN),
   updateAnnouncementHandler
 );
 announcementRoutes.delete(
   "/:id",
-  requireRole(UserRole.TEACHER),
+  requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN),
   deleteAnnouncementHandler
 );
 
-// Both teacher and parent: list, get one
+// Teacher, Admin and Parent: list, get one
 announcementRoutes.get(
   "/",
-  requireRole(UserRole.TEACHER, UserRole.PARENT),
+  requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.PARENT),
   listAnnouncementsHandler
 );
 announcementRoutes.get(
   "/:id",
-  requireRole(UserRole.TEACHER, UserRole.PARENT),
+  requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.PARENT),
   getAnnouncementHandler
 );
 

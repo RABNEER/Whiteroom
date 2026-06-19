@@ -7,7 +7,7 @@ import { classStatsHandler } from "./class-stats.js";
 const reportRoutes = new Hono();
 
 reportRoutes.use("*", authMiddleware);
-reportRoutes.use("*", requireRole(UserRole.TEACHER));
+reportRoutes.use("*", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN));
 
 reportRoutes.get("/attendance/summary", attendanceSummaryHandler);
 reportRoutes.get("/classes/:id/stats", classStatsHandler);

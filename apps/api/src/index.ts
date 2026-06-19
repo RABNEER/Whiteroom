@@ -20,8 +20,22 @@ import { announcementRoutes } from "./routes/announcements/index.js";
 import { paymentRoutes } from "./routes/payments/index.js";
 import { reportRoutes } from "./routes/reports/index.js";
 import { adminRoutes } from "./routes/admin/index.js";
+import { chatRoutes } from "./routes/chat/index.js";
+import { archiveRoutes } from "./routes/archive/index.js";
+import { publicRoutes } from "./routes/public/index.js";
+import { billingRoutes } from "./routes/billing/index.js";
+import { userRoutes } from "./routes/users/index.js";
+import { bulletinsRoutes } from "./routes/bulletins/index.js";
+import {
+  waltQuizHandler,
+  waltFlashcardHandler,
+  waltInsightsHandler,
+  waltDraftNoticeHandler,
+} from "./routes/walt/index.js";
 import { secureHeaders } from "hono/secure-headers";
 import { startJobs } from "./jobs/index.js";
+import { authMiddleware, requireRole } from "./middleware/auth.js";
+import { UserRole } from "@whiteroom/shared";
 
 const app = new Hono();
 
@@ -76,6 +90,37 @@ app.route("/api/v1/announcements", announcementRoutes);
 app.route("/api/v1/payments", paymentRoutes);
 app.route("/api/v1/reports", reportRoutes);
 app.route("/api/v1/admin", adminRoutes);
+app.route("/api/v1/chat", chatRoutes);
+app.route("/api/v1/classes/:classId/archive", archiveRoutes);
+app.route("/api/v1/billing", billingRoutes);
+app.route("/api/v1/users", userRoutes);
+app.route("/api/v1/bulletins", bulletinsRoutes);
+app.route("/", publicRoutes);
+
+// ─── Walt AI Routes ───
+app.post(
+  "/api/v1/classes/:id/walt/quiz",
+  authMiddleware,
+  requireRole(UserRole.SCHOOL_ADMIN, UserRole.TEACHER),
+  waltQuizHandler
+);
+app.post(
+  "/api/v1/classes/:id/walt/flashcards",
+  authMiddleware,
+  waltFlashcardHandler
+);
+app.get(
+  "/api/v1/reports/insights",
+  authMiddleware,
+  requireRole(UserRole.SCHOOL_ADMIN, UserRole.TEACHER),
+  waltInsightsHandler
+);
+app.post(
+  "/api/v1/walt/draft-notice",
+  authMiddleware,
+  requireRole(UserRole.SCHOOL_ADMIN, UserRole.TEACHER),
+  waltDraftNoticeHandler
+);
 
 // ─── Global Error Handler ───
 app.onError(errorHandler);
@@ -101,7 +146,7 @@ serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   ╚╩╝┴ ┴┴ ┴ └─┘┴└─└─┘└─┘┴ ┴
   API running on port ${info.port}
   Environment: ${env.NODE_ENV}
-  Routes: /api/v1/auth, /api/v1/tenants, /api/v1/invite, /api/v1/classes, /api/v1/students, /api/v1/schedules, /api/v1/devices, /api/v1/parent, /api/v1/attendance, /api/v1/announcements, /api/v1/payments, /api/v1/reports, /api/v1/admin
+  Routes: /api/v1/auth, /api/v1/tenants, /api/v1/invite, /api/v1/classes, /api/v1/students, /api/v1/schedules, /api/v1/devices, /api/v1/parent, /api/v1/attendance, /api/v1/announcements, /api/v1/payments, /api/v1/reports, /api/v1/admin, /api/v1/chat
 `);
 });
 

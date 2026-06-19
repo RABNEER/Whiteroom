@@ -13,7 +13,7 @@ import { removeStudentFromClassHandler } from "./students/remove.js";
 const classRoutes = new Hono();
 
 classRoutes.use("*", authMiddleware);
-classRoutes.use("*", requireRole(UserRole.TEACHER));
+classRoutes.use("*", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN));
 
 classRoutes.post("/", createClassHandler);
 classRoutes.get("/", listClassesHandler);

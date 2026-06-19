@@ -1,6 +1,7 @@
 // ─── Schemas ───
 export { tenants } from "./schema/tenants.js";
 export { users } from "./schema/users.js";
+export { schoolAdmins } from "./schema/school-admins.js";
 export { teacherProfiles } from "./schema/teacher-profiles.js";
 export { parentProfiles } from "./schema/parent-profiles.js";
 export { students } from "./schema/students.js";
@@ -21,6 +22,18 @@ export { reportsCache } from "./schema/reports-cache.js";
 export { idempotencyKeys } from "./schema/idempotency-keys.js";
 export { registrationTokens } from "./schema/registration-tokens.js";
 export { whatsappSessions } from "./schema/whatsapp-sessions.js";
+export { dmRooms } from "./schema/dm-rooms.js";
+export { messages } from "./schema/messages.js";
+export { messageReceipts } from "./schema/message-receipts.js";
+export { userBlocks } from "./schema/user-blocks.js";
+export { roomMutes } from "./schema/room-mutes.js";
+export { messageAuditLogs } from "./schema/message-audit-logs.js";
+export { classroomFiles } from "./schema/classroom-files.js";
+export { classroomFileChunks } from "./schema/classroom-file-chunks.js";
+export { waltQuizzes } from "./schema/walt-quizzes.js";
+export { waltQuizResponses } from "./schema/walt-quiz-responses.js";
+export { bulletins } from "./schema/bulletins.js";
+export { bulletinReads } from "./schema/bulletin-reads.js";
 
 // ─── Utilities ───
 export { createId } from "./utils.js";
@@ -34,6 +47,7 @@ export {
   inArray,
   isNull,
   lt,
+  or,
   sql,
 } from "drizzle-orm";
 export { drizzle } from "drizzle-orm/postgres-js";

@@ -20,6 +20,10 @@ import type {
   TenantInfo,
   PaginatedResponse,
   AnnouncementResponse,
+  ChatRoomResponse,
+  ChatMessageResponse,
+  ChatAttachment,
+  ChatReceiptResponse,
 } from "@whiteroom/shared";
 import { sessionStore } from "@/auth/session-store";
 
@@ -118,9 +122,11 @@ export const api = {
     }),
   register: (input: {
     registrationToken: string;
-    role: "teacher" | "parent";
+    role: "school_admin" | "teacher" | "parent";
     consentAccepted: boolean;
     inviteCode?: string;
+    schoolName?: string;
+    designation?: string;
     studentName?: string;
     rollNumber?: string;
   }): Promise<OTPVerifyResponse> =>
@@ -166,7 +172,12 @@ export const api = {
     }),
   classUpdate: (
     id: string,
-    input: { name?: string; subject?: string | null; teacherName?: string | null }
+    input: {
+      name?: string;
+      subject?: string | null;
+      teacherName?: string | null;
+      chatMode?: "announcement" | "open";
+    }
   ) =>
     request<ClassResponse>(`/classes/${id}`, {
       method: "PATCH",
@@ -323,4 +334,116 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input),
     }),
+
+  // ─── Native Chat Endpoints ───
+  chatRooms: (): Promise<ChatRoomResponse[]> =>
+    request<ChatRoomResponse[]>("/chat/rooms"),
+
+  chatMessages: (
+    roomId: string,
+    roomType: "classroom" | "teacher_channel" | "direct_message"
+  ): Promise<ChatMessageResponse[]> =>
+    request<ChatMessageResponse[]>(`/chat/rooms/${roomId}/messages?roomType=${roomType}`),
+
+  chatSendMessage: (
+    roomId: string,
+    input: {
+      roomType: "classroom" | "teacher_channel" | "direct_message";
+      content: string;
+      attachments?: ChatAttachment[];
+      mentions?: string[];
+    }
+  ): Promise<ChatMessageResponse> =>
+    request<ChatMessageResponse>(`/chat/rooms/${roomId}/messages`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  chatMarkRead: (roomId: string): Promise<{ marked: number }> =>
+    request<{ marked: number }>(`/chat/rooms/${roomId}/read`, {
+      method: "POST",
+    }),
+
+  chatPinMessage: (messageId: string): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(`/chat/messages/${messageId}/pin`, {
+      method: "PUT",
+    }),
+
+  chatUnpinMessage: (messageId: string): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(`/chat/messages/${messageId}/pin`, {
+      method: "DELETE",
+    }),
+
+  chatDeleteMessage: (messageId: string): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(`/chat/messages/${messageId}`, {
+      method: "DELETE",
+    }),
+
+  chatGetReceipts: (messageId: string): Promise<ChatReceiptResponse[]> =>
+    request<ChatReceiptResponse[]>(`/chat/messages/${messageId}/receipts`),
+
+  chatBlockUser: (blockedUserId: string): Promise<any> =>
+    request<any>("/chat/blocks", {
+      method: "POST",
+      body: JSON.stringify({ blockedUserId }),
+    }),
+
+  chatUnblockUser: (blockedUserId: string): Promise<any> =>
+    request<any>(`/chat/blocks/${blockedUserId}`, {
+      method: "DELETE",
+    }),
+
+  chatListBlocked: (): Promise<any[]> =>
+    request<any[]>("/chat/blocks"),
+
+  // ─── Classroom Archive Endpoints ───
+  getClassArchive: (classId: string): Promise<any[]> =>
+    request<any[]>(`/classes/${classId}/archive`),
+  uploadArchiveFile: (
+    classId: string,
+    payload: { name: string; url: string; type: string; size: number; category: string }
+  ): Promise<any> =>
+    request<any>(`/classes/${classId}/archive`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  deleteArchiveFile: (classId: string, fileId: string): Promise<any> =>
+    request<any>(`/classes/${classId}/archive/${fileId}`, {
+      method: "DELETE",
+    }),
+
+  // ─── Walt AI Doubt Solver ───
+  askWalt: (roomId: string, question: string): Promise<any> =>
+    request<any>(`/chat/rooms/${roomId}/walt`, {
+      method: "POST",
+      body: JSON.stringify({ question }),
+    }),
+
+  // ─── Billing & Subscriptions ───
+  getBillingDashboard: (): Promise<any> =>
+    request<any>("/billing/dashboard"),
+  subscribeBilling: (payload: { planType: "tuition" | "school"; waltAiEnabled: boolean }): Promise<any> =>
+    request<any>("/billing/subscribe", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  simulatePaymentWebhook: (payload: any): Promise<any> =>
+    request<any>("/billing/webhook", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  // ─── Bulletins ───
+  getBulletins: (filters?: { classId?: string }): Promise<any[]> => {
+    const params = new URLSearchParams();
+    if (filters?.classId) params.set("classId", filters.classId);
+    const query = params.toString();
+    return request<any[]>(query ? `/bulletins?${query}` : "/bulletins");
+  },
+  markBulletinRead: (bulletinId: string): Promise<any> =>
+    request<any>(`/bulletins/${bulletinId}/read`, {
+      method: "POST",
+    }),
+  getBulletinReceipts: (bulletinId: string): Promise<any> =>
+    request<any>(`/bulletins/${bulletinId}/receipts`),
 };

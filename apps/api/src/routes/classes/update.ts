@@ -9,6 +9,7 @@ const updateClassSchema = z
     name: z.string().trim().min(1).max(120).optional(),
     subject: z.string().trim().min(1).max(80).nullable().optional(),
     teacherName: z.string().trim().min(1).max(120).nullable().optional(),
+    chatMode: z.enum(["announcement", "open"]).optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field is required",

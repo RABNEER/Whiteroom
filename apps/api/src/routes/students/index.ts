@@ -9,7 +9,7 @@ import { updateStudentHandler } from "./update.js";
 const studentRoutes = new Hono();
 
 studentRoutes.use("*", authMiddleware);
-studentRoutes.use("*", requireRole(UserRole.TEACHER));
+studentRoutes.use("*", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN));
 
 studentRoutes.post("/", createStudentHandler);
 studentRoutes.get("/", listStudentsHandler);

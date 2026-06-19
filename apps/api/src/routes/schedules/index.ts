@@ -9,7 +9,7 @@ import { deleteScheduleHandler } from "./delete.js";
 const scheduleRoutes = new Hono();
 
 scheduleRoutes.use("*", authMiddleware);
-scheduleRoutes.use("*", requireRole(UserRole.TEACHER));
+scheduleRoutes.use("*", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN));
 
 scheduleRoutes.post("/", createScheduleHandler);
 scheduleRoutes.get("/", listSchedulesHandler);

@@ -12,6 +12,7 @@ export const classes = pgTable("classes", {
   subject: text("subject"),
   teacherId: text("teacher_id").references(() => users.id),
   teacherName: text("teacher_name"),
+  chatMode: text("chat_mode").default("announcement").notNull(), // 'announcement' | 'open'
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()

@@ -1,10 +1,12 @@
 <!--
   Sync Impact Report
   ============================================================================
-  Version change: 1.0.0 → 1.1.0 (Firebase Auth Amendment)
+  Version change: 1.1.0 → 1.2.0 (Native Chat & School Admin Amendment)
   Modified principles:
-    - Allowed Firebase Admin SDK for cryptographic ID token verification of Phone Auth.
-    - Retired MSG91 REST API version lock in favor of Firebase Phone Auth.
+    - Added SCHOOL_ADMIN role to Section III and Section II.
+    - Extended Section VI (No PII / GDPR / FERPA compliance) to include mandatory onboarding consent disclosures for Admin chat audit visibility.
+    - Locked Native AES-256-GCM database encryption-at-rest for Direct Messages.
+    - Expressly prohibited external WhatsApp group invite links or Baileys integrations.
   Added sections: None
   Removed sections: None
   Templates requiring updates: None
@@ -106,6 +108,8 @@ day one.
 - Every parent onboarding event MUST write a row to `consent_logs`
   recording: who consented, what was consented to, when, and the
   consent mechanism (OTP verification).
+- Every user onboarding event (parents, teachers, and admins) MUST explicitly disclose and log consent for School Admin visibility over classroom discussions and direct messages (DMs) for compliance, safety, and audit.
+- Direct Messages (1-on-1) MUST be stored encrypted-at-rest in the database using AES-256-GCM, with keys derived per-tenant, ensuring only the participants and the authorized School Admin can access them.
 - API logs MUST NOT contain phone numbers, student names, or any
   identifiable data. Use user IDs and tenant IDs only.
 
@@ -152,6 +156,7 @@ Changes require a constitution amendment with migration plan.
 - No external state stores — PostgreSQL is the only data store.
 - No WebSockets in v1 — polling or push notifications only.
 - No Tailwind CSS in mobile — NativeWind only if explicitly approved.
+- No actual WhatsApp integrations, group creations, invite links, or deep links in classroom metadata — Whiteroom is a fully native replacement, not an integration.
 
 ## Development Workflow
 
@@ -213,4 +218,4 @@ behavior MUST comply with these principles.
   flag the conflict and propose an amendment rather than silently
   violating.
 
-**Version**: 1.1.0 | **Ratified**: 2026-05-19 | **Last Amended**: 2026-05-23
+**Version**: 1.2.0 | **Ratified**: 2026-05-19 | **Last Amended**: 2026-06-17

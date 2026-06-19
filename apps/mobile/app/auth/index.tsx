@@ -35,7 +35,7 @@ import { colors, spacing } from '@/theme/tokens';
 import LogoImage from '../../src/assets/logo.png';
 
 type Step = 'SPLASH' | 'WELCOME' | 'PHONE' | 'CONSENT' | 'ROLE_SELECT' | 'WHATSAPP_POLL';
-type Role = 'teacher' | 'parent';
+type Role = 'school_admin' | 'teacher' | 'parent';
 
 export default function AuthScreen() {
   const setSession = useSession((s) => s.setSession);
@@ -44,8 +44,10 @@ export default function AuthScreen() {
   const [step, setStep] = useState<Step>('SPLASH');
   const [phone, setPhone] = useState('');
   const [agreed, setAgreed] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<Role>('teacher');
+  const [selectedRole, setSelectedRole] = useState<Role>('school_admin');
   const [inviteCode, setInviteCode] = useState('');
+  const [schoolName, setSchoolName] = useState('');
+  const [designation, setDesignation] = useState('');
   const [studentName, setStudentName] = useState('');
   const [rollNumber, setRollNumber] = useState('');
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -254,6 +256,8 @@ export default function AuthScreen() {
       role: Role;
       consentAccepted: boolean;
       inviteCode?: string;
+      schoolName?: string;
+      designation?: string;
       studentName?: string;
       rollNumber?: string;
     }) => api.register(params),
@@ -362,13 +366,13 @@ export default function AuthScreen() {
             tenantId: 'mock-tenant-id',
             role: selectedRole,
             status: 'active',
-            tenantName: resolvedTenant || 'Mock Institute',
+            tenantName: resolvedTenant || (selectedRole === 'school_admin' ? schoolName : 'Mock Institute'),
           }],
         },
         isNewUser: true,
       };
       setSession(mockSession).then(() => {
-        router.replace(selectedRole === 'parent' ? '/parent' : '/tenant-init');
+        router.replace(selectedRole === 'parent' ? '/parent' : '/teacher');
       });
       return;
     }
@@ -382,7 +386,9 @@ export default function AuthScreen() {
       registrationToken,
       role: selectedRole,
       consentAccepted: agreed,
-      inviteCode: selectedRole === 'parent' ? inviteCode : undefined,
+      inviteCode: selectedRole !== 'school_admin' ? inviteCode : undefined,
+      schoolName: selectedRole === 'school_admin' ? schoolName : undefined,
+      designation: selectedRole === 'school_admin' ? designation : undefined,
       studentName: selectedRole === 'parent' ? studentName : undefined,
       rollNumber: selectedRole === 'parent' ? rollNumber : undefined,
     });
@@ -672,6 +678,15 @@ export default function AuthScreen() {
                 </Text>
               </View>
 
+              <View style={styles.consentCard}>
+                <View style={styles.consentIconCircle}>
+                  <Shield color={colors.teal} size={18} />
+                </View>
+                <Text style={styles.consentText}>
+                  For compliance under FERPA/GDPR/DPDP, school admins have full visibility over all classroom discussions and DMs.
+                </Text>
+              </View>
+
               <View style={styles.consentDivider} />
 
               <Pressable
@@ -719,6 +734,26 @@ export default function AuthScreen() {
                 </View>
               )}
 
+              {/* School Admin card */}
+              <Pressable
+                accessibilityRole="button"
+                style={[
+                  styles.roleCard,
+                  selectedRole === 'school_admin' && styles.roleCardSelected,
+                ]}
+                onPress={() => setSelectedRole('school_admin')}
+              >
+                <View style={[styles.roleIconBox, { backgroundColor: colors.navy }]}>
+                  <Text style={styles.roleIconText}>A</Text>
+                </View>
+                <View style={styles.roleContent}>
+                  <Text style={styles.roleName}>Institution Owner / Admin</Text>
+                  <Text style={styles.roleDesc}>
+                    Set up your school, invite staff/teachers, view classrooms & compliance audits.
+                  </Text>
+                </View>
+              </Pressable>
+
               {/* Teacher card */}
               <Pressable
                 accessibilityRole="button"
@@ -728,13 +763,13 @@ export default function AuthScreen() {
                 ]}
                 onPress={() => setSelectedRole('teacher')}
               >
-                <View style={[styles.roleIconBox, { backgroundColor: colors.navy }]}>
+                <View style={[styles.roleIconBox, { backgroundColor: colors.teal }]}>
                   <Text style={styles.roleIconText}>T</Text>
                 </View>
                 <View style={styles.roleContent}>
-                  <Text style={styles.roleName}>Teacher / Institute</Text>
+                  <Text style={styles.roleName}>Teacher / Educator</Text>
                   <Text style={styles.roleDesc}>
-                    Create classrooms, mark attendance, post announcements.
+                    Join your school, create classrooms, mark attendance, post announcements.
                   </Text>
                 </View>
               </Pressable>
@@ -748,29 +783,60 @@ export default function AuthScreen() {
                 ]}
                 onPress={() => setSelectedRole('parent')}
               >
-                <View style={[styles.roleIconBox, { backgroundColor: colors.teal }]}>
+                <View style={[styles.roleIconBox, { backgroundColor: colors.sky }]}>
                   <Text style={styles.roleIconText}>P</Text>
                 </View>
                 <View style={styles.roleContent}>
                   <Text style={styles.roleName}>Parent / Guardian</Text>
                   <Text style={styles.roleDesc}>
-                    Join your child's class, get absent alerts, see announcements.
+                    Join your child's classes, receive absent alerts, read notices.
                   </Text>
                 </View>
               </Pressable>
 
               {/* Role-specific section */}
-              {selectedRole === 'parent' ? (
+              {selectedRole === 'school_admin' && (
                 <View style={styles.roleMetaSection}>
                   <View style={styles.roleInfoBox}>
                     <Text style={styles.roleInfoText}>
-                      Parents join via an invite link from their teacher. Enter
-                      the 6-character invite code below.
+                      Set up your institution workspace. You will receive a school-wide invite code after setup.
                     </Text>
                   </View>
 
                   <Text style={[styles.fieldLabel, { marginBottom: spacing.sm }]}>
-                    INVITE CODE
+                    SCHOOL / INSTITUTION NAME
+                  </Text>
+                  <TextInput
+                    style={styles.plainInput}
+                    placeholder="e.g. Greenfield High School"
+                    placeholderTextColor={colors.teal}
+                    value={schoolName}
+                    onChangeText={setSchoolName}
+                  />
+
+                  <Text style={[styles.fieldLabel, { marginTop: spacing.md, marginBottom: spacing.sm }]}>
+                    YOUR DESIGNATION (OPTIONAL)
+                  </Text>
+                  <TextInput
+                    style={styles.plainInput}
+                    placeholder="e.g. Principal / Administrator"
+                    placeholderTextColor={colors.teal}
+                    value={designation}
+                    onChangeText={setDesignation}
+                  />
+                </View>
+              )}
+
+              {selectedRole === 'teacher' && (
+                <View style={styles.roleMetaSection}>
+                  <View style={styles.roleInfoBox}>
+                    <Text style={styles.roleInfoText}>
+                      Teachers join an existing school using the school-wide invite code provided by your administrator.
+                    </Text>
+                  </View>
+
+                  <Text style={[styles.fieldLabel, { marginBottom: spacing.sm }]}>
+                    SCHOOL INVITE CODE
                   </Text>
                   <TextInput
                     style={styles.plainInput}
@@ -794,7 +860,46 @@ export default function AuthScreen() {
                       <Text style={styles.resolvedTenantName}>
                         {resolvedTenant}
                       </Text>
-                      <Text style={styles.resolvedVerified}>✓ Verified</Text>
+                      <Text style={styles.resolvedVerified}>✓ Verified School</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {selectedRole === 'parent' && (
+                <View style={styles.roleMetaSection}>
+                  <View style={styles.roleInfoBox}>
+                    <Text style={styles.roleInfoText}>
+                      Parents join their child's school using the invite code.
+                    </Text>
+                  </View>
+
+                  <Text style={[styles.fieldLabel, { marginBottom: spacing.sm }]}>
+                    SCHOOL INVITE CODE
+                  </Text>
+                  <TextInput
+                    style={styles.plainInput}
+                    placeholder="ABC123"
+                    placeholderTextColor={colors.teal}
+                    autoCapitalize="characters"
+                    maxLength={6}
+                    value={inviteCode}
+                    onChangeText={handleInviteCodeChange}
+                  />
+
+                  {resolveInviteMutation.isPending && (
+                    <ActivityIndicator
+                      color={colors.teal}
+                      style={{ marginTop: 8 }}
+                    />
+                  )}
+
+                  {resolvedTenant && (
+                    <View style={styles.resolvedStrip}>
+                      <Text style={styles.resolvedTenantName}>
+                        {resolvedTenant}
+                      </Text>
+                      <Text style={styles.resolvedVerified}>✓ Verified School</Text>
                     </View>
                   )}
 
@@ -820,12 +925,6 @@ export default function AuthScreen() {
                     onChangeText={setRollNumber}
                   />
                 </View>
-              ) : (
-                <View style={styles.roleInfoBox}>
-                  <Text style={styles.roleInfoText}>
-                    You'll set up your institution on the next screen.
-                  </Text>
-                </View>
               )}
 
               <Pressable
@@ -833,13 +932,15 @@ export default function AuthScreen() {
                 style={[
                   styles.primaryButton,
                   { marginTop: spacing.md },
-                  (selectedRole === 'parent' && !resolvedTenant) ||
+                  (selectedRole !== 'school_admin' && !resolvedTenant) ||
+                    (selectedRole === 'school_admin' && schoolName.trim().length < 2) ||
                     registerMutation.isPending
                     ? { opacity: 0.5 }
                     : {},
                 ]}
                 disabled={
-                  (selectedRole === 'parent' && !resolvedTenant) ||
+                  (selectedRole !== 'school_admin' && !resolvedTenant) ||
+                  (selectedRole === 'school_admin' && schoolName.trim().length < 2) ||
                   registerMutation.isPending
                 }
                 onPress={handleFinalSubmit}
@@ -848,7 +949,9 @@ export default function AuthScreen() {
                   <ActivityIndicator color="#FFF" />
                 ) : (
                   <Text style={styles.buttonText}>
-                    {selectedRole === 'teacher'
+                    {selectedRole === 'school_admin'
+                      ? 'CREATE INSTITUTION →'
+                      : selectedRole === 'teacher'
                       ? 'CONTINUE AS TEACHER →'
                       : 'CONTINUE AS PARENT →'}
                   </Text>

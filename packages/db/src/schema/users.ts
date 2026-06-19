@@ -6,7 +6,7 @@ export const users = pgTable("users", {
   id: text("id").primaryKey().$defaultFn(createId),
   phone: text("phone").notNull().unique(),
   name: text("name"),
-  role: text("role").notNull(), // 'teacher' | 'parent' | 'super_admin'
+  role: text("role").notNull(), // 'teacher' | 'parent' | 'school_admin' | 'super_admin'
   tenantId: text("tenant_id").references(() => tenants.id),
   refreshToken: text("refresh_token"),
   createdAt: timestamp("created_at", { withTimezone: true })

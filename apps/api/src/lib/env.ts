@@ -37,6 +37,7 @@ const envSchema = z.object({
   RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
   SUPER_ADMIN_PHONE: z.string().min(1).optional(),
   WHATSAPP_WEBHOOK_SECRET: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
 });
 
 function validateEnv() {

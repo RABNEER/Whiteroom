@@ -2,6 +2,7 @@
 export const UserRole = {
   TEACHER: "teacher",
   PARENT: "parent",
+  SCHOOL_ADMIN: "school_admin",
   SUPER_ADMIN: "super_admin",
 } as const;
 

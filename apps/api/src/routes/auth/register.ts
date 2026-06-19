@@ -5,6 +5,7 @@ import {
   registrationTokens,
   users,
   tenants,
+  schoolAdmins,
   teacherProfiles,
   parentProfiles,
   consentLogs,
@@ -29,10 +30,12 @@ import { eq, and, gte, lt, isNull, count } from "@whiteroom/db";
 
 const registerSchema = z.object({
   registrationToken: z.string().uuid(),
-  role: z.enum([UserRole.TEACHER, UserRole.PARENT]),
+  role: z.enum([UserRole.SCHOOL_ADMIN, UserRole.TEACHER, UserRole.PARENT]),
   consentAccepted: z.boolean(),
   consentAcceptedAt: z.string().optional(),
   inviteCode: z.string().length(6).optional(),
+  schoolName: z.string().trim().min(2).max(120).optional(),
+  designation: z.string().trim().min(2).max(80).optional(),
   studentName: z.string().trim().min(1).max(120).optional(),
   rollNumber: z.string().trim().min(1).max(40).optional(),
 });
@@ -65,6 +68,8 @@ export async function registerHandler(c: Context) {
     role,
     consentAccepted,
     inviteCode,
+    schoolName,
+    designation,
     studentName,
     rollNumber,
   } = parsed.data;
@@ -129,7 +134,105 @@ export async function registerHandler(c: Context) {
       .set({ usedAt: new Date() })
       .where(eq(registrationTokens.id, registrationToken));
 
-    if (role === UserRole.PARENT) {
+    if (role === UserRole.SCHOOL_ADMIN) {
+      // ─── School Admin Signup ───
+      const tName = schoolName || `My Institution`;
+      const generatedInvite = generateInviteCode();
+      const slug = slugify(tName) + "-" + generatedInvite.toLowerCase();
+
+      const [newTenant] = await tx
+        .insert(tenants)
+        .values({
+          name: tName,
+          slug,
+          inviteCode: generatedInvite,
+          phone,
+          brandColor: "#4F46E5",
+        })
+        .returning();
+
+      const [newUser] = await tx
+        .insert(users)
+        .values({
+          phone,
+          role: UserRole.SCHOOL_ADMIN,
+          tenantId: newTenant!.id,
+        })
+        .returning();
+
+      await tx.insert(userTenants).values({
+        userId: newUser!.id,
+        tenantId: newTenant!.id,
+        role: UserRole.SCHOOL_ADMIN,
+        status: "active",
+        activeTenant: true,
+      });
+
+      await tx.insert(schoolAdmins).values({
+        userId: newUser!.id,
+        tenantId: newTenant!.id,
+        designation: designation || null,
+      });
+
+      // Log consent for school admin
+      await tx.insert(consentLogs).values({
+        userId: newUser!.id,
+        tenantId: newTenant!.id,
+        consentType: "data_processing",
+        ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+        userAgent: c.req.header("user-agent") ?? null,
+      });
+
+      return { user: newUser!, tenantId: newTenant!.id };
+    } else if (role === UserRole.TEACHER) {
+      // ─── Teacher Signup (Joins existing Tenant) ───
+      if (!inviteCode) {
+        throw Errors.validation("Invite code is required for teacher registration.");
+      }
+
+      const [tenant] = await tx
+        .select()
+        .from(tenants)
+        .where(eq(tenants.inviteCode, inviteCode))
+        .limit(1);
+
+      if (!tenant) {
+        throw Errors.notFound("Invite code");
+      }
+
+      const [newUser] = await tx
+        .insert(users)
+        .values({
+          phone,
+          role: UserRole.TEACHER,
+          tenantId: tenant.id,
+        })
+        .returning();
+
+      await tx.insert(userTenants).values({
+        userId: newUser!.id,
+        tenantId: tenant.id,
+        role: UserRole.TEACHER,
+        status: "active",
+        activeTenant: true,
+      });
+
+      await tx.insert(teacherProfiles).values({
+        userId: newUser!.id,
+        tenantId: tenant.id,
+      });
+
+      // Log consent for teachers
+      await tx.insert(consentLogs).values({
+        userId: newUser!.id,
+        tenantId: tenant.id,
+        consentType: "data_processing",
+        ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+        userAgent: c.req.header("user-agent") ?? null,
+      });
+
+      return { user: newUser!, tenantId: tenant.id };
+    } else {
       // ─── Parent Signup ───
       if (!inviteCode) {
         throw Errors.validation("Invite code is required for parent registration.");
@@ -162,13 +265,10 @@ export async function registerHandler(c: Context) {
         activeTenant: true,
       });
 
-      const [parentProfile] = await tx
-        .insert(parentProfiles)
-        .values({
-          userId: newUser!.id,
-          tenantId: tenant.id,
-        })
-        .returning();
+      await tx.insert(parentProfiles).values({
+        userId: newUser!.id,
+        tenantId: tenant.id,
+      });
 
       // Log consent under DPDP Act 2023 specifications
       await tx.insert(consentLogs).values({
@@ -182,55 +282,6 @@ export async function registerHandler(c: Context) {
       // Automatic student auto-linking removed to prevent IDOR student claiming vulnerability (Finding 3)
 
       return { user: newUser!, tenantId: tenant.id };
-    } else {
-      // ─── Teacher Signup ───
-      const generatedInvite = generateInviteCode();
-      const tenantName = `My Institute`;
-      const slug = slugify(tenantName) + "-" + generatedInvite.toLowerCase();
-
-      const [newTenant] = await tx
-        .insert(tenants)
-        .values({
-          name: tenantName,
-          slug,
-          inviteCode: generatedInvite,
-          phone,
-          brandColor: "#4F46E5",
-        })
-        .returning();
-
-      const [newUser] = await tx
-        .insert(users)
-        .values({
-          phone,
-          role: UserRole.TEACHER,
-          tenantId: newTenant!.id,
-        })
-        .returning();
-
-      await tx.insert(userTenants).values({
-        userId: newUser!.id,
-        tenantId: newTenant!.id,
-        role: UserRole.TEACHER,
-        status: "active",
-        activeTenant: true,
-      });
-
-      await tx.insert(teacherProfiles).values({
-        userId: newUser!.id,
-        tenantId: newTenant!.id,
-      });
-
-      // Log consent for teachers
-      await tx.insert(consentLogs).values({
-        userId: newUser!.id,
-        tenantId: newTenant!.id,
-        consentType: "data_processing",
-        ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
-        userAgent: c.req.header("user-agent") ?? null,
-      });
-
-      return { user: newUser!, tenantId: newTenant!.id };
     }
   });
 

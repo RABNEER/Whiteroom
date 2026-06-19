@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, integer } from "drizzle-orm/pg-core";
 import { createId } from "../utils.js";
 import { tenants } from "./tenants.js";
 
@@ -9,6 +9,10 @@ export const subscriptions = pgTable("subscriptions", {
     .unique()
     .references(() => tenants.id),
   plan: text("plan").notNull().default("free"), // 'free' | 'pro'
+  planType: text("plan_type").default("tuition").notNull(), // 'tuition' | 'school'
+  waltAiEnabled: boolean("walt_ai_enabled").default(false).notNull(),
+  calculatedMonthlyAmount: integer("calculated_monthly_amount").default(0).notNull(), // in paise
+  billingCycleStartDate: timestamp("billing_cycle_start_date", { withTimezone: true }),
   razorpayOrderId: text("razorpay_order_id"),
   razorpayPaymentId: text("razorpay_payment_id"),
   razorpaySubscriptionId: text("razorpay_subscription_id"),

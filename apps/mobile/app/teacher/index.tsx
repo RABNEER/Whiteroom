@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Plus,
   ArrowLeft,
+  MessageSquare,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -138,11 +139,19 @@ export default function TeacherScreen() {
         eyebrow="TEACHER"
         avatarName={tenantName}
         trailing={
-          <IconButton
-            icon={LogOut}
-            onPress={() => logout.mutate()}
-            active={logout.isPending}
-          />
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <View style={{ marginRight: 8 }}>
+              <IconButton
+                icon={MessageSquare}
+                onPress={() => router.push("/chat" as any)}
+              />
+            </View>
+            <IconButton
+              icon={LogOut}
+              onPress={() => logout.mutate()}
+              active={logout.isPending}
+            />
+          </View>
         }
       />
 

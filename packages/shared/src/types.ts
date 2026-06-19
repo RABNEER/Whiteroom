@@ -136,6 +136,7 @@ export interface ClassResponse {
   name: string;
   subject: string | null;
   teacherName: string | null;
+  chatMode: string;
   studentCount?: number;
   createdAt: Date;
   updatedAt: Date;
@@ -245,6 +246,52 @@ export interface ParentFeedResponse {
   meta?: PaginationMeta;
   unread: number;
   total: number;
+}
+
+// ─── Chat Response Types ───
+export interface ChatRoomResponse {
+  id: string;
+  name: string;
+  type: "classroom" | "teacher_channel" | "direct_message";
+  subtitle: string;
+  chatMode?: "announcement" | "open";
+  unreadCount: number;
+  updatedAt: string | Date;
+  otherParticipant?: {
+    id: string;
+    name: string;
+    role: string;
+  };
+}
+
+export interface ChatAttachment {
+  type: "image" | "video" | "document";
+  url: string;
+  name: string;
+  size: number;
+}
+
+export interface ChatMessageResponse {
+  id: string;
+  roomId: string;
+  roomType: "classroom" | "teacher_channel" | "direct_message";
+  senderId: string;
+  senderName: string | null;
+  senderRole: string | null;
+  content: string;
+  attachments: ChatAttachment[] | null;
+  isPinned: boolean;
+  mentions: string[] | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  deletedAt: string | Date | null;
+}
+
+export interface ChatReceiptResponse {
+  userId: string;
+  userName: string | null;
+  userRole: string | null;
+  readAt: string | Date;
 }
 
 

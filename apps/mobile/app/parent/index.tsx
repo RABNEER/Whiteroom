@@ -22,6 +22,7 @@ import {
   Megaphone,
   Shield,
   User,
+  MessageSquare,
   type LucideIcon,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -162,12 +163,19 @@ export default function ParentScreen() {
         accent={selectedChild?.rollNumber ? `Roll ${selectedChild.rollNumber}` : undefined}
         avatarName={selectedChild?.name ?? 'Parent'}
         onAvatarPress={() => setIsSiblingDrawerOpen(true)}
-        trailing={<IconButton icon={LogOut} onPress={() => {
-          Alert.alert('Log Out', 'Are you sure you want to log out?', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Log Out', style: 'destructive', onPress: () => logout.mutate() },
-          ]);
-        }} />}
+        trailing={
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <View style={{ marginRight: 8 }}>
+              <IconButton icon={MessageSquare} onPress={() => router.push("/chat" as any)} />
+            </View>
+            <IconButton icon={LogOut} onPress={() => {
+              Alert.alert('Log Out', 'Are you sure you want to log out?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Log Out', style: 'destructive', onPress: () => logout.mutate() },
+              ]);
+            }} />
+          </View>
+        }
       />
 
       {/* ── Content ────────────────────────────────────────────────── */}
