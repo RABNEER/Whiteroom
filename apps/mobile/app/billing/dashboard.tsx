@@ -35,7 +35,13 @@ export default function BillingDashboardScreen() {
     mutationFn: (payload: { planType: "tuition" | "school"; waltAiEnabled: boolean }) =>
       api.subscribeBilling(payload),
     onSuccess: (order: any) => {
-      // Offer opening the real checkout link or simulating payment success
+      // Direct redirect for Web to bypass pop-up blockers
+      if (typeof window !== "undefined" && window.location) {
+        window.location.href = order.paymentUrl;
+        return;
+      }
+
+      // Fallback for native devices
       Alert.alert(
         "Payment Order Created",
         `Order ID: ${order.id}\nAmount: ₹${(order.amount / 100).toFixed(2)}`,
