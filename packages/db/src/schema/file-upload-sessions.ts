@@ -4,7 +4,7 @@ import { tenants } from "./tenants.js";
 import { classes } from "./classes.js";
 import { users } from "./users.js";
 
-export const classroomFiles = pgTable("classroom_files", {
+export const fileUploadSessions = pgTable("file_upload_sessions", {
   id: text("id").primaryKey().$defaultFn(createId),
   tenantId: text("tenant_id")
     .notNull()
@@ -15,17 +15,14 @@ export const classroomFiles = pgTable("classroom_files", {
   uploaderId: text("uploader_id")
     .notNull()
     .references(() => users.id),
-  name: text("name").notNull(),
-  url: text("url").notNull(),
-  type: text("type").notNull(), // 'pdf' | 'image' | 'video' | 'other'
-  size: integer("size").notNull(), // in bytes
-  checksum: text("checksum"), // SHA-256 hash for integrity verification
-  originalSize: integer("original_size"), // original file size before any processing
-  category: text("category").default("General").notNull(), // folder/category e.g., 'Chapter 4'
+  fileName: text("file_name").notNull(),
+  fileSize: integer("file_size").notNull(),
+  mimeType: text("mime_type").notNull(),
+  category: text("category").default("General").notNull(),
+  checksum: text("checksum").notNull(), // client-provided SHA-256
+  status: text("status").default("pending").notNull(), // 'pending' | 'assembling' | 'completed' | 'failed'
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });

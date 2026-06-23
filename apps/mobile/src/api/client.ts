@@ -96,6 +96,11 @@ async function request<T>(
       return request<T>(path, options, false);
     } catch {
       await clear();
+      // Redirect to auth on web — prevents dead dashboard with invisible errors
+      if (typeof window !== "undefined" && window.location) {
+        window.location.href = "/auth";
+      }
+      throw new ApiError("AUTH_EXPIRED", "Session expired. Please log in again.", 401);
     }
   }
 
@@ -255,6 +260,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  attendanceMarkAllPresent: (sessionId: string, idempotencyKey?: string) =>
+    request<AttendanceBatchResult>(`/attendance/sessions/${sessionId}/mark-all-present`, {
+      method: "POST",
+      body: JSON.stringify({ idempotencyKey }),
+    }),
   attendanceHistory: (studentId: string, classId?: string, page?: number, limit?: number) => {
     const params = new URLSearchParams();
     if (classId) params.set("classId", classId);
@@ -401,12 +411,62 @@ export const api = {
     request<any[]>(`/classes/${classId}/archive`),
   uploadArchiveFile: (
     classId: string,
-    payload: { name: string; url: string; type: string; size: number; category: string }
-  ): Promise<any> =>
-    request<any>(`/classes/${classId}/archive`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+    file: { uri: string; name: string; type: string },
+    category: string,
+    onProgress?: (progress: number) => void
+  ): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const { accessToken } = sessionStore.getState();
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${API_BASE_URL}/classes/${classId}/archive/upload`);
+
+      if (accessToken) {
+        xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+      }
+      xhr.setRequestHeader("Accept", "application/json");
+
+      if (xhr.upload && onProgress) {
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const progress = Math.round((event.loaded / event.total) * 100);
+            onProgress(progress);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const res = JSON.parse(xhr.responseText);
+            resolve(res.data);
+          } catch (e) {
+            reject(new Error("Invalid JSON response from server"));
+          }
+        } else {
+          try {
+            const res = JSON.parse(xhr.responseText);
+            reject(new ApiError(res.error?.code || "UPLOAD_ERROR", res.error?.message || "Upload failed", xhr.status));
+          } catch {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error("Network error during file upload"));
+      };
+
+      const formData = new FormData();
+      formData.append("file", {
+        uri: file.uri,
+        name: file.name,
+        type: file.type,
+      } as any);
+      formData.append("category", category);
+
+      xhr.send(formData);
+    });
+  },
   deleteArchiveFile: (classId: string, fileId: string): Promise<any> =>
     request<any>(`/classes/${classId}/archive/${fileId}`, {
       method: "DELETE",
@@ -446,4 +506,17 @@ export const api = {
     }),
   getBulletinReceipts: (bulletinId: string): Promise<any> =>
     request<any>(`/bulletins/${bulletinId}/receipts`),
+
+  // ─── Class Promotions ───
+  promoteAll: (payload: {
+    academicYear: string;
+    promotionRules: { fromClassId: string; toClassId: string }[];
+    graduatingClassIds: string[];
+  }): Promise<any> =>
+    request<any>("/admin/promote-all", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  promotionHistory: (): Promise<any[]> =>
+    request<any[]>("/admin/promotion-history"),
 };

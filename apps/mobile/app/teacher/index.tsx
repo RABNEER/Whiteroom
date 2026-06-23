@@ -9,6 +9,15 @@ import {
   Alert,
   Platform,
 } from 'react-native';
+
+// Cross-platform alert — Alert.alert silently fails on web/PWA
+function showAlert(title: string, message: string) {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import {
@@ -335,7 +344,7 @@ function ClassroomsTab({
       onToggleCreate(false);
     },
     onError: (err: unknown) => {
-      Alert.alert('Error', err instanceof ApiError ? err.message : 'Failed to create classroom. Please try again.');
+      showAlert('Error', err instanceof ApiError ? err.message : 'Failed to create classroom. Please try again.');
     },
   });
 
@@ -528,7 +537,7 @@ function AttendanceView({ classId }: { classId: string }) {
       setRecords(initial);
     },
     onError: (err: unknown) => {
-      Alert.alert(
+      showAlert(
         'Cannot Start Session',
         err instanceof ApiError ? err.message : 'Failed to start session. A session may already exist for today.',
       );
@@ -575,6 +584,34 @@ function AttendanceView({ classId }: { classId: string }) {
     onSuccess: () => {
       setSubmitted(true);
       qc.invalidateQueries({ queryKey: ['sessions'] });
+    },
+  });
+
+  const markAllPresent = useMutation({
+    mutationFn: async () => {
+      const idempotencyKey = `${classId}-${todayIsoDate()}-all-present`;
+      
+      if (!online) {
+        showAlert('Offline Mode', 'One-tap attendance requires an internet connection.');
+        throw new Error('Offline mode not supported for mark all present');
+      }
+
+      return await api.attendanceMarkAllPresent(sessionId!, idempotencyKey);
+    },
+    onSuccess: (result) => {
+      setSubmitted(true);
+      qc.invalidateQueries({ queryKey: ['sessions'] });
+      // Update local records to reflect all present
+      const studentList = students.data?.data ?? [];
+      const allPresent: Record<string, AttendanceStatus> = {};
+      studentList.forEach((st) => { allPresent[st.id] = 'present'; });
+      setRecords(allPresent);
+    },
+    onError: (err: unknown) => {
+      showAlert(
+        'Failed to Mark All Present',
+        err instanceof ApiError ? err.message : 'An error occurred while marking attendance.',
+      );
     },
   });
 
@@ -640,6 +677,23 @@ function AttendanceView({ classId }: { classId: string }) {
         <StatPill value={absentCount} label="Absent" />
         <StatPill value={(students.data?.data ?? []).length} label="Total" />
       </View>
+
+      {/* One-tap Mark All Present Button */}
+      <Pressable
+        accessibilityRole="button"
+        style={[s.quickActionBtn, (markAllPresent.isPending || !online) && { opacity: 0.5 }]}
+        disabled={markAllPresent.isPending || !online}
+        onPress={() => markAllPresent.mutate()}
+      >
+        {markAllPresent.isPending ? (
+          <ActivityIndicator color={colors.white} />
+        ) : (
+          <>
+            <Text style={s.quickActionBtnText}>⚡ MARK ALL PRESENT</Text>
+            <Text style={s.quickActionBtnSub}>One-tap attendance with instant parent notifications</Text>
+          </>
+        )}
+      </Pressable>
 
       {/* Donut Chart */}
       <View style={{ alignItems: 'center', marginVertical: 16 }}>
@@ -746,7 +800,7 @@ function StudentsView({ classId }: { classId: string }) {
       setShowAdd(false);
     },
     onError: (err: unknown) => {
-      Alert.alert('Error', err instanceof ApiError ? err.message : 'Failed to add student.');
+      showAlert('Error', err instanceof ApiError ? err.message : 'Failed to add student.');
     },
   });
 
@@ -1053,7 +1107,7 @@ function AnnounceTab() {
       setTitle(''); setBody(''); setPinned(false); setShowCreate(false);
     },
     onError: (err: unknown) => {
-      Alert.alert('Post Failed', err instanceof ApiError ? err.message : 'Failed to post announcement. Please try again.');
+      showAlert('Post Failed', err instanceof ApiError ? err.message : 'Failed to post announcement. Please try again.');
     },
   });
 
@@ -1431,6 +1485,27 @@ const s = StyleSheet.create({
     borderColor: 'rgba(239, 68, 68, 0.15)',
   },
   toggleBtnText: { fontSize: 14, fontWeight: '700' },
+  quickActionBtn: {
+    backgroundColor: colors.teal,
+    borderRadius: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  quickActionBtnText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  quickActionBtnSub: {
+    color: colors.white,
+    fontSize: 12,
+    opacity: 0.9,
+  },
   saveBtn: {
     backgroundColor: colors.navy, borderRadius: 10, height: 48,
     justifyContent: 'center', alignItems: 'center', marginTop: 24, marginBottom: 40,

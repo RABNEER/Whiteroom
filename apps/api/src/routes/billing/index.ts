@@ -45,6 +45,15 @@ billingRoutes.post("/webhook", async (c) => {
     if (orderId) {
       await completeSubscriptionPayment(orderId, paymentId || "mock_pay", signature || "mock_sig");
     }
+  } else if (payload.event === "payment_link.paid") {
+    const paymentLink = payload.payload?.payment_link?.entity;
+    const payment = payload.payload?.payment?.entity;
+    const linkId = paymentLink?.id;
+    const paymentId = payment?.id;
+
+    if (linkId) {
+      await completeSubscriptionPayment(linkId, paymentId || "mock_pay", signature || "mock_sig");
+    }
   }
 
   return c.json({ success: true, status: "ok" }, 200);

@@ -28,6 +28,7 @@ import {
 import { api } from "@/api/client";
 import { useSession } from "@/auth/session-store";
 import { colors, spacing, font, radius } from "@/theme/tokens";
+import { uploadFileInChunks } from "@/utils/chunkedUpload";
 
 export default function ClassroomArchiveScreen() {
   const { classId } = useLocalSearchParams<{ classId: string }>();
@@ -46,6 +47,8 @@ export default function ClassroomArchiveScreen() {
 
   const isTeacherOrAdmin = user?.role === "teacher" || user?.role === "school_admin";
 
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+
   // Delete File Mutation
   const deleteMutation = useMutation({
     mutationFn: (fileId: string) => api.deleteArchiveFile(classId, fileId),
@@ -59,35 +62,56 @@ export default function ClassroomArchiveScreen() {
     },
   });
 
-  // Upload (Mocking file picker and upload for demonstration)
+  // Upload Mutation using chunked upload helper
   const uploadMutation = useMutation({
-    mutationFn: (payload: { name: string; url: string; type: string; size: number; category: string }) =>
-      api.uploadArchiveFile(classId, payload),
+    mutationFn: (variables: { file: { uri: string; name: string; type: string }; category: string }) =>
+      new Promise((resolve, reject) => {
+        uploadFileInChunks({
+          classId,
+          file: variables.file,
+          category: variables.category,
+          onProgress: (progress) => {
+            setUploadProgress(progress);
+          },
+          onSuccess: (fileRecord) => {
+            resolve(fileRecord);
+          },
+          onError: (err) => {
+            reject(err);
+          },
+        });
+      }),
     onSuccess: () => {
+      setUploadProgress(null);
       queryClient.invalidateQueries({ queryKey: ["classroomArchive", classId] });
-      Alert.alert("Success", "File added to archive");
+      Alert.alert("Success", "Original quality file uploaded, chunked, and verified!");
     },
-    onError: (err) => {
+    onError: (err: any) => {
+      setUploadProgress(null);
       console.error(err);
-      Alert.alert("Error", "Failed to upload file");
+      Alert.alert("Upload Failed", err.message || "Failed to upload file");
     },
   });
 
   const handleMockUpload = () => {
     Alert.prompt(
-      "Mock Upload",
-      "Enter a category for the study file (e.g. Chapter 1, Homework):",
+      "Upload Study File",
+      "Enter a category/folder name (e.g. Chapter 4, Homework):",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Add",
+          text: "Upload",
           onPress: (categoryName) => {
             const randomId = Math.random().toString(36).substring(7);
+            // Statically encoded base64 matching a mock PDF content (Original quality)
+            const dataUri = "data:application/pdf;base64,VGhpcyBpcyBhIG1vY2sgc3R1ZHkgbm90ZSBkb2N1bWVudCB3aXRoIG9yaWdpbmFsIHF1YWxpdHkgcHJlc2VydmVkLg==";
+            
             uploadMutation.mutate({
-              name: `StudyNotes_${randomId}.pdf`,
-              url: "https://whiteroom.co.in/files/mock.pdf",
-              type: "pdf",
-              size: 245600, // ~240kb
+              file: {
+                uri: dataUri,
+                name: `StudyNotes_${randomId}.pdf`,
+                type: "application/pdf",
+              },
               category: categoryName || "General",
             });
           },
@@ -157,6 +181,18 @@ export default function ClassroomArchiveScreen() {
         )}
       </View>
 
+      {uploadProgress !== null && (
+        <View style={styles.progressContainer}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
+            <Text style={styles.progressText}>Uploading Study File...</Text>
+            <Text style={styles.progressText}>{uploadProgress}%</Text>
+          </View>
+          <View style={styles.progressBarBg}>
+            <View style={[styles.progressBarFill, { width: `${uploadProgress}%` }]} />
+          </View>
+        </View>
+      )}
+
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.navy} />
@@ -225,9 +261,16 @@ export default function ClassroomArchiveScreen() {
                     <Text style={styles.fileName} numberOfLines={1}>
                       {item.name}
                     </Text>
-                    <Text style={styles.fileMeta}>
-                      {formatBytes(item.size)} • {new Date(item.createdAt).toLocaleDateString()}
-                    </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
+                      <Text style={styles.fileMeta}>
+                        {formatBytes(item.originalSize || item.size)} • {new Date(item.createdAt).toLocaleDateString()}
+                      </Text>
+                      {item.checksum && (
+                        <View style={styles.verifiedBadge}>
+                          <Text style={styles.verifiedText}>Verified</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                   {isTeacherOrAdmin && (
                     <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
@@ -404,5 +447,40 @@ const styles = StyleSheet.create({
   },
   deleteBtn: {
     padding: spacing.sm,
+  },
+  progressContainer: {
+    backgroundColor: colors.white,
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  progressText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.navy,
+  },
+  progressBarBg: {
+    height: 6,
+    backgroundColor: "#E2E8F0",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: colors.teal,
+  },
+  verifiedBadge: {
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  verifiedText: {
+    color: "#059669",
+    fontSize: 9,
+    fontWeight: "700",
+    textTransform: "uppercase",
   },
 });

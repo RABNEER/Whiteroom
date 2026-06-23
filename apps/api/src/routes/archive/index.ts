@@ -11,9 +11,13 @@ import {
 import { authMiddleware } from "../../middleware/auth.js";
 import { Errors, UserRole } from "@whiteroom/shared";
 import type { JWTPayload, ApiResponse } from "@whiteroom/shared";
+import { uploadRoutes } from "./upload.js";
 
 // Explicitly define Hono variables to avoid 'never' generic type conflicts
 const archiveRoutes = new Hono<{ Variables: { user: JWTPayload } }>();
+
+// Mount upload sub-router
+archiveRoutes.route("/upload", uploadRoutes);
 
 // All archive routes require authentication
 archiveRoutes.use("*", authMiddleware);

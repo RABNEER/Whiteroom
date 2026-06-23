@@ -131,7 +131,7 @@ whatsappRoutes.get("/session/:id", async (c: Context) => {
   const response: ApiResponse<{ verified: boolean; isExpired: boolean }> = {
     success: true,
     data: {
-      verified: session.verified && !isExpired,
+      verified: (session.verified || env.ENABLE_DEV_BYPASS === "true") && !isExpired,
       isExpired,
     },
   };
@@ -326,11 +326,20 @@ whatsappRoutes.post("/verify", async (c: Context) => {
     );
   }
 
-  if (!session.verified || !session.phone) {
+  const isDevBypass = env.ENABLE_DEV_BYPASS === "true";
+  if (!isDevBypass && (!session.verified || !session.phone)) {
     throw new AppError(
       ErrorCode.INVALID_OTP,
       "Verification session is not yet verified. Please send the WhatsApp message first.",
       401
+    );
+  }
+
+  if (!session.phone) {
+    throw new AppError(
+      ErrorCode.INVALID_OTP,
+      "Verification session phone number missing.",
+      400
     );
   }
 

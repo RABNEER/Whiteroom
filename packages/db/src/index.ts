@@ -34,12 +34,16 @@ export { waltQuizzes } from "./schema/walt-quizzes.js";
 export { waltQuizResponses } from "./schema/walt-quiz-responses.js";
 export { bulletins } from "./schema/bulletins.js";
 export { bulletinReads } from "./schema/bulletin-reads.js";
+export { classPromotions } from "./schema/class-promotions.js";
+export { fileUploadSessions } from "./schema/file-upload-sessions.js";
+export { fileUploadChunks } from "./schema/file-upload-chunks.js";
 
 // ─── Utilities ───
 export { createId } from "./utils.js";
 
 export {
   and,
+  asc,
   count,
   desc,
   eq,
@@ -47,6 +51,7 @@ export {
   inArray,
   isNull,
   lt,
+  ne,
   or,
   sql,
 } from "drizzle-orm";

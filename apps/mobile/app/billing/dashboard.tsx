@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Switch,
   Alert,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -34,24 +35,41 @@ export default function BillingDashboardScreen() {
     mutationFn: (payload: { planType: "tuition" | "school"; waltAiEnabled: boolean }) =>
       api.subscribeBilling(payload),
     onSuccess: (order: any) => {
-      // Simulate successful payment checkout (triggers webhook call under the hood in dev/test)
+      // Offer opening the real checkout link or simulating payment success
       Alert.alert(
         "Payment Order Created",
-        `Order ID: ${order.id}\nAmount: ₹${(order.amount / 100).toFixed(2)}\n\nWould you like to simulate a successful payment?`,
+        `Order ID: ${order.id}\nAmount: ₹${(order.amount / 100).toFixed(2)}`,
         [
           { text: "Cancel", style: "cancel" },
           {
-            text: "Simulate Success",
+            text: "Pay Online",
+            onPress: async () => {
+              if (order.paymentUrl) {
+                try {
+                  await Linking.openURL(order.paymentUrl);
+                } catch (err) {
+                  Alert.alert("Error", "Could not open payment link");
+                }
+              }
+            }
+          },
+          {
+            text: "Simulate Success (Dev)",
             onPress: async () => {
               try {
                 // Call webhook directly or mock capture
                 await api.simulatePaymentWebhook({
-                  event: "payment.captured",
+                  event: "payment_link.paid",
                   payload: {
+                    payment_link: {
+                      entity: {
+                        id: order.id,
+                        status: "paid"
+                      }
+                    },
                     payment: {
                       entity: {
                         id: `pay_${Math.random().toString(36).substring(7)}`,
-                        order_id: order.id,
                         amount: order.amount,
                       },
                     },
@@ -157,7 +175,7 @@ export default function BillingDashboardScreen() {
               <Text style={[styles.selectText, selectedPlanType === "tuition" && styles.selectTextActive]}>
                 Tuition Center
               </Text>
-              <Text style={styles.selectSubText}>Flat rate monthly fee</Text>
+              <Text style={styles.selectSubText}>Dynamic student pricing</Text>
             </TouchableOpacity>
           </View>
 
@@ -184,46 +202,28 @@ export default function BillingDashboardScreen() {
         {/* Dynamic Pricing Breakdown */}
         <Text style={styles.sectionTitle}>Calculated Rate Breakdown</Text>
         <View style={styles.breakdownCard}>
-          {selectedPlanType === "school" ? (
-            <>
-              <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Classes Base Fee (Min 10 classes)</Text>
-                <Text style={styles.breakdownVal}>₹200</Text>
-              </View>
-              <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Surcharge (+₹2 / enrolled student)</Text>
-                <Text style={styles.breakdownVal}>
-                  {billing?.breakdown?.studentsCount || 0} x ₹2
-                </Text>
-              </View>
-              {waltEnabled && (
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Walt AI Flat Addon</Text>
-                  <Text style={styles.breakdownVal}>₹400</Text>
-                </View>
-              )}
-            </>
-          ) : (
-            <>
-              <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Tuition Flat Standard Fee</Text>
-                <Text style={styles.breakdownVal}>₹200</Text>
-              </View>
-              {waltEnabled && (
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Walt AI Premium Addon</Text>
-                  <Text style={styles.breakdownVal}>₹200</Text>
-                </View>
-              )}
-            </>
+          {/* Dynamic Pricing Breakdown */}
+          <View style={styles.breakdownRow}>
+            <Text style={styles.breakdownLabel}>Classes Base Fee (Minimums Removed)</Text>
+            <Text style={styles.breakdownVal}>₹0</Text>
+          </View>
+          <View style={styles.breakdownRow}>
+            <Text style={styles.breakdownLabel}>Student Subscription (+₹5 / enrolled student)</Text>
+            <Text style={styles.breakdownVal}>
+              {billing?.breakdown?.studentsCount || 0} x ₹5
+            </Text>
+          </View>
+          {waltEnabled && (
+            <View style={styles.breakdownRow}>
+              <Text style={styles.breakdownLabel}>Walt AI Flat Addon</Text>
+              <Text style={styles.breakdownVal}>₹400</Text>
+            </View>
           )}
 
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Estimated Monthly Charge:</Text>
             <Text style={styles.totalVal}>
-              {selectedPlanType === "school"
-                ? `₹${(Math.max(10, billing?.breakdown?.classesCount || 0) * 20 + (billing?.breakdown?.studentsCount || 0) * 2 + (waltEnabled ? 400 : 0))}`
-                : `₹${200 + (waltEnabled ? 200 : 0)}`}
+              ₹{((billing?.breakdown?.studentsCount || 0) * 5 + (waltEnabled ? 400 : 0))}
             </Text>
           </View>
         </View>

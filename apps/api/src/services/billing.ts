@@ -32,21 +32,6 @@ export async function calculateSubscriptionFee(
     waltCharge: number;
   };
 }> {
-  if (planType === "tuition") {
-    const totalAmount = waltAiEnabled ? 40000 : 20000;
-    return {
-      totalAmount,
-      breakdown: {
-        classesCount: 0,
-        classesCharge: 0,
-        studentsCount: 0,
-        studentsCharge: 0,
-        waltCharge: waltAiEnabled ? 40000 : 0,
-      },
-    };
-  }
-
-  // School Plan
   const [classCountResult] = await db
     .select({ value: count() })
     .from(classes)
@@ -59,12 +44,11 @@ export async function calculateSubscriptionFee(
     .where(and(eq(students.tenantId, tenantId), isNull(students.deletedAt)));
   const totalStudents = studentCountResult?.value ?? 0;
 
-  const billingClasses = Math.max(10, totalClasses);
-  const classesCharge = billingClasses * 20 * 100; // ₹20/class in paise
-  const studentsCharge = totalStudents * 2 * 100; // ₹2/student in paise
+  const classesCharge = 0; // Class base fee removed in new pricing model
+  const studentsCharge = totalStudents * 5 * 100; // ₹5/student in paise
   const waltCharge = waltAiEnabled ? 40000 : 0; // ₹400 in paise
 
-  const totalAmount = classesCharge + studentsCharge + waltCharge;
+  const totalAmount = studentsCharge + waltCharge;
 
   return {
     totalAmount,
@@ -101,13 +85,25 @@ export async function createBillingOrder(
 
   try {
     const razorpay = getRazorpayClient();
-    const order = await razorpay.orders.create({
+    const paymentLink = await razorpay.paymentLink.create({
       amount: totalAmount,
       currency: "INR",
-      receipt: `receipt_${tenantId}_${Date.now()}`,
+      accept_partial: false,
+      description: `Whiteroom Subscription - ${planType === "school" ? "School Plan" : "Tuition Plan"}${waltAiEnabled ? " + Walt AI" : ""}`,
+      customer: {
+        name: tenant?.name || "Whiteroom School Admin",
+        contact: tenant?.phone || "+919999999999",
+      },
+      notify: {
+        sms: false,
+        email: false,
+      },
+      reminder_enable: false,
+      callback_url: "https://whiteroom.co.in/billing/success",
+      callback_method: "get",
     });
 
-    // Save order ID to subscription table
+    // Save payment link ID to subscription table
     await db
       .insert(subscriptions)
       .values({
@@ -116,7 +112,7 @@ export async function createBillingOrder(
         planType,
         waltAiEnabled,
         calculatedMonthlyAmount: totalAmount,
-        razorpayOrderId: order.id,
+        razorpayOrderId: paymentLink.id,
         billingCycleStartDate: new Date(),
       })
       .onConflictDoUpdate({
@@ -125,14 +121,19 @@ export async function createBillingOrder(
           planType,
           waltAiEnabled,
           calculatedMonthlyAmount: totalAmount,
-          razorpayOrderId: order.id,
+          razorpayOrderId: paymentLink.id,
           updatedAt: new Date(),
         },
       });
 
-    return order;
+    return {
+      id: paymentLink.id,
+      amount: totalAmount,
+      currency: "INR",
+      paymentUrl: paymentLink.short_url,
+    };
   } catch (err) {
-    console.error("Razorpay order creation failed, falling back to mock:", err);
+    console.error("Razorpay payment link creation failed, falling back to mock:", err);
     // Offline/Testing Mock order fallback
     const mockOrderId = `order_mock_${Math.random().toString(36).substring(7)}`;
     
@@ -162,7 +163,7 @@ export async function createBillingOrder(
       id: mockOrderId,
       amount: totalAmount,
       currency: "INR",
-      receipt: `receipt_${tenantId}`,
+      paymentUrl: `https://example.com/mock-pay?orderId=${mockOrderId}`,
     };
   }
 }

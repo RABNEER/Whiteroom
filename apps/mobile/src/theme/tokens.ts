@@ -1,8 +1,8 @@
 export const colors = {
-  navy: "#2F4156",
-  teal: "#567C8D",
-  sky: "#C8D9E6",
-  paper: "#F5EFEB",
+  navy: "#000000",
+  teal: "#5A6E80",
+  sky: "#E2E8F0",
+  paper: "#FFFFFF",
   white: "#FFFFFF",
   danger: "#EF4444",
   warning: "#F59E0B",

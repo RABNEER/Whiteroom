@@ -9,6 +9,11 @@ import {
   registerRegistrationTokenCleanupWorker,
   scheduleRegistrationTokenCleanup,
 } from "./registration-token-cleanup.job.js";
+import { registerAssembleUploadWorker } from "./assemble-upload.job.js";
+import {
+  registerCleanupExpiredUploadsWorker,
+  scheduleCleanupExpiredUploads,
+} from "./cleanup-expired-uploads.job.js";
 
 let started = false;
 
@@ -27,6 +32,8 @@ export async function startJobs() {
     boss.createQueue("absent-follow-up"),
     boss.createQueue("subscription-expiry"),
     boss.createQueue("registration-token-cleanup"),
+    boss.createQueue("assemble-file-upload"),
+    boss.createQueue("cleanup-expired-uploads"),
   ]);
 
   await Promise.all([
@@ -34,10 +41,16 @@ export async function startJobs() {
     registerAbsentNotificationWorker(),
     registerSubscriptionExpiryWorker(),
     registerRegistrationTokenCleanupWorker(),
+    registerAssembleUploadWorker(),
+    registerCleanupExpiredUploadsWorker(),
   ]);
 
   await scheduleRegistrationTokenCleanup().catch((err) => {
     console.error("[jobs] Failed to schedule token cleanup:", err);
+  });
+
+  await scheduleCleanupExpiredUploads().catch((err) => {
+    console.error("[jobs] Failed to schedule expired uploads cleanup:", err);
   });
 
   await enqueueAttendanceRemindersForNextWeek();

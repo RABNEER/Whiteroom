@@ -11,6 +11,15 @@ import {
   KeyboardAvoidingView,
   Alert,
 } from 'react-native';
+
+// Cross-platform alert — Alert.alert silently fails on web/PWA
+function showAlert(title: string, message: string) {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -26,10 +35,9 @@ export default function TenantInitScreen() {
   const [publicSearch, setPublicSearch] = useState(false);
 
   const showProAlert = (featureName: string) => {
-    Alert.alert(
+    showAlert(
       'PRO Feature Required',
-      `Custom ${featureName} is locked to Whiteroom PRO. Upgrade to personalize your institution's theme.`,
-      [{ text: 'OK' }]
+      `Custom ${featureName} is locked to Whiteroom PRO. Upgrade to personalize your institution's theme.`
     );
   };
 
@@ -42,7 +50,7 @@ export default function TenantInitScreen() {
       router.replace('/teacher');
     },
     onError: (err: unknown) => {
-      Alert.alert(
+      showAlert(
         'Setup Failed',
         err instanceof ApiError ? err.message : 'An unexpected error occurred. Please try again.',
       );
@@ -51,7 +59,7 @@ export default function TenantInitScreen() {
 
   const handleComplete = () => {
     if (!name.trim()) {
-      Alert.alert('Required', 'Please enter your institution name to continue.');
+      showAlert('Required', 'Please enter your institution name to continue.');
       return;
     }
     initMutation.mutate();

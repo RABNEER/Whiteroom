@@ -8,7 +8,7 @@ export default function Index() {
   if (!user) return <Redirect href="/auth" />;
   if (user.role === "parent") return <Redirect href="/parent" />;
   if (user.role === "teacher") return <Redirect href="/teacher" />;
-  if (user.role === "school_admin") return <Redirect href={"/chat" as any} />;
+  if (user.role === "school_admin") return <Redirect href={"/admin" as any} />;
 
   return (
     <Screen>

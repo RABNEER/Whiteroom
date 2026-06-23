@@ -1,6 +1,6 @@
 import { db } from "./db.js";
 import { env } from "./env.js";
-import { deviceTokens, notifications } from "@whiteroom/db";
+import { deviceTokens, notifications, students } from "@whiteroom/db";
 import { eq, and, inArray } from "@whiteroom/db";
 import { getFirebaseMessaging } from "./firebase.js";
 
@@ -100,8 +100,6 @@ export async function getParentUserIdsForStudents(
   studentIds: string[]
 ): Promise<{ studentId: string; parentId: string }[]> {
   if (studentIds.length === 0) return [];
-
-  const { students } = await import("@whiteroom/db");
 
   const rows = await db
     .select({

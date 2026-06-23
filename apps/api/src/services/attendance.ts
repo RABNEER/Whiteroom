@@ -333,6 +333,158 @@ export async function markAttendanceBatch(
   return result;
 }
 
+/**
+ * Mark all enrolled students as present in one tap.
+ * Sends instant FCM notification to all parents.
+ */
+export async function markAllPresent(
+  tenantId: string,
+  sessionId: string,
+  idempotencyKey: string
+) {
+  const result = await db.transaction(async (tx) => {
+    // Check idempotency
+    const [idempotencyRow] = await tx
+      .insert(idempotencyKeys)
+      .values({
+        tenantId,
+        key: idempotencyKey,
+        scope: "attendance.mark-all-present",
+        resourceId: sessionId,
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    if (!idempotencyRow) {
+      const [existing] = await tx
+        .select({ response: idempotencyKeys.response })
+        .from(idempotencyKeys)
+        .where(
+          and(
+            eq(idempotencyKeys.tenantId, tenantId),
+            eq(idempotencyKeys.key, idempotencyKey)
+          )
+        )
+        .limit(1);
+
+      const resp = (existing?.response as {
+        marked: number;
+        present: number;
+        duplicate?: boolean;
+      } | null) ?? { marked: 0, present: 0, duplicate: true };
+      return { response: resp, enrolledStudents: [] };
+    }
+
+    // Verify session exists and belongs to tenant
+    const [session] = await tx
+      .select()
+      .from(attendanceSessions)
+      .where(eq(attendanceSessions.id, sessionId))
+      .limit(1);
+
+    if (!session) {
+      throw Errors.notFound("Attendance session");
+    }
+
+    if (session.tenantId !== tenantId) {
+      throw Errors.forbidden("You do not have access to this attendance session");
+    }
+
+    // Get all enrolled students
+    const enrolledStudents = await tx
+      .select({
+        studentId: students.id,
+        studentName: students.name,
+        parentId: students.parentId,
+      })
+      .from(classEnrollments)
+      .innerJoin(students, eq(classEnrollments.studentId, students.id))
+      .where(
+        and(
+          eq(classEnrollments.classId, session.classId),
+          eq(students.tenantId, tenantId),
+          isNull(students.deletedAt)
+        )
+      );
+
+    if (enrolledStudents.length === 0) {
+      throw Errors.validation("No students enrolled in this class");
+    }
+
+    // Mark all as present
+    const now = new Date();
+    const records = enrolledStudents.map((student) => ({
+      sessionId,
+      studentId: student.studentId,
+      status: "present" as const,
+      markedAt: now,
+      updatedAt: now,
+    }));
+
+    await tx
+      .insert(attendanceRecords)
+      .values(records)
+      .onConflictDoUpdate({
+        target: [attendanceRecords.sessionId, attendanceRecords.studentId],
+        set: {
+          status: sql`excluded.status`,
+          updatedAt: now,
+        },
+      });
+
+    // Update session totals
+    await tx
+      .update(attendanceSessions)
+      .set({
+        totalPresent: enrolledStudents.length,
+        totalAbsent: 0,
+        totalStudents: enrolledStudents.length,
+      })
+      .where(eq(attendanceSessions.id, sessionId));
+
+    const response = {
+      marked: enrolledStudents.length,
+      present: enrolledStudents.length,
+    };
+
+    await tx
+      .update(idempotencyKeys)
+      .set({ response, updatedAt: now })
+      .where(eq(idempotencyKeys.id, idempotencyRow.id));
+
+    return { response, enrolledStudents };
+  });
+
+  // Send instant FCM notifications to all parents (fire-and-forget)
+  if (!("duplicate" in result.response)) {
+    const parentIds = result.enrolledStudents
+      .filter((s) => s.parentId !== null)
+      .map((s) => s.parentId as string);
+
+    if (parentIds.length > 0) {
+      // Get class name for notification
+      const { classes } = await import("@whiteroom/db");
+      const [classInfo] = await db
+        .select({ name: classes.name })
+        .from(classes)
+        .where(eq(classes.id, result.enrolledStudents[0]?.studentId ?
+          (await db.select({ classId: classEnrollments.classId })
+            .from(classEnrollments)
+            .where(eq(classEnrollments.studentId, result.enrolledStudents[0].studentId))
+            .limit(1))[0]?.classId || "" : ""))
+        .limit(1);
+
+      sendPushToUsers(tenantId, parentIds, {
+        title: "Attendance Marked ✓",
+        body: `Your child was present in ${classInfo?.name || "class"} today`,
+        type: "reminder",
+      });
+    }
+  }
+
+  return result.response;
+}
+
 export async function getStudentAttendanceHistory(
   tenantId: string,
   studentId: string,

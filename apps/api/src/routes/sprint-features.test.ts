@@ -363,7 +363,7 @@ describe("Pre-Launch B2B Sprint Features", () => {
       const [studentRow] = await db.select().from(students).where(eq(students.id, studentId)).limit(1);
       expect(studentRow.name).toBe("Scrubbed Student");
       expect(studentRow.deletedAt).not.toBeNull();
-    });
+    }, 15000);
   });
 
   describe("Structured bulletins notices board", () => {

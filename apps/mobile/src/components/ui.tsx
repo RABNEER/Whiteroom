@@ -49,15 +49,6 @@ export function Screen({
   const content = <View style={styles.content}>{children}</View>;
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.bgElements} pointerEvents="none">
-        <Svg height="400" width="100%" style={styles.waveSvg}>
-          <Path
-            d="M-50,-20 L450,-20 L450,240 C320,300 180,140 -50,260 Z"
-            fill={colors.sky}
-            opacity="0.22"
-          />
-        </Svg>
-      </View>
       {scroll ? (
         <ScrollView
           contentContainerStyle={footer ? styles.scrollWithFooter : undefined}
@@ -162,29 +153,6 @@ export function HeroPanel({
 }) {
   return (
     <View style={[styles.heroPanel, compact && styles.heroPanelCompact]}>
-      {/* 1. Pure SVG Gradient Absolute Background */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <Svg height="100%" width="100%" style={StyleSheet.absoluteFill}>
-          <Defs>
-            <LinearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <Stop offset="0%" stopColor="#2A385C" />
-              <Stop offset="50%" stopColor="#3E4F84" />
-              <Stop offset="100%" stopColor="#256B85" />
-            </LinearGradient>
-          </Defs>
-          <Rect width="100%" height="100%" fill="url(#heroGrad)" />
-          
-          {/* Abstract overlay lighting paths to give organic depth */}
-          <Path
-            d="M0,80 C120,40 240,160 400,90 L400,200 L0,200 Z"
-            fill="rgba(255, 255, 255, 0.05)"
-          />
-          <Path
-            d="M-50,130 C100,180 250,90 450,140 L450,200 L-50,200 Z"
-            fill="rgba(255, 255, 255, 0.03)"
-          />
-        </Svg>
-      </View>
       <View style={styles.heroContent}>{children}</View>
     </View>
   );
@@ -210,17 +178,17 @@ export function AvatarBadge({
     const code = label.toUpperCase().charCodeAt(0);
     const slot = code % 4;
     if (slot === 0) {
-      bgColor = "#F4DCD6"; // Soft Muted Rose-Peach
-      textColor = "#7A4D43";
+      bgColor = "#F1F5F9"; // Light gray
+      textColor = "#0F172A"; // Dark slate
     } else if (slot === 1) {
-      bgColor = "#D4E2D4"; // Soft Sage
-      textColor = "#3C5249";
+      bgColor = "#E2E8F0"; // Slate 200
+      textColor = "#1E293B"; // Slate 800
     } else if (slot === 2) {
-      bgColor = "#D5E0EA"; // Muted Ice Blue
-      textColor = "#2D4B63";
+      bgColor = "#F8FAFC"; // Slate 50
+      textColor = "#334155"; // Slate 700
     } else {
-      bgColor = "#EFE1D1"; // Soft Oatmeal / Sand
-      textColor = "#6B5A49";
+      bgColor = "#ECEFF1"; // Slate 100/Blue-Grey
+      textColor = "#263238"; // Dark blue-grey
     }
   }
 
@@ -534,7 +502,7 @@ export function DonutChart3D({
           cx={size / 2}
           cy={size / 2}
           r={radiusVal}
-          stroke={colors.teal}
+          stroke={colors.navy}
           strokeWidth={strokeWidth}
           fill="transparent"
           strokeDasharray={circumference}
@@ -577,13 +545,6 @@ export function LayeredChart({
   return (
     <View style={[styles.layeredContainer, { width: size, height: size }]}>
       <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <Defs>
-          <LinearGradient id="glowingStrokeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#00F2FE" />
-            <Stop offset="100%" stopColor="#4FACFE" />
-          </LinearGradient>
-        </Defs>
-
         {/* 1. Thin technical dotted outer track */}
         <Circle
           cx={size / 2}
@@ -605,29 +566,12 @@ export function LayeredChart({
           fill="transparent"
         />
 
-        {/* 3. Glowing drop shadow ring behind the progress ring */}
-        {value > 0 && (
-          <Circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radiusVal}
-            stroke={strokeColor === colors.white ? "url(#glowingStrokeGrad)" : strokeColor}
-            strokeWidth={strokeWidth + 5}
-            fill="transparent"
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-            opacity={0.3}
-            transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          />
-        )}
-
-        {/* 4. Active Progress Ring */}
+        {/* 3. Active Progress Ring */}
         <Circle
           cx={size / 2}
           cy={size / 2}
           r={radiusVal}
-          stroke={strokeColor === colors.white ? "url(#glowingStrokeGrad)" : strokeColor}
+          stroke={strokeColor}
           strokeWidth={strokeWidth}
           fill="transparent"
           strokeDasharray={circumference}
@@ -637,7 +581,7 @@ export function LayeredChart({
         />
       </Svg>
       
-      {/* 5. Center glass bubble value display */}
+      {/* 4. Center glass bubble value display */}
       <View style={[styles.layeredInner, { 
         width: size - strokeWidth * 2 - 4, 
         height: size - strokeWidth * 2 - 4,
@@ -733,7 +677,7 @@ export const styles = StyleSheet.create({
     lineHeight: 34,
   },
   wordmarkAccent: {
-    color: colors.teal,
+    color: colors.navy,
     fontWeight: "900",
   },
   display: {
@@ -748,13 +692,13 @@ export const styles = StyleSheet.create({
     lineHeight: 35,
   },
   displayAccent: {
-    color: colors.teal,
+    color: colors.navy,
     fontWeight: "900",
   },
   header: {
     alignItems: "center",
     backgroundColor: colors.white,
-    borderBottomColor: "rgba(86, 124, 141, 0.15)",
+    borderBottomColor: "rgba(0, 0, 0, 0.08)",
     borderBottomWidth: 1.5,
     flexDirection: "row",
     gap: spacing.md,
@@ -796,7 +740,7 @@ export const styles = StyleSheet.create({
   brandDot: {
     width: 6,
     height: 6,
-    backgroundColor: colors.teal,
+    backgroundColor: colors.navy,
     borderRadius: radius.full,
     marginLeft: 4,
   },
@@ -819,22 +763,17 @@ export const styles = StyleSheet.create({
     padding: 3,
     backgroundColor: colors.white,
     borderRadius: radius.full,
-    borderColor: "rgba(86, 124, 141, 0.15)",
+    borderColor: "rgba(0, 0, 0, 0.08)",
     borderWidth: 1.5,
   },
   heroPanel: {
-    backgroundColor: "transparent",
-    borderRadius: radius.xl,
+    backgroundColor: colors.navy,
+    borderRadius: radius.lg,
     minHeight: 210,
     overflow: "hidden",
     position: "relative",
-    borderColor: "rgba(255, 255, 255, 0.22)",
+    borderColor: "rgba(255, 255, 255, 0.15)",
     borderWidth: 1.5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 6,
   },
   heroPanelCompact: {
     minHeight: 150,
@@ -859,13 +798,13 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.sky,
     borderColor: colors.white,
     borderRadius: radius.full,
-    borderWidth: 3,
+    borderWidth: 2,
     height: 58,
     justifyContent: "center",
     width: 58,
   },
   avatarBadgeSmall: {
-    borderWidth: 2,
+    borderWidth: 1.5,
     height: 46,
     width: 46,
   },
@@ -892,7 +831,7 @@ export const styles = StyleSheet.create({
     overflow: "hidden",
   },
   progressFill: {
-    backgroundColor: colors.teal,
+    backgroundColor: colors.navy,
     borderRadius: radius.full,
     height: 7,
   },
@@ -920,7 +859,7 @@ export const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: colors.white,
-    borderColor: "rgba(47, 65, 86, 0.12)",
+    borderColor: "rgba(0, 0, 0, 0.08)",
     borderWidth: 1,
     borderRadius: radius.md,
     color: colors.navy,
@@ -936,20 +875,20 @@ export const styles = StyleSheet.create({
   button: {
     alignItems: "center",
     backgroundColor: colors.navy,
-    borderRadius: radius.md,
+    borderRadius: radius.full,
     minHeight: 56,
     justifyContent: "center",
     paddingHorizontal: spacing.md,
-    borderColor: "rgba(86, 124, 141, 0.15)",
+    borderColor: "rgba(0, 0, 0, 0.15)",
     borderWidth: 1.5,
   },
   buttonGhost: {
     backgroundColor: colors.white,
-    borderColor: "rgba(86, 124, 141, 0.15)",
+    borderColor: colors.navy,
   },
   buttonSoft: {
     backgroundColor: colors.sky,
-    borderColor: "rgba(255, 255, 255, 0.5)",
+    borderColor: "rgba(0, 0, 0, 0.05)",
   },
   buttonDanger: {
     backgroundColor: colors.danger,
@@ -979,7 +918,7 @@ export const styles = StyleSheet.create({
   iconButton: {
     alignItems: "center",
     backgroundColor: colors.white,
-    borderColor: "rgba(86, 124, 141, 0.15)",
+    borderColor: "rgba(0, 0, 0, 0.08)",
     borderRadius: radius.full,
     borderWidth: 1.5,
     height: 46,
@@ -992,20 +931,17 @@ export const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.white,
-    borderColor: "rgba(47, 65, 86, 0.08)",
+    borderColor: "rgba(0, 0, 0, 0.06)",
     borderRadius: radius.lg,
     borderWidth: 1,
     gap: spacing.sm,
     padding: spacing.md,
-    shadowColor: "#2F4156",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   cardInset: {
-    backgroundColor: "rgba(86, 124, 141, 0.06)",
-    borderColor: "rgba(86, 124, 141, 0.2)",
+    backgroundColor: "rgba(0, 0, 0, 0.02)",
+    borderColor: "rgba(0, 0, 0, 0.06)",
     borderWidth: 1.5,
     shadowOpacity: 0,
     elevation: 0,
@@ -1023,7 +959,7 @@ export const styles = StyleSheet.create({
     height: 44,
     width: 44,
     justifyContent: "center",
-    borderColor: "rgba(86, 124, 141, 0.1)",
+    borderColor: "rgba(0, 0, 0, 0.05)",
     borderWidth: 1,
   },
   metricDot: {
@@ -1051,7 +987,7 @@ export const styles = StyleSheet.create({
     position: "absolute",
     right: spacing.md,
     top: spacing.md,
-    borderColor: "rgba(255, 255, 255, 0.4)",
+    borderColor: "rgba(0, 0, 0, 0.08)",
     borderWidth: 1,
   },
   pillText: {
@@ -1070,7 +1006,7 @@ export const styles = StyleSheet.create({
     lineHeight: 20,
   },
   segmented: {
-    backgroundColor: "rgba(47, 65, 86, 0.05)",
+    backgroundColor: "rgba(0, 0, 0, 0.04)",
     borderRadius: radius.full,
     flexDirection: "row",
     gap: spacing.xs,
@@ -1086,9 +1022,9 @@ export const styles = StyleSheet.create({
   },
   segmentActive: {
     backgroundColor: colors.white,
-    shadowColor: "#2F4156",
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 2,
   },
@@ -1111,7 +1047,7 @@ export const styles = StyleSheet.create({
   },
   bottomNav: {
     backgroundColor: "rgba(255, 255, 255, 0.98)",
-    borderTopColor: "rgba(86, 124, 141, 0.15)",
+    borderTopColor: "rgba(0, 0, 0, 0.08)",
     borderTopWidth: 1.5,
     flexDirection: "row",
     justifyContent: "space-around",
@@ -1167,7 +1103,7 @@ export const styles = StyleSheet.create({
     borderRadius: radius.full,
     alignItems: "center",
     justifyContent: "center",
-    borderColor: "rgba(86, 124, 141, 0.12)",
+    borderColor: "rgba(0, 0, 0, 0.08)",
     borderWidth: 1.5,
   },
   donutVal: {
@@ -1187,7 +1123,7 @@ export const styles = StyleSheet.create({
     borderRadius: radius.full,
     alignItems: "center",
     justifyContent: "center",
-    borderColor: "rgba(86, 124, 141, 0.15)",
+    borderColor: "rgba(255, 255, 255, 0.15)",
     borderWidth: 1.5,
   },
   layeredVal: {
@@ -1197,7 +1133,7 @@ export const styles = StyleSheet.create({
   },
   drawerBackdrop: {
     flex: 1,
-    backgroundColor: "rgba(47, 65, 86, 0.4)",
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
     justifyContent: "flex-end",
   },
   drawerContentContainer: {
@@ -1210,7 +1146,7 @@ export const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     padding: spacing.lg,
     paddingBottom: spacing.xl + 20,
-    borderColor: "rgba(255, 255, 255, 0.8)",
+    borderColor: "rgba(0, 0, 0, 0.08)",
     borderWidth: 1.5,
   },
   drawerHandle: {

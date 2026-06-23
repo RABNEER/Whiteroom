@@ -33,11 +33,11 @@ const registerSchema = z.object({
   role: z.enum([UserRole.SCHOOL_ADMIN, UserRole.TEACHER, UserRole.PARENT]),
   consentAccepted: z.boolean(),
   consentAcceptedAt: z.string().optional(),
-  inviteCode: z.string().length(6).optional(),
-  schoolName: z.string().trim().min(2).max(120).optional(),
-  designation: z.string().trim().min(2).max(80).optional(),
-  studentName: z.string().trim().min(1).max(120).optional(),
-  rollNumber: z.string().trim().min(1).max(40).optional(),
+  inviteCode: z.preprocess(val => val === "" ? undefined : val, z.string().length(6).optional()),
+  schoolName: z.preprocess(val => val === "" ? undefined : val, z.string().trim().min(2).max(120).optional()),
+  designation: z.preprocess(val => val === "" ? undefined : val, z.string().trim().min(2).max(80).optional()),
+  studentName: z.preprocess(val => val === "" ? undefined : val, z.string().trim().min(1).max(120).optional()),
+  rollNumber: z.preprocess(val => val === "" ? undefined : val, z.string().trim().min(1).max(40).optional()),
 });
 
 /**
@@ -58,6 +58,7 @@ export async function registerHandler(c: Context) {
   const parsed = registerSchema.safeParse(body);
 
   if (!parsed.success) {
+    console.error("❌ [REGISTER VALIDATION FAILED] body:", body, "errors:", parsed.error.format());
     throw Errors.validation("Invalid request body", {
       issues: parsed.error.flatten().fieldErrors,
     });

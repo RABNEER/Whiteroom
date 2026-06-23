@@ -24,6 +24,7 @@ import { chatRoutes } from "./routes/chat/index.js";
 import { archiveRoutes } from "./routes/archive/index.js";
 import { publicRoutes } from "./routes/public/index.js";
 import { billingRoutes } from "./routes/billing/index.js";
+import { chunkedRoutes } from "./routes/upload/chunked.js";
 import { userRoutes } from "./routes/users/index.js";
 import { bulletinsRoutes } from "./routes/bulletins/index.js";
 import {
@@ -41,7 +42,8 @@ const app = new Hono();
 
 // FIX: No request body size limit
 app.use("*", (c, next) => {
-  if (c.req.path.startsWith("/api/upload/")) {
+  const path = c.req.path;
+  if (path.includes("/archive/upload") || path.startsWith("/api/v1/upload/")) {
     return next();
   }
   return bodyLimit({
@@ -56,9 +58,28 @@ app.use("*", (c, next) => {
 });
 
 app.use(
-  "/api/upload/*",
+  "*/archive/upload",
   bodyLimit({
-    maxSize: 10 * 1024 * 1024 // 10MB for uploads only
+    maxSize: 100 * 1024 * 1024, // 100MB for archive uploads
+    onError: (c) => {
+      return c.json({
+        error: "Payload too large",
+        maxSize: "100MB"
+      }, 413);
+    }
+  })
+);
+
+app.use(
+  "/api/v1/upload/*",
+  bodyLimit({
+    maxSize: 5 * 1024 * 1024, // 5MB for chunk uploads (1MB chunks)
+    onError: (c) => {
+      return c.json({
+        error: "Payload too large",
+        maxSize: "5MB"
+      }, 413);
+    }
   })
 );
 
@@ -93,6 +114,7 @@ app.route("/api/v1/admin", adminRoutes);
 app.route("/api/v1/chat", chatRoutes);
 app.route("/api/v1/classes/:classId/archive", archiveRoutes);
 app.route("/api/v1/billing", billingRoutes);
+app.route("/api/v1/upload", chunkedRoutes);
 app.route("/api/v1/users", userRoutes);
 app.route("/api/v1/bulletins", bulletinsRoutes);
 app.route("/", publicRoutes);

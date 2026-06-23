@@ -14,6 +14,8 @@ export const classEnrollments = pgTable(
     enrolledAt: timestamp("enrolled_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
+    status: text("status").default("active").notNull(), // 'active' | 'promoted' | 'graduated'
+    promotedAt: timestamp("promoted_at", { withTimezone: true }),
   },
   (table) => [
     primaryKey({ columns: [table.classId, table.studentId] }),
