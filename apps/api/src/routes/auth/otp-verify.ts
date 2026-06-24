@@ -1,6 +1,5 @@
 import type { Context } from "hono";
 import { z } from "zod";
-import { env } from "../../lib/env.js";
 import { db } from "../../lib/db.js";
 import {
   otpAttempts,
@@ -31,7 +30,7 @@ import {
   PlanTier,
 } from "@whiteroom/shared";
 import type { ApiResponse, OTPVerifyResponse, JWTPayload } from "@whiteroom/shared";
-import { eq, and, gte, lt, isNull, count } from "@whiteroom/db";
+import { eq, and, gte, lt, isNull, count, or } from "@whiteroom/db";
 import { verifyFirebaseIdToken } from "../../lib/firebase.js";
 
 const verifySchema = z.object({
@@ -63,10 +62,6 @@ export async function otpVerifyHandler(c: Context) {
   const parsed = verifySchema.safeParse(body);
 
   if (!parsed.success) {
-    console.error("❌ [OTP VERIFY VALIDATION FAILED]", {
-      body,
-      errors: parsed.error.format(),
-    });
     throw Errors.validation("Invalid request body", {
       issues: parsed.error.flatten().fieldErrors,
     });
@@ -74,37 +69,38 @@ export async function otpVerifyHandler(c: Context) {
 
   let phone: string;
   let firebaseUid = "legacy-otp";
+  let phoneHash = "";
 
   if (parsed.data.idToken) {
     try {
       const verified = await verifyFirebaseIdToken(parsed.data.idToken);
       phone = normalizePhone(verified.phone);
+      phoneHash = hashSHA256(phone);
       firebaseUid = verified.uid;
     } catch (err: any) {
       throw new AppError(
         ErrorCode.INVALID_OTP,
-        `Firebase token verification failed: ${err?.message || err}`,
+        "Firebase token verification failed.",
         401
       );
     }
   } else {
-    // ─── Legacy Phone/OTP Fallback Path ───
+    // â”€â”€â”€ Legacy Phone/OTP Fallback Path â”€â”€â”€
     const reqPhone = normalizePhone(parsed.data.phone!);
     if (!isValidIndianPhone(reqPhone)) {
       throw Errors.validation("Invalid phone number format.");
     }
     phone = reqPhone;
-
-    const phoneHash = hashSHA256(phone);
+    phoneHash = hashSHA256(phone);
     const otpHash = hashSHA256(parsed.data.otp!);
     const now = new Date();
 
-    // ─── Brute-Force Guard (Fix 1) using a secure transaction with row locking ───
+    // â”€â”€â”€ Brute-Force Guard (Fix 1) using a secure transaction with row locking â”€â”€â”€
     await db.transaction(async (tx) => {
       let [lockout] = await tx
         .select()
         .from(otpLockouts)
-        .where(eq(otpLockouts.phone, phone))
+        .where(eq(otpLockouts.phone, phoneHash))
         .for("update")
         .limit(1);
 
@@ -152,7 +148,7 @@ export async function otpVerifyHandler(c: Context) {
         }
       }
 
-      // ─── Find Matching OTP ───
+      // â”€â”€â”€ Find Matching OTP â”€â”€â”€
       const [otpRecord] = await tx
         .select({ id: otpAttempts.id })
         .from(otpAttempts)
@@ -196,7 +192,7 @@ export async function otpVerifyHandler(c: Context) {
           await tx
             .insert(otpLockouts)
             .values({
-              phone,
+              phone: phoneHash,
               attempts: 1,
               lockedUntil: null,
               createdAt: now,
@@ -204,7 +200,7 @@ export async function otpVerifyHandler(c: Context) {
             });
         }
 
-        // Check if there's an expired match → specific error
+        // Check if there's an expired match â†’ specific error
         const [expired] = await tx
           .select()
           .from(otpAttempts)
@@ -232,7 +228,7 @@ export async function otpVerifyHandler(c: Context) {
         );
       }
 
-      // ─── Reset attempts on correct OTP ───
+      // â”€â”€â”€ Reset attempts on correct OTP â”€â”€â”€
       if (lockout) {
         await tx
           .update(otpLockouts)
@@ -244,7 +240,7 @@ export async function otpVerifyHandler(c: Context) {
           .where(eq(otpLockouts.id, lockout.id));
       }
 
-      // ─── Mark OTP as Verified ───
+      // â”€â”€â”€ Mark OTP as Verified â”€â”€â”€
       await tx
         .update(otpAttempts)
         .set({ verified: true })
@@ -257,22 +253,22 @@ export async function otpVerifyHandler(c: Context) {
     throw Errors.validation("Invalid phone number format.");
   }
 
-  // ─── Find or Create User ───
-  // FIX: Parents cannot join multiple tenants — breaks multi-school families
+  // â”€â”€â”€ Find or Create User â”€â”€â”€
+  // FIX: Parents cannot join multiple tenants â€” breaks multi-school families
   const [existingUser] = await db
     .select()
     .from(users)
-    .where(eq(users.phone, phone))
+    .where(or(eq(users.phone, phoneHash), eq(users.phone, phone)))
     .limit(1);
 
   if (!existingUser) {
-    // ─── NEW USER FLOW: Generate Registration Token ───
+    // â”€â”€â”€ NEW USER FLOW: Generate Registration Token â”€â”€â”€
     const registrationToken = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     await db.insert(registrationTokens).values({
       id: registrationToken,
-      phone,
+      phone: phoneHash,
       firebaseUid,
       expiresAt,
     });
@@ -405,7 +401,7 @@ export async function otpVerifyHandler(c: Context) {
       }
     }
   } else if (parsed.data.inviteCode) {
-    // ─── New Parent via Invite ───
+    // â”€â”€â”€ New Parent via Invite â”€â”€â”€
     isNewUser = true;
 
     const [tenant] = await db
@@ -422,7 +418,7 @@ export async function otpVerifyHandler(c: Context) {
       const [newUser] = await tx
         .insert(users)
         .values({
-          phone,
+          phone: phoneHash,
           role: UserRole.PARENT,
           tenantId: tenant.id,
         })
@@ -461,7 +457,7 @@ export async function otpVerifyHandler(c: Context) {
     tenantId = tenant.id;
     role = UserRole.PARENT;
   } else {
-    // ─── New Teacher (first-time signup) ───
+    // â”€â”€â”€ New Teacher (first-time signup) â”€â”€â”€
     isNewUser = true;
 
     const inviteCode = generateInviteCode();
@@ -483,7 +479,7 @@ export async function otpVerifyHandler(c: Context) {
       const [newUser] = await tx
         .insert(users)
         .values({
-          phone,
+          phone: phoneHash,
           role: UserRole.TEACHER,
           tenantId: newTenant!.id,
         })
@@ -510,7 +506,7 @@ export async function otpVerifyHandler(c: Context) {
     role = UserRole.TEACHER;
   }
 
-  // ─── Resolve All Linked Tenants for JWT ───
+  // â”€â”€â”€ Resolve All Linked Tenants for JWT â”€â”€â”€
   const userTenantRecords = await db
     .select({
       tenantId: userTenants.tenantId,
@@ -528,7 +524,7 @@ export async function otpVerifyHandler(c: Context) {
     status: r.status,
   }));
 
-  // ─── Issue JWT Pair ───
+  // â”€â”€â”€ Issue JWT Pair â”€â”€â”€
   const jwtPayload: JWTPayload = {
     userId,
     tenantId,

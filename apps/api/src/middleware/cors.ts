@@ -1,4 +1,5 @@
 import { cors as honoCors } from "hono/cors";
+import { env } from "../lib/env.js";
 
 export function corsMiddleware() {
   // FIX: CORS wildcard allows requests from any website
@@ -6,7 +7,7 @@ export function corsMiddleware() {
     origin: (origin) => {
       if (!origin) return "";
 
-      if (process.env.NODE_ENV === "development") {
+      if (env.NODE_ENV === "development") {
         return origin;
       }
 
@@ -16,8 +17,8 @@ export function corsMiddleware() {
         "http://127.0.0.1:8081",
         "http://192.168.*:8081",
         "https://*.netlify.app",
-        process.env.MOBILE_WEB_URL,
-        process.env.ADMIN_URL,
+        env.MOBILE_WEB_URL,
+        env.ADMIN_URL,
       ].filter(Boolean) as string[];
 
       if (!origin) return origin || ""; // Allow server-to-server or return empty
@@ -39,4 +40,3 @@ export function corsMiddleware() {
     maxAge: 86400,
   });
 }
-

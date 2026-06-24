@@ -3,11 +3,11 @@ import { createClient } from "@supabase/supabase-js";
 import { env } from "./env.js";
 
 // Initialize Cloudflare R2 / S3 client if keys are present
-const r2AccessKeyId = process.env.R2_ACCESS_KEY_ID || "";
-const r2SecretAccessKey = process.env.R2_SECRET_ACCESS_KEY || "";
-const cloudflareAccountId = process.env.CLOUDFLARE_ACCOUNT_ID || "";
-const r2BucketName = process.env.R2_BUCKET_NAME || "classroom-media";
-const r2PublicUrlPrefix = process.env.R2_PUBLIC_URL_PREFIX || "";
+const r2AccessKeyId = env.R2_ACCESS_KEY_ID || "";
+const r2SecretAccessKey = env.R2_SECRET_ACCESS_KEY || "";
+const cloudflareAccountId = env.CLOUDFLARE_ACCOUNT_ID || "";
+const r2BucketName = env.R2_BUCKET_NAME || "classroom-media";
+const r2PublicUrlPrefix = env.R2_PUBLIC_URL_PREFIX || "";
 
 let s3Client: S3Client | null = null;
 const isR2Configured = !!(r2AccessKeyId && r2SecretAccessKey && cloudflareAccountId);

@@ -1,35 +1,24 @@
 /**
- * Seed script — creates the "Sharma Coaching Centre" demo tenant
+ * Seed script â€” creates the "Sharma Coaching Centre" demo tenant
  * with a teacher, 30 students, and sample data.
  *
  * Usage: pnpm seed (from apps/api or monorepo root)
  */
-import { config } from "dotenv";
-import { resolve } from "node:path";
 import { drizzle } from "@whiteroom/db";
 import postgres from "postgres";
 import * as schema from "@whiteroom/db";
 import { UserRole } from "@whiteroom/shared";
-import { generateInviteCode, slugify } from "./lib/otp.js";
+import { generateInviteCode, slugify, hashSHA256 } from "./lib/otp.js";
+import { env } from "./lib/env.js";
 import { and, eq } from "@whiteroom/db";
 
-// Load env
-config({ path: resolve(process.cwd(), ".env") });
-config({ path: resolve(process.cwd(), "../../.env") });
-
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  console.error("❌ DATABASE_URL is required for seeding.");
-  process.exit(1);
-}
-
-const client = postgres(DATABASE_URL, { max: 1 });
+const client = postgres(env.DATABASE_URL, { max: 1 });
 const db = drizzle(client, { schema });
 
 async function seed() {
-  console.log("🌱 Starting seed...\n");
+  console.log("ðŸŒ± Starting seed...\n");
 
-  // ─── Create Tenant ───
+  // â”€â”€â”€ Create Tenant â”€â”€â”€
   const inviteCode = generateInviteCode();
   const tenantName = "Sharma Coaching Centre";
   const slug = slugify(tenantName);
@@ -53,13 +42,13 @@ async function seed() {
         })
         .returning();
 
-  console.log(`✅ Tenant: ${tenant!.name} (invite: ${tenant!.inviteCode})`);
+  console.log(`âœ… Tenant: ${tenant!.name} (invite: ${tenant!.inviteCode})`);
 
-  // ─── Create Teacher ───
+  // â”€â”€â”€ Create Teacher â”€â”€â”€
   const [existingTeacher] = await db
     .select()
     .from(schema.users)
-    .where(eq(schema.users.phone, "+919876543210"))
+    .where(eq(schema.users.phone, hashSHA256("+919876543210")))
     .limit(1);
 
   const [teacherUser] = existingTeacher
@@ -67,7 +56,7 @@ async function seed() {
     : await db
         .insert(schema.users)
         .values({
-          phone: "+919876543210",
+          phone: hashSHA256("+919876543210"),
           name: "Rajesh Sharma",
           role: UserRole.TEACHER,
           tenantId: tenant!.id,
@@ -83,9 +72,9 @@ async function seed() {
     })
     .onConflictDoNothing();
 
-  console.log(`✅ Teacher: demo account seeded`);
+  console.log(`âœ… Teacher: demo account seeded`);
 
-  // ─── Create 30 Students ───
+  // â”€â”€â”€ Create 30 Students â”€â”€â”€
   const studentNames = [
     "Aarav Patel", "Vivaan Gupta", "Aditya Singh", "Vihaan Sharma",
     "Arjun Kumar", "Reyansh Verma", "Ayaan Jain", "Krishna Mishra",
@@ -114,13 +103,13 @@ async function seed() {
     }
   }
 
-  console.log(`✅ Students: ${studentNames.length} created`);
+  console.log(`âœ… Students: ${studentNames.length} created`);
 
-  // ─── Create Parent (linked to first student) ───
+  // â”€â”€â”€ Create Parent (linked to first student) â”€â”€â”€
   const [existingParent] = await db
     .select()
     .from(schema.users)
-    .where(eq(schema.users.phone, "+919123456789"))
+    .where(eq(schema.users.phone, hashSHA256("+919123456789")))
     .limit(1);
 
   const [parentUser] = existingParent
@@ -128,7 +117,7 @@ async function seed() {
     : await db
         .insert(schema.users)
         .values({
-          phone: "+919123456789",
+          phone: hashSHA256("+919123456789"),
           name: "Meera Patel",
           role: UserRole.PARENT,
           tenantId: tenant!.id,
@@ -175,35 +164,35 @@ async function seed() {
     });
   }
 
-  console.log(`✅ Parent: demo account seeded`);
-  console.log(`✅ Consent log created for parent onboarding`);
+  console.log(`âœ… Parent: demo account seeded`);
+  console.log(`âœ… Consent log created for parent onboarding`);
 
-  const superAdminPhone = process.env.SUPER_ADMIN_PHONE;
+  const superAdminPhone = env.SUPER_ADMIN_PHONE;
   if (superAdminPhone) {
     await db
       .insert(schema.users)
       .values({
-        phone: superAdminPhone,
+        phone: hashSHA256(superAdminPhone),
         name: "Whiteroom Admin",
         role: UserRole.SUPER_ADMIN,
         tenantId: tenant!.id,
       })
       .onConflictDoNothing();
 
-    console.log(`✅ Super admin seeded from SUPER_ADMIN_PHONE`);
+    console.log(`âœ… Super admin seeded from SUPER_ADMIN_PHONE`);
   }
 
-  // ─── Summary ───
+  // â”€â”€â”€ Summary â”€â”€â”€
   console.log(`
-  ╔══════════════════════════════════════════╗
-  ║  🌱 Seed Complete                        ║
-  ║                                          ║
-  ║  Tenant: ${tenantName.padEnd(25)}      ║
-  ║  Invite: ${tenant!.inviteCode.padEnd(25)}      ║
-  ║  Teacher and parent demo phones are      ║
-  ║  defined inside the seed script.         ║
-  ║  Students: 30                            ║
-  ╚══════════════════════════════════════════╝
+  â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+  â•‘  ðŸŒ± Seed Complete                        â•‘
+  â•‘                                          â•‘
+  â•‘  Tenant: ${tenantName.padEnd(25)}      â•‘
+  â•‘  Invite: ${tenant!.inviteCode.padEnd(25)}      â•‘
+  â•‘  Teacher and parent demo phones are      â•‘
+  â•‘  defined inside the seed script.         â•‘
+  â•‘  Students: 30                            â•‘
+  â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 `);
 
   await client.end();
@@ -211,6 +200,6 @@ async function seed() {
 }
 
 seed().catch((err) => {
-  console.error("❌ Seed failed:", err);
+  console.error("âŒ Seed failed:", err);
   process.exit(1);
 });

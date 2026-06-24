@@ -13,6 +13,10 @@ const sendSchema = z.object({
   phone: z.string().min(10).max(15),
 });
 
+function maskPhone(phone: string): string {
+  return phone.slice(-4).padStart(phone.length, "*");
+}
+
 /**
  * POST /api/v1/auth/otp/send
  *
@@ -39,7 +43,7 @@ export async function otpSendHandler(c: Context) {
 
   const phoneHash = hashSHA256(phone);
 
-  // ─── Rate Limit Check ───
+  // â”€â”€â”€ Rate Limit Check â”€â”€â”€
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   const [result] = await db
     .select({ total: count() })
@@ -57,7 +61,7 @@ export async function otpSendHandler(c: Context) {
     );
   }
 
-  // ─── Generate & Store OTP ───
+  // â”€â”€â”€ Generate & Store OTP â”€â”€â”€
   const otp = generateOTP();
   const otpHash = hashSHA256(otp);
   const expiresAt = new Date(Date.now() + Limits.OTP_EXPIRY_SECONDS * 1000);
@@ -68,9 +72,9 @@ export async function otpSendHandler(c: Context) {
     expiresAt,
   });
 
-  // ─── Send SMS ───
-  if (process.env.NODE_ENV === "development" && !env.TERMUX_SMS_GATEWAY_URL && !env.SMSGATEWAY24_TOKEN) {
-    console.log(`[DEV MODE] Skipping SMS. OTP for ${phone} is: ${otp}`);
+  // â”€â”€â”€ Send SMS â”€â”€â”€
+  if (env.NODE_ENV === "development" && !env.TERMUX_SMS_GATEWAY_URL && !env.SMSGATEWAY24_TOKEN) {
+    console.log(`[DEV MODE] Skipping SMS. OTP for ${maskPhone(phone)} is: ${otp}`);
   } else {
     await sendOTP(phone, otp);
   }

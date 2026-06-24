@@ -56,6 +56,8 @@ export async function refreshHandler(c: Context) {
     tenantId: claims.tenantId,
     role: claims.role,
     plan: claims.plan,
+    activeTenantId: claims.activeTenantId ?? claims.tenantId,
+    tenants: claims.tenants,
   });
 
   const response: ApiResponse<RefreshResponse> = {

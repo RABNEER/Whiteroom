@@ -6,15 +6,19 @@ interface MSG91SendResponse {
   message?: string;
 }
 
+function maskPhone(phone: string): string {
+  return phone.slice(-4).padStart(phone.length, "*");
+}
+
 /**
  * Send an OTP via SMS Gateway 24 (SIM) or MSG91 REST API.
  *
  * Falls back to console logging in development mode if no credentials are set.
  */
 export async function sendOTP(phone: string, otp: string): Promise<void> {
-  // ─── 0. Termux Custom SMS Gateway ───
+  // â”€â”€â”€ 0. Termux Custom SMS Gateway â”€â”€â”€
   if (env.TERMUX_SMS_GATEWAY_URL) {
-    console.log(`📱 [TERMUX GATEWAY] Forwarding OTP SMS to ${phone} via Termux Local Gateway...`);
+    console.log(`ðŸ“± [TERMUX GATEWAY] Forwarding OTP SMS to ${maskPhone(phone)} via Termux Local Gateway...`);
     try {
       const response = await fetch(`${env.TERMUX_SMS_GATEWAY_URL.replace(/\/$/, "")}/send`, {
         method: "POST",
@@ -38,17 +42,17 @@ export async function sendOTP(phone: string, otp: string): Promise<void> {
         throw Errors.internal(`Termux SMS Gateway failed: ${data.error}`);
       }
 
-      console.log(`✅ [TERMUX GATEWAY] OTP sent successfully.`);
+      console.log(`âœ… [TERMUX GATEWAY] OTP sent successfully.`);
       return;
     } catch (err: any) {
-      console.error("❌ Termux SMS Gateway connection failed:", err);
+      console.error("âŒ Termux SMS Gateway connection failed:", err);
       throw Errors.internal(err.message || "Failed to reach Termux SMS Gateway");
     }
   }
 
-  // ─── 1. SMS Gateway 24 (SIM Gateway fallback) ───
+  // â”€â”€â”€ 1. SMS Gateway 24 (SIM Gateway fallback) â”€â”€â”€
   if (env.SMSGATEWAY24_TOKEN && env.SMSGATEWAY24_DEVICE_ID) {
-    console.log(`📱 [SMSGATEWAY24] Queueing OTP SMS to ${phone} via Android SIM Gateway...`);
+    console.log(`ðŸ“± [SMSGATEWAY24] Queueing OTP SMS to ${maskPhone(phone)} via Android SIM Gateway...`);
     const url = "https://smsgateway24.com/getdata/addsms";
 
     const params = new URLSearchParams();
@@ -79,15 +83,15 @@ export async function sendOTP(phone: string, otp: string): Promise<void> {
         throw Errors.internal(`Failed to send SMS via SIM: ${data.message}`);
       }
 
-      console.log(`✅ [SMSGATEWAY24] OTP queued successfully on Android device.`);
+      console.log(`âœ… [SMSGATEWAY24] OTP queued successfully on Android device.`);
       return;
     } catch (err: any) {
-      console.error("❌ SMS Gateway 24 connection failed:", err);
+      console.error("âŒ SMS Gateway 24 connection failed:", err);
       throw Errors.internal(err.message || "Failed to reach SIM SMS Gateway");
     }
   }
 
-  // ─── 2. MSG91 REST API ───
+  // â”€â”€â”€ 2. MSG91 REST API â”€â”€â”€
   if (env.MSG91_API_KEY && env.MSG91_TEMPLATE_ID) {
     const url = "https://control.msg91.com/api/v5/otp";
 
@@ -119,6 +123,11 @@ export async function sendOTP(phone: string, otp: string): Promise<void> {
     return;
   }
 
-  // ─── 3. Development fallback — log OTP to console
-  console.log(`\n📱 [DEV OTP] Phone: ${phone.slice(-4).padStart(phone.length, '*')} → OTP: ${otp}\n`);
+  // â”€â”€â”€ 3. Development fallback â€” log OTP to console
+  if (env.NODE_ENV === "development" || env.NODE_ENV === "test") {
+    console.log(`\n📱 [DEV OTP] Phone: ${maskPhone(phone)} → OTP: ${otp}\n`);
+    return;
+  }
+
+  throw Errors.internal("SMS provider is not configured");
 }

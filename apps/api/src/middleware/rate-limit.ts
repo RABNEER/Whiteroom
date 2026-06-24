@@ -1,7 +1,8 @@
 import { Context, Next } from "hono";
+import { env } from "../lib/env.js";
 
 /**
- * Simple in-memory rate limiter — good enough for single-instance pilot.
+ * Simple in-memory rate limiter â€” good enough for single-instance pilot.
  * 
  * SECURITY WARNING:
  * This rate-limiter uses a simple in-memory Map. In containerized production
@@ -17,9 +18,9 @@ import { Context, Next } from "hono";
 const store = new Map<string, { count: number; resetAt: number }>();
 
 // Log architectural security warning during server startup if multi-instance deploy is possible
-if (process.env.NODE_ENV === "production") {
+if (env.NODE_ENV === "production") {
   console.warn(
-    "⚠️ [SECURITY WARNING] Using in-memory Rate Limiting middleware in production. " +
+    "âš ï¸ [SECURITY WARNING] Using in-memory Rate Limiting middleware in production. " +
     "Generic endpoints will reset limits on redeployments or server scaling. " +
     "Centralized OTP rate limiting is secure (backed by postgres `otp_lockouts`), but generic middleware should be migrated to Redis/postgres."
   );

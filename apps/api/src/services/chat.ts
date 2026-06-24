@@ -17,14 +17,38 @@ import { Errors, UserRole } from "@whiteroom/shared";
 
 const ENCRYPTION_ALGORITHM = "aes-256-gcm";
 
-// ─── Cryptographic Encryption Helper functions ───
-function getTenantKey(tenantId: string): Buffer {
-  const secret = env.JWT_ACCESS_SECRET || "fallback-secret-at-least-32-chars-long";
-  return crypto.createHmac("sha256", secret).update(tenantId).digest();
+function deriveTenantKey(rootSecret: string, tenantId: string): Buffer {
+  return crypto.createHmac("sha256", rootSecret).update(tenantId).digest();
+}
+
+function getCurrentTenantKey(tenantId: string): Buffer {
+  const rootSecret = env.DM_ENCRYPTION_SECRET ?? env.JWT_ACCESS_SECRET;
+  return deriveTenantKey(rootSecret, tenantId);
+}
+
+function getDecryptionKeys(tenantId: string): Buffer[] {
+  const keys = [getCurrentTenantKey(tenantId)];
+
+  if (env.DM_ENCRYPTION_SECRET && env.DM_ENCRYPTION_SECRET !== env.JWT_ACCESS_SECRET) {
+    keys.push(deriveTenantKey(env.JWT_ACCESS_SECRET, tenantId));
+  }
+
+  return keys;
+}
+
+function decryptWithKey(encryptedData: string, key: Buffer): string {
+  const [ivHex, encryptedHex, authTagHex] = encryptedData.split(":");
+  const iv = Buffer.from(ivHex!, "hex");
+  const authTag = Buffer.from(authTagHex!, "hex");
+  const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
+  decipher.setAuthTag(authTag);
+  let decrypted = decipher.update(encryptedHex!, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
 }
 
 export function encryptMessage(content: string, tenantId: string): string {
-  const key = getTenantKey(tenantId);
+  const key = getCurrentTenantKey(tenantId);
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, key, iv);
   let encrypted = cipher.update(content, "utf8", "hex");
@@ -34,27 +58,22 @@ export function encryptMessage(content: string, tenantId: string): string {
 }
 
 export function decryptMessage(encryptedData: string, tenantId: string): string {
-  try {
-    const parts = encryptedData.split(":");
-    if (parts.length !== 3) {
-      return encryptedData;
-    }
-    const [ivHex, encryptedHex, authTagHex] = parts;
-    const key = getTenantKey(tenantId);
-    const iv = Buffer.from(ivHex, "hex");
-    const authTag = Buffer.from(authTagHex, "hex");
-    const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
-    decipher.setAuthTag(authTag);
-    let decrypted = decipher.update(encryptedHex, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-    return decrypted;
-  } catch (err) {
-    console.error("Failed to decrypt message:", err);
-    return "[Encrypted Message]";
+  const parts = encryptedData.split(":");
+  if (parts.length !== 3) {
+    return encryptedData;
   }
-}
 
-// ─── DM Room Helpers ───
+  for (const key of getDecryptionKeys(tenantId)) {
+    try {
+      return decryptWithKey(encryptedData, key);
+    } catch {
+      // Try the next configured key for legacy ciphertext support.
+    }
+  }
+
+  return "[Encrypted Message]";
+}
+// â”€â”€â”€ DM Room Helpers â”€â”€â”€
 export async function getOrCreateDMRoom(
   tenantId: string,
   participant1Id: string,
@@ -98,7 +117,7 @@ export async function getOrCreateDMRoom(
   return created!;
 }
 
-// ─── Core Message operations ───
+// â”€â”€â”€ Core Message operations â”€â”€â”€
 export async function sendMessage(
   tenantId: string,
   senderId: string,
@@ -314,7 +333,7 @@ export async function getMessages(
   return orderedMessages;
 }
 
-// ─── Pinning ───
+// â”€â”€â”€ Pinning â”€â”€â”€
 export async function pinMessage(
   tenantId: string,
   messageId: string,
@@ -399,7 +418,7 @@ export async function unpinMessage(
   return { success: true };
 }
 
-// ─── Deletion ───
+// â”€â”€â”€ Deletion â”€â”€â”€
 export async function deleteMessage(
   tenantId: string,
   messageId: string,
@@ -444,7 +463,7 @@ export async function deleteMessage(
   return { success: true };
 }
 
-// ─── Read Receipts ───
+// â”€â”€â”€ Read Receipts â”€â”€â”€
 export async function markRoomRead(tenantId: string, roomId: string, userId: string) {
   // Find all messages in this room that do not have a read receipt from this user
   const unreadMessages = await db

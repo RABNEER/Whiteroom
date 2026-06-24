@@ -1,4 +1,4 @@
-// ─── Schemas ───
+// â”€â”€â”€ Schemas â”€â”€â”€
 export { tenants } from "./schema/tenants.js";
 export { users } from "./schema/users.js";
 export { schoolAdmins } from "./schema/school-admins.js";
@@ -21,7 +21,6 @@ export { userTenants } from "./schema/user-tenants.js";
 export { reportsCache } from "./schema/reports-cache.js";
 export { idempotencyKeys } from "./schema/idempotency-keys.js";
 export { registrationTokens } from "./schema/registration-tokens.js";
-export { whatsappSessions } from "./schema/whatsapp-sessions.js";
 export { dmRooms } from "./schema/dm-rooms.js";
 export { messages } from "./schema/messages.js";
 export { messageReceipts } from "./schema/message-receipts.js";
@@ -38,7 +37,7 @@ export { classPromotions } from "./schema/class-promotions.js";
 export { fileUploadSessions } from "./schema/file-upload-sessions.js";
 export { fileUploadChunks } from "./schema/file-upload-chunks.js";
 
-// ─── Utilities ───
+// â”€â”€â”€ Utilities â”€â”€â”€
 export { createId } from "./utils.js";
 
 export {

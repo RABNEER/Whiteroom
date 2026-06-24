@@ -12,10 +12,14 @@ import {
 import { getRazorpayClient } from "../lib/razorpay.js";
 import { Errors } from "@whiteroom/shared";
 
+function paymentContact(phone?: string | null): string {
+  return phone && phone.startsWith("+91") ? phone : "+919999999999";
+}
+
 /**
  * Calculate the dynamic monthly subscription fee for a tenant.
- * Tuition: standard (₹200) or premium with Walt AI (₹400).
- * School: Min 10 classes, ₹20/class + ₹2/student + ₹400 Walt AI.
+ * Tuition: standard (â‚¹200) or premium with Walt AI (â‚¹400).
+ * School: Min 10 classes, â‚¹20/class + â‚¹2/student + â‚¹400 Walt AI.
  * Returns amount in paise (Rupees * 100).
  */
 export async function calculateSubscriptionFee(
@@ -45,8 +49,8 @@ export async function calculateSubscriptionFee(
   const totalStudents = studentCountResult?.value ?? 0;
 
   const classesCharge = 0; // Class base fee removed in new pricing model
-  const studentsCharge = totalStudents * 5 * 100; // ₹5/student in paise
-  const waltCharge = waltAiEnabled ? 40000 : 0; // ₹400 in paise
+  const studentsCharge = totalStudents * 5 * 100; // â‚¹5/student in paise
+  const waltCharge = waltAiEnabled ? 40000 : 0; // â‚¹400 in paise
 
   const totalAmount = studentsCharge + waltCharge;
 
@@ -92,7 +96,7 @@ export async function createBillingOrder(
       description: `Whiteroom Subscription - ${planType === "school" ? "School Plan" : "Tuition Plan"}${waltAiEnabled ? " + Walt AI" : ""}`,
       customer: {
         name: tenant?.name || "Whiteroom School Admin",
-        contact: tenant?.phone || "+919999999999",
+        contact: paymentContact(tenant?.phone),
       },
       notify: {
         sms: false,

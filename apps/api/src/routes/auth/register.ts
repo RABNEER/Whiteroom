@@ -58,7 +58,6 @@ export async function registerHandler(c: Context) {
   const parsed = registerSchema.safeParse(body);
 
   if (!parsed.success) {
-    console.error("❌ [REGISTER VALIDATION FAILED] body:", body, "errors:", parsed.error.format());
     throw Errors.validation("Invalid request body", {
       issues: parsed.error.flatten().fieldErrors,
     });
@@ -79,7 +78,7 @@ export async function registerHandler(c: Context) {
     throw Errors.validation("Consent is required to complete registration.");
   }
 
-  // ─── 1. Retrieve Registration Token ───
+  // â”€â”€â”€ 1. Retrieve Registration Token â”€â”€â”€
   const [tokenRecord] = await db
     .select()
     .from(registrationTokens)
@@ -90,7 +89,7 @@ export async function registerHandler(c: Context) {
     throw Errors.notFound("Registration token");
   }
 
-  // ─── 2. Enforce Token Status & Expiry ───
+  // â”€â”€â”€ 2. Enforce Token Status & Expiry â”€â”€â”€
   if (tokenRecord.expiresAt < new Date()) {
     throw new AppError(
       ErrorCode.OTP_EXPIRED,
@@ -107,7 +106,7 @@ export async function registerHandler(c: Context) {
     );
   }
 
-  // ─── 3. Enforce Rate Limiting (Max 5 attempts/hour) ───
+  // â”€â”€â”€ 3. Enforce Rate Limiting (Max 5 attempts/hour) â”€â”€â”€
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   const [attemptCount] = await db
     .select({ total: count() })
@@ -123,11 +122,16 @@ export async function registerHandler(c: Context) {
     throw Errors.rateLimited("Too many registration attempts. Please try again in an hour.");
   }
 
-  const phone = tokenRecord.phone;
+  const phoneLookup = tokenRecord.phone.startsWith("+91")
+    ? hashSHA256(tokenRecord.phone)
+    : tokenRecord.phone;
+  const tenantContactPhone = tokenRecord.phone.startsWith("+91")
+    ? tokenRecord.phone
+    : phoneLookup;
   let userId: string;
   let tenantId: string;
 
-  // ─── 4. Execute Registration Transaction ───
+  // â”€â”€â”€ 4. Execute Registration Transaction â”€â”€â”€
   const txnResult = await db.transaction(async (tx) => {
     // a. Mark registration token as used immediately to block replay attempts
     await tx
@@ -136,7 +140,7 @@ export async function registerHandler(c: Context) {
       .where(eq(registrationTokens.id, registrationToken));
 
     if (role === UserRole.SCHOOL_ADMIN) {
-      // ─── School Admin Signup ───
+      // â”€â”€â”€ School Admin Signup â”€â”€â”€
       const tName = schoolName || `My Institution`;
       const generatedInvite = generateInviteCode();
       const slug = slugify(tName) + "-" + generatedInvite.toLowerCase();
@@ -147,7 +151,7 @@ export async function registerHandler(c: Context) {
           name: tName,
           slug,
           inviteCode: generatedInvite,
-          phone,
+          phone: tenantContactPhone,
           brandColor: "#4F46E5",
         })
         .returning();
@@ -155,7 +159,7 @@ export async function registerHandler(c: Context) {
       const [newUser] = await tx
         .insert(users)
         .values({
-          phone,
+          phone: phoneLookup,
           role: UserRole.SCHOOL_ADMIN,
           tenantId: newTenant!.id,
         })
@@ -186,7 +190,7 @@ export async function registerHandler(c: Context) {
 
       return { user: newUser!, tenantId: newTenant!.id };
     } else if (role === UserRole.TEACHER) {
-      // ─── Teacher Signup (Joins existing Tenant) ───
+      // â”€â”€â”€ Teacher Signup (Joins existing Tenant) â”€â”€â”€
       if (!inviteCode) {
         throw Errors.validation("Invite code is required for teacher registration.");
       }
@@ -204,7 +208,7 @@ export async function registerHandler(c: Context) {
       const [newUser] = await tx
         .insert(users)
         .values({
-          phone,
+          phone: phoneLookup,
           role: UserRole.TEACHER,
           tenantId: tenant.id,
         })
@@ -234,7 +238,7 @@ export async function registerHandler(c: Context) {
 
       return { user: newUser!, tenantId: tenant.id };
     } else {
-      // ─── Parent Signup ───
+      // â”€â”€â”€ Parent Signup â”€â”€â”€
       if (!inviteCode) {
         throw Errors.validation("Invite code is required for parent registration.");
       }
@@ -252,7 +256,7 @@ export async function registerHandler(c: Context) {
       const [newUser] = await tx
         .insert(users)
         .values({
-          phone,
+          phone: phoneLookup,
           role: UserRole.PARENT,
           tenantId: tenant.id,
         })
@@ -289,7 +293,7 @@ export async function registerHandler(c: Context) {
   userId = txnResult.user.id;
   tenantId = txnResult.tenantId;
 
-  // ─── 5. Resolve Tenant Payload & Sign JWTs ───
+  // â”€â”€â”€ 5. Resolve Tenant Payload & Sign JWTs â”€â”€â”€
   const userTenantRecords = await db
     .select({
       tenantId: userTenants.tenantId,
