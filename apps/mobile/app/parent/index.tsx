@@ -10,6 +10,7 @@ import {
   FlatList,
   TextInput,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -917,8 +918,16 @@ function ProfileLink({ icon: Icon, label, last }: { icon: LucideIcon; label: str
 
 // ─── Chats Tab Component ───────────────────────────────────────────────────────
 
+type ChatFilter = 'ALL' | 'UNREAD' | 'GROUPS' | 'PERSONAL';
+
 function ChatsTab() {
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<ChatFilter>('ALL');
+  const [pinnedRoomIds, setPinnedRoomIds] = useState<string[]>([]);
+  const [selectedRoom, setSelectedRoom] = useState<any | null>(null);
+  const [roomDrafts, setRoomDrafts] = useState<Record<string, string>>({
+    "room-1": "Make sure to bring notes tomorrow...",
+  });
 
   // Fetch Rooms
   const { data: rooms = [], isLoading, isRefetching, refetch } = useQuery({
@@ -927,15 +936,38 @@ function ChatsTab() {
     refetchInterval: 10000, // Auto-poll every 10 seconds for new messages
   });
 
+  const sortedRooms = useMemo(() => {
+    return [...rooms].sort((a, b) => {
+      const aPinned = pinnedRoomIds.includes(a.id);
+      const bPinned = pinnedRoomIds.includes(b.id);
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+  }, [rooms, pinnedRoomIds]);
+
   const filteredRooms = useMemo(() => {
-    if (!search.trim()) return rooms;
-    const query = search.toLowerCase();
-    return rooms.filter(
-      (room) =>
-        room.name.toLowerCase().includes(query) ||
-        room.subtitle.toLowerCase().includes(query)
-    );
-  }, [rooms, search]);
+    let list = sortedRooms;
+
+    if (search.trim()) {
+      const query = search.toLowerCase();
+      list = list.filter(
+        (room) =>
+          room.name.toLowerCase().includes(query) ||
+          room.subtitle.toLowerCase().includes(query)
+      );
+    }
+
+    if (filter === 'UNREAD') {
+      list = list.filter((room) => room.unreadCount > 0);
+    } else if (filter === 'GROUPS') {
+      list = list.filter((room) => room.type === 'classroom' || room.type === 'teacher_channel');
+    } else if (filter === 'PERSONAL') {
+      list = list.filter((room) => room.type === 'direct_message');
+    }
+
+    return list;
+  }, [sortedRooms, search, filter]);
 
   const formatTime = (dateStr: string | Date) => {
     try {
@@ -950,10 +982,19 @@ function ChatsTab() {
     }
   };
 
+  const togglePinRoom = (roomId: string) => {
+    setPinnedRoomIds((prev) =>
+      prev.includes(roomId) ? prev.filter((id) => id !== roomId) : [...prev, roomId]
+    );
+    setSelectedRoom(null);
+  };
+
   const renderRoomItem = ({ item }: { item: any }) => {
     const isDM = item.type === "direct_message";
     const isStaff = item.type === "teacher_channel";
     const isAnnouncement = item.type === "classroom" && item.chatMode === "announcement";
+    const draftText = roomDrafts[item.id];
+    const isPinned = pinnedRoomIds.includes(item.id);
 
     // Room Icon / Theme Color
     let IconComponent = MessageSquare;
@@ -979,6 +1020,7 @@ function ChatsTab() {
             )}&chatMode=${item.chatMode || ""}` as any
           );
         }}
+        onLongPress={() => setSelectedRoom(item)}
         style={({ pressed }) => [
           chatStyles.roomItem,
           pressed && chatStyles.roomItemPressed,
@@ -993,15 +1035,26 @@ function ChatsTab() {
 
         <View style={chatStyles.roomContent}>
           <View style={chatStyles.roomHeader}>
-            <Text style={chatStyles.roomName} numberOfLines={1}>
-              {item.name}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: spacing.sm }}>
+              {isPinned && (
+                <Text style={{ marginRight: 4, fontSize: 14 }}>📌</Text>
+              )}
+              <Text style={chatStyles.roomName} numberOfLines={1}>
+                {item.name}
+              </Text>
+            </View>
             <Text style={chatStyles.roomTime}>{formatTime(item.updatedAt)}</Text>
           </View>
 
           <View style={chatStyles.roomFooter}>
-            <Text style={chatStyles.roomSubtitle} numberOfLines={1}>
-              {item.subtitle}
+            <Text
+              style={[
+                chatStyles.roomSubtitle,
+                draftText && { color: "#22C55E", fontWeight: "600" }
+              ]}
+              numberOfLines={1}
+            >
+              {draftText ? `Draft: ${draftText}` : item.subtitle}
             </Text>
             {item.unreadCount > 0 && (
               <View style={chatStyles.unreadBadge}>
@@ -1055,6 +1108,31 @@ function ChatsTab() {
         </View>
       </View>
 
+      {/* Filters Row */}
+      <View style={{ height: 48 }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={chatStyles.filtersContainer}
+          contentContainerStyle={chatStyles.filtersContent}
+        >
+          {(['ALL', 'UNREAD', 'GROUPS', 'PERSONAL'] as ChatFilter[]).map((f) => {
+            const active = filter === f;
+            return (
+              <Pressable
+                key={f}
+                style={[chatStyles.filterPill, active && chatStyles.filterPillActive]}
+                onPress={() => setFilter(f)}
+              >
+                <Text style={[chatStyles.filterPillText, active && chatStyles.filterPillTextActive]}>
+                  {f === 'ALL' ? 'All' : f === 'UNREAD' ? 'Unread' : f === 'GROUPS' ? 'Groups' : 'Personal'}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
       {/* Conversations List */}
       {isLoading ? (
         <View style={chatStyles.loadingContainer}>
@@ -1085,6 +1163,36 @@ function ChatsTab() {
           }
         />
       )}
+
+      {/* Long Press Bottom actions sheet modal */}
+      <Modal
+        visible={!!selectedRoom}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedRoom(null)}
+      >
+        <Pressable style={chatStyles.modalOverlay} onPress={() => setSelectedRoom(null)}>
+          <View style={chatStyles.bottomSheetContainer}>
+            <Text style={chatStyles.sheetTitle}>{selectedRoom?.name}</Text>
+            
+            <Pressable
+              style={chatStyles.sheetItem}
+              onPress={() => togglePinRoom(selectedRoom.id)}
+            >
+              <Text style={chatStyles.sheetItemText}>
+                {pinnedRoomIds.includes(selectedRoom?.id) ? "📌 Unpin Conversation" : "📌 Pin Conversation"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={chatStyles.sheetItem}
+              onPress={() => setSelectedRoom(null)}
+            >
+              <Text style={[chatStyles.sheetItemText, { color: colors.danger }]}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1114,6 +1222,41 @@ const chatStyles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: colors.navy,
+  },
+  filtersContainer: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.paper,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    maxHeight: 50,
+  },
+  filtersContent: {
+    gap: 8,
+    paddingRight: spacing.md,
+    alignItems: 'center',
+  },
+  filterPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  filterPillActive: {
+    backgroundColor: `${colors.teal}20`,
+    borderWidth: 1,
+    borderColor: colors.teal,
+  },
+  filterPillText: {
+    fontSize: 13,
+    color: colors.teal,
+    fontWeight: "600",
+  },
+  filterPillTextActive: {
+    color: colors.teal,
+    fontWeight: "700",
   },
   loadingContainer: {
     flex: 1,
@@ -1187,7 +1330,6 @@ const chatStyles = StyleSheet.create({
     fontWeight: "600",
     color: colors.navy,
     flex: 1,
-    marginRight: spacing.sm,
   },
   roomTime: {
     fontSize: 11,
@@ -1238,6 +1380,35 @@ const chatStyles = StyleSheet.create({
   },
   chevron: {
     marginLeft: spacing.sm,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    justifyContent: "flex-end",
+  },
+  bottomSheetContainer: {
+    backgroundColor: colors.paper,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    padding: spacing.md,
+    paddingBottom: spacing.xl,
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.navy,
+    marginBottom: spacing.md,
+    textAlign: "center",
+  },
+  sheetItem: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  sheetItemText: {
+    fontSize: 15,
+    color: colors.navy,
+    fontWeight: "600",
   },
 });
 
