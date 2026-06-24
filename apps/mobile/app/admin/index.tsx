@@ -6,7 +6,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { router } from "expo-router";
 import { colors, spacing, radius, font } from "@/theme/tokens";
-import { LogOut, GraduationCap, CreditCard, MessageSquare, Shield } from "lucide-react-native";
+import { LogOut, GraduationCap, CreditCard, MessageSquare, Shield, BookOpen } from "lucide-react-native";
 
 function showAlert(title: string, message: string) {
   if (Platform.OS === "web") {
@@ -68,6 +68,24 @@ export default function AdminDashboardScreen() {
       </Muted>
 
       <View style={styles.cardContainer}>
+        {/* Classroom Operations Console Card */}
+        <Card style={styles.dashboardCard}>
+          <Pressable
+            onPress={() => router.push("/teacher" as any)}
+            style={({ pressed }) => [styles.cardPressable, pressed && { opacity: 0.9 }]}
+          >
+            <View style={styles.cardIconContainer}>
+              <BookOpen color={colors.white} size={24} />
+            </View>
+            <View style={styles.cardContent}>
+              <Text style={styles.cardTitle}>Classroom Operations Console</Text>
+              <Text style={styles.cardDescription}>
+                View and manage classrooms, attendance sheets, schedules, and study archives.
+              </Text>
+            </View>
+          </Pressable>
+        </Card>
+
         {/* Class Promotion Flow Card */}
         <Card style={styles.dashboardCard}>
           <Pressable

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,9 @@ import {
   StyleSheet,
   Alert,
   Platform,
+  FlatList,
+  TextInput,
+  RefreshControl,
 } from 'react-native';
 
 // Cross-platform alert — Alert.alert silently fails on web/PWA
@@ -30,12 +33,22 @@ import {
   Plus,
   ArrowLeft,
   MessageSquare,
+  Shield,
+  Eye,
+  Check,
+  Award,
+  Calendar,
+  CreditCard,
+  Trash2,
+  Users,
+  Lock,
+  Search,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/api/client';
 import { useSession } from '@/auth/session-store';
-import { colors, spacing } from '@/theme/tokens';
+import { colors, spacing, font, radius } from '@/theme/tokens';
 import { todayIsoDate, formatDateDdmmyyyy } from '@/utils/format';
 import { isOnline, offlineQueue } from '@/utils/offlineQueue';
 import {
@@ -53,13 +66,14 @@ import {
   DisplayTitle,
   Muted,
   IconButton,
+  AvatarBadge,
 } from '@/components/ui';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = 'HOME' | 'CLASSES' | 'ANNOUNCE' | 'PROFILE';
+type Tab = 'HOME' | 'CLASSES' | 'CHAT' | 'PROFILE';
 type DetailView = 'LIST' | 'DETAIL';
-type SubTab = 'Attendance' | 'Students' | 'Schedule' | 'Invite';
+type SubTab = 'Attendance' | 'Students' | 'Schedule' | 'Invite' | 'Notices' | 'Materials';
 type AttendanceStatus = 'present' | 'absent';
 
 // ─── Root Screen ──────────────────────────────────────────────────────────────
@@ -71,6 +85,7 @@ export default function TeacherScreen() {
   const [isCreatingClass, setIsCreatingClass] = useState(false);
 
   const clear = useSession((s) => s.clear);
+  const user = useSession((s) => s.user);
   const qc = useQueryClient();
 
   const tenant = useQuery({ queryKey: ['tenant'], queryFn: api.tenantMe });
@@ -137,7 +152,7 @@ export default function TeacherScreen() {
   const TABS: { value: Tab; label: string; icon: LucideIcon }[] = [
     { value: 'HOME', label: 'Home', icon: Home },
     { value: 'CLASSES', label: 'Classes', icon: BookOpen },
-    { value: 'ANNOUNCE', label: 'Announce', icon: Megaphone },
+    { value: 'CHAT', label: 'Chat', icon: MessageSquare },
     { value: 'PROFILE', label: 'Profile', icon: User },
   ];
 
@@ -149,12 +164,14 @@ export default function TeacherScreen() {
         avatarName={tenantName}
         trailing={
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <View style={{ marginRight: 8 }}>
-              <IconButton
-                icon={MessageSquare}
-                onPress={() => router.push("/chat" as any)}
-              />
-            </View>
+            {user?.role === 'school_admin' && (
+              <View style={{ marginRight: 8 }}>
+                <IconButton
+                  icon={Shield}
+                  onPress={() => router.push("/admin" as any)}
+                />
+              </View>
+            )}
             <IconButton
               icon={LogOut}
               onPress={() => logout.mutate()}
@@ -189,9 +206,8 @@ export default function TeacherScreen() {
             onToggleCreate={(v) => setIsCreatingClass(v)}
           />
         )}
-        {activeTab === 'ANNOUNCE' && (
-          <AnnounceTab />
-        )}
+        {activeTab === 'CHAT' && <ChatsTab />}
+        {/* AnnounceTab removed from root tab navigation */}
         {activeTab === 'PROFILE' && (
           <ProfileTab
             tenantName={tenantName}
@@ -464,6 +480,8 @@ function ClassDetailView({
           { value: 'Students', label: 'Students' },
           { value: 'Schedule', label: 'Schedule' },
           { value: 'Invite', label: 'Invite' },
+          { value: 'Notices', label: 'Notices' },
+          { value: 'Materials', label: 'Materials' },
         ]}
         onChange={(v) => setSubTab(v as SubTab)}
       />
@@ -473,6 +491,8 @@ function ClassDetailView({
         {subTab === 'Students' && <StudentsView classId={cls.id} />}
         {subTab === 'Schedule' && <ScheduleView classId={cls.id} />}
         {subTab === 'Invite' && <InviteView />}
+        {subTab === 'Notices' && <ClassNoticesView classId={cls.id} />}
+        {subTab === 'Materials' && <ClassMaterialsView classId={cls.id} />}
       </ScrollView>
     </View>
   );
@@ -1272,6 +1292,499 @@ function ProfileTab({ tenantName, onLogout }: { tenantName: string; onLogout: ()
     </ScrollView>
   );
 }
+
+// ─── Classroom Notices & Materials Views ────────────────────────────────────────
+
+function ClassNoticesView({ classId }: { classId: string }) {
+  const qc = useQueryClient();
+  const user = useSession((s) => s.user);
+  const [showCreate, setShowCreate] = useState(false);
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [category, setCategory] = useState<'FEES' | 'EXAM' | 'HOLIDAY' | 'GENERAL'>('GENERAL');
+
+  const { data: noticesList = [], isLoading, refetch } = useQuery({
+    queryKey: ['bulletins', classId],
+    queryFn: () => api.getBulletins({ classId }),
+  });
+
+  const post = useMutation({
+    mutationFn: () => api.createBulletin({
+      title: title.trim(),
+      body: body.trim(),
+      category,
+      classId,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bulletins', classId] });
+      setTitle('');
+      setBody('');
+      setCategory('GENERAL');
+      setShowCreate(false);
+    },
+    onError: (err: unknown) => {
+      showAlert('Post Failed', err instanceof ApiError ? err.message : 'Failed to publish notice. Please try again.');
+    },
+  });
+
+  const handleShowReceipts = async (bulletinId: string) => {
+    try {
+      const data = await api.getBulletinReceipts(bulletinId);
+      showAlert(
+        "Notice Seen Receipts",
+        `This notice has been seen by ${data.seenCount} users.\n\nSeen list is visible to school staff and administrators.`
+      );
+    } catch (err) {
+      console.error(err);
+      showAlert("Error", "Unable to fetch read receipts");
+    }
+  };
+
+  const getCategoryColor = (cat: string) => {
+    switch (cat) {
+      case 'FEES': return '#EF4444';
+      case 'EXAM': return '#3B82F6';
+      case 'HOLIDAY': return '#D97706';
+      default: return '#10B981';
+    }
+  };
+
+  const isTeacherOrAdmin = user?.role === 'teacher' || user?.role === 'school_admin';
+
+  return (
+    <View style={{ flex: 1 }}>
+      {isTeacherOrAdmin && (
+        <View style={{ marginBottom: 16 }}>
+          {showCreate ? (
+            <Card style={{ marginBottom: 16 }}>
+              <Text style={s.formTitle}>New Classroom Notice</Text>
+              <Field
+                label="TITLE"
+                placeholder="e.g. Test schedule or fee reminder"
+                value={title}
+                onChangeText={setTitle}
+              />
+              <Field
+                label="MESSAGE"
+                placeholder="Write your announcement here..."
+                value={body}
+                onChangeText={setBody}
+                multiline={true}
+                numberOfLines={4}
+              />
+              <Text style={[s.formLabel, { marginBottom: 8, marginTop: 8 }]}>CATEGORY</Text>
+              <Segmented
+                value={category}
+                options={[
+                  { value: 'GENERAL', label: 'General' },
+                  { value: 'FEES', label: 'Fees' },
+                  { value: 'EXAM', label: 'Exam' },
+                  { value: 'HOLIDAY', label: 'Holiday' },
+                ]}
+                onChange={(v) => setCategory(v as any)}
+              />
+              <View style={[s.formButtons, { marginTop: 16 }]}>
+                <Button variant="ghost" onPress={() => setShowCreate(false)} style={{ flex: 1 }}>
+                  Cancel
+                </Button>
+                <Button
+                  onPress={() => post.mutate()}
+                  disabled={!title.trim() || !body.trim()}
+                  loading={post.isPending}
+                  style={{ flex: 1 }}
+                >
+                  Publish Notice
+                </Button>
+              </View>
+            </Card>
+          ) : (
+            <Pressable accessibilityRole="button" style={[s.newClassButton, { marginBottom: 16 }]} onPress={() => setShowCreate(true)}>
+              <Plus size={16} color={colors.white} />
+              <Text style={s.newClassText}>New Notice</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      {isLoading ? (
+        <ActivityIndicator color={colors.teal} style={{ marginTop: 24 }} />
+      ) : noticesList.length === 0 ? (
+        <View style={[s.card, { alignItems: 'center', padding: 24 }]}>
+          <Text style={{ fontSize: 32, marginBottom: 8 }}>📣</Text>
+          <Text style={{ color: colors.teal, fontSize: 13, textAlign: 'center' }}>
+            No notices published for this classroom yet.
+          </Text>
+        </View>
+      ) : (
+        noticesList.map((notice: any) => (
+          <View key={notice.id} style={[s.card, { marginBottom: 12, borderLeftWidth: 4, borderLeftColor: getCategoryColor(notice.category) }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: getCategoryColor(notice.category) }}>
+                {notice.category}
+              </Text>
+              <Text style={{ fontSize: 11, color: colors.teal }}>
+                {new Date(notice.createdAt).toLocaleDateString()}
+              </Text>
+            </View>
+            <Text style={s.announcementTitle}>{notice.title}</Text>
+            <Text style={s.announcementBody}>{notice.body}</Text>
+            {isTeacherOrAdmin && (
+              <View style={{ borderTopWidth: 1, borderTopColor: '#F1F5F9', marginTop: 12, paddingTop: 8, flexDirection: 'row', justifyContent: 'flex-end' }}>
+                <Pressable onPress={() => handleShowReceipts(notice.id)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={{ color: colors.teal, fontSize: 12, fontWeight: '600' }}>Seen Receipts</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        ))
+      )}
+    </View>
+  );
+}
+
+function ClassMaterialsView({ classId }: { classId: string }) {
+  return (
+    <Card style={{ padding: 16, alignItems: 'center' }}>
+      <BookOpen size={48} color={colors.teal} style={{ marginBottom: 12 }} />
+      <Text style={{ color: colors.navy, fontSize: 16, fontWeight: '700', marginBottom: 4 }}>Study Material Archive</Text>
+      <Text style={{ color: colors.teal, fontSize: 13, textAlign: 'center', marginBottom: 16, lineHeight: 18 }}>
+        Upload and share reference guides, files, and homework worksheets with students and parents.
+      </Text>
+      <Button
+        onPress={() => router.push(`/classes/${classId}/archive` as any)}
+        style={{ alignSelf: 'stretch' }}
+      >
+        Open Archive
+      </Button>
+    </Card>
+  );
+}
+
+// ─── Chats Tab Component ───────────────────────────────────────────────────────
+
+function ChatsTab() {
+  const [search, setSearch] = useState("");
+
+  // Fetch Rooms
+  const { data: rooms = [], isLoading, isRefetching, refetch } = useQuery({
+    queryKey: ["chatRooms"],
+    queryFn: api.chatRooms,
+    refetchInterval: 10000, // Auto-poll every 10 seconds for new messages
+  });
+
+  const filteredRooms = useMemo(() => {
+    if (!search.trim()) return rooms;
+    const query = search.toLowerCase();
+    return rooms.filter(
+      (room) =>
+        room.name.toLowerCase().includes(query) ||
+        room.subtitle.toLowerCase().includes(query)
+    );
+  }, [rooms, search]);
+
+  const formatTime = (dateStr: string | Date) => {
+    try {
+      const d = new Date(dateStr);
+      const now = new Date();
+      if (d.toDateString() === now.toDateString()) {
+        return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      }
+      return d.toLocaleDateString([], { month: "short", day: "numeric" });
+    } catch {
+      return "";
+    }
+  };
+
+  const renderRoomItem = ({ item }: { item: any }) => {
+    const isDM = item.type === "direct_message";
+    const isStaff = item.type === "teacher_channel";
+    const isAnnouncement = item.type === "classroom" && item.chatMode === "announcement";
+
+    // Room Icon / Theme Color
+    let IconComponent = MessageSquare;
+    let iconColor: string = colors.teal;
+
+    if (isStaff) {
+      IconComponent = Lock;
+      iconColor = "#B45309"; // Muted Amber
+    } else if (isAnnouncement) {
+      IconComponent = Megaphone;
+      iconColor = colors.navy;
+    } else if (item.type === "classroom") {
+      IconComponent = Users;
+      iconColor = colors.sky;
+    }
+
+    return (
+      <Pressable
+        onPress={() => {
+          router.push(
+            `/chat/${item.id}?roomType=${item.type}&name=${encodeURIComponent(
+              item.name
+            )}&chatMode=${item.chatMode || ""}` as any
+          );
+        }}
+        style={({ pressed }) => [
+          chatStyles.roomItem,
+          pressed && chatStyles.roomItemPressed,
+        ]}
+      >
+        <View style={chatStyles.avatarContainer}>
+          <AvatarBadge label={item.name} />
+          <View style={[chatStyles.typeBadge, { backgroundColor: iconColor }]}>
+            <IconComponent color={colors.white} size={10} />
+          </View>
+        </View>
+
+        <View style={chatStyles.roomContent}>
+          <View style={chatStyles.roomHeader}>
+            <Text style={chatStyles.roomName} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <Text style={chatStyles.roomTime}>{formatTime(item.updatedAt)}</Text>
+          </View>
+
+          <View style={chatStyles.roomFooter}>
+            <Text style={chatStyles.roomSubtitle} numberOfLines={1}>
+              {item.subtitle}
+            </Text>
+            {item.unreadCount > 0 && (
+              <View style={chatStyles.unreadBadge}>
+                <Text style={chatStyles.unreadText}>{item.unreadCount}</Text>
+              </View>
+            )}
+          </View>
+          
+          <View style={chatStyles.tagRow}>
+            {isAnnouncement && (
+              <View style={chatStyles.noticeTag}>
+                <Megaphone size={10} color={colors.navy} style={{ marginRight: 2 }} />
+                <Text style={chatStyles.noticeTagText}>Notice Board</Text>
+              </View>
+            )}
+            {isStaff && (
+              <View style={[chatStyles.noticeTag, { backgroundColor: "#FEF3C7" }]}>
+                <Lock size={10} color="#B45309" style={{ marginRight: 2 }} />
+                <Text style={[chatStyles.noticeTagText, { color: "#B45309" }]}>Staff Only</Text>
+              </View>
+            )}
+            {isDM && (
+              <View style={[chatStyles.noticeTag, { backgroundColor: `${colors.teal}12` }]}>
+                <MessageSquare size={10} color={colors.teal} style={{ marginRight: 2 }} />
+                <Text style={[chatStyles.noticeTagText, { color: colors.teal }]}>
+                  {item.otherParticipant?.role === "teacher" ? "Teacher DM" : "Parent DM"}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+        
+        <ChevronRight size={16} color={colors.teal} style={chatStyles.chevron} />
+      </Pressable>
+    );
+  };
+
+  return (
+    <View style={chatStyles.container}>
+      {/* Search Bar */}
+      <View style={chatStyles.searchContainer}>
+        <View style={chatStyles.searchBar}>
+          <Search color={colors.teal} size={18} style={chatStyles.searchIcon} />
+          <TextInput
+            placeholder="Search conversations..."
+            placeholderTextColor={colors.teal}
+            value={search}
+            onChangeText={setSearch}
+            style={chatStyles.searchInput}
+          />
+        </View>
+      </View>
+
+      {/* Conversations List */}
+      {isLoading ? (
+        <View style={chatStyles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.navy} />
+          <Text style={chatStyles.loadingText}>Loading conversations...</Text>
+        </View>
+      ) : filteredRooms.length === 0 ? (
+        <View style={chatStyles.emptyContainer}>
+          <MessageSquare size={48} color={colors.teal} style={{ marginBottom: 12 }} />
+          <Text style={chatStyles.emptyTitle}>No chats found</Text>
+          <Text style={chatStyles.emptyDesc}>
+            {search ? "Try adjusting your search query." : "No active classroom chats or direct messages."}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredRooms}
+          keyExtractor={(item) => item.id}
+          renderItem={renderRoomItem}
+          contentContainerStyle={chatStyles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching}
+              onRefresh={refetch}
+              colors={[colors.navy]}
+              tintColor={colors.navy}
+            />
+          }
+        />
+      )}
+    </View>
+  );
+}
+
+const chatStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.paper,
+  },
+  searchContainer: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.paper,
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    height: 44,
+  },
+  searchIcon: {
+    marginRight: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.navy,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: 14,
+    color: colors.teal,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xl,
+    paddingVertical: 80,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: colors.navy,
+    marginBottom: 4,
+  },
+  emptyDesc: {
+    fontSize: 14,
+    color: colors.teal,
+    textAlign: "center",
+  },
+  listContent: {
+    paddingBottom: 110,
+  },
+  roomItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  roomItemPressed: {
+    backgroundColor: "#F8FAFC",
+  },
+  avatarContainer: {
+    position: "relative",
+  },
+  typeBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    borderRadius: 8,
+    width: 16,
+    height: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: colors.paper,
+  },
+  roomContent: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  roomHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  roomName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.navy,
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  roomTime: {
+    fontSize: 11,
+    color: colors.teal,
+  },
+  roomFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  roomSubtitle: {
+    fontSize: 13,
+    color: colors.teal,
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  unreadBadge: {
+    backgroundColor: colors.teal,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 5,
+  },
+  unreadText: {
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  tagRow: {
+    flexDirection: "row",
+    marginTop: 6,
+  },
+  noticeTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: `${colors.navy}08`,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  noticeTagText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: colors.navy,
+  },
+  chevron: {
+    marginLeft: spacing.sm,
+  },
+});
 
 // ─── StyleSheet ───────────────────────────────────────────────────────────────
 

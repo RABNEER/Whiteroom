@@ -506,6 +506,11 @@ export const api = {
     }),
   getBulletinReceipts: (bulletinId: string): Promise<any> =>
     request<any>(`/bulletins/${bulletinId}/receipts`),
+  createBulletin: (payload: { title: string; body: string; category: string; classId?: string }): Promise<any> =>
+    request<any>("/bulletins", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 
   // ─── Class Promotions ───
   promoteAll: (payload: {

@@ -153,26 +153,18 @@ export async function otpVerifyHandler(c: Context) {
       }
 
       // ─── Find Matching OTP ───
-      let otpRecord: { id: string } | null | undefined = null;
-      const isDevBypass = env.ENABLE_DEV_BYPASS === "true" && parsed.data.otp === "000000";
-
-      if (isDevBypass) {
-        otpRecord = { id: "dev-bypass" };
-      } else {
-        const [fetched] = await tx
-          .select({ id: otpAttempts.id })
-          .from(otpAttempts)
-          .where(
-            and(
-              eq(otpAttempts.phoneHash, phoneHash),
-              eq(otpAttempts.otp, otpHash),
-              eq(otpAttempts.verified, false),
-              gte(otpAttempts.expiresAt, now)
-            )
+      const [otpRecord] = await tx
+        .select({ id: otpAttempts.id })
+        .from(otpAttempts)
+        .where(
+          and(
+            eq(otpAttempts.phoneHash, phoneHash),
+            eq(otpAttempts.otp, otpHash),
+            eq(otpAttempts.verified, false),
+            gte(otpAttempts.expiresAt, now)
           )
-          .limit(1);
-        otpRecord = fetched;
-      }
+        )
+        .limit(1);
 
       if (!otpRecord) {
         // Increment attempts on wrong OTP
@@ -253,12 +245,10 @@ export async function otpVerifyHandler(c: Context) {
       }
 
       // ─── Mark OTP as Verified ───
-      if (!isDevBypass) {
-        await tx
-          .update(otpAttempts)
-          .set({ verified: true })
-          .where(eq(otpAttempts.id, otpRecord.id));
-      }
+      await tx
+        .update(otpAttempts)
+        .set({ verified: true })
+        .where(eq(otpAttempts.id, otpRecord.id));
     });
   }
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -7,6 +7,9 @@ import {
   StyleSheet,
   Text,
   View,
+  FlatList,
+  TextInput,
+  RefreshControl,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,12 +26,15 @@ import {
   Shield,
   User,
   MessageSquare,
+  Users,
+  Lock,
+  Search,
   type LucideIcon,
 } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, ApiError } from '@/api/client';
 import { useSession } from '@/auth/session-store';
-import { colors } from '@/theme/tokens';
+import { colors, spacing, font, radius } from '@/theme/tokens';
 import { formatDate } from '@/utils/format';
 import {
   AppHeader,
@@ -50,7 +56,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ParentTab = 'FEED' | 'ATTEND' | 'CLASSES' | 'PROFILE';
+type ParentTab = 'ATTEND' | 'CLASSES' | 'CHAT' | 'PROFILE';
 type ViewState = 'LIST' | 'ATTEND_DETAIL' | 'CLASS_DETAIL';
 
 interface ChildItem {
@@ -61,16 +67,16 @@ interface ChildItem {
 }
 
 const TABS: { value: ParentTab; label: string; icon: LucideIcon }[] = [
-  { value: 'FEED', label: 'Feed', icon: Megaphone },
   { value: 'ATTEND', label: 'Attend', icon: CalendarCheck },
   { value: 'CLASSES', label: 'Classes', icon: BookOpen },
+  { value: 'CHAT', label: 'Chat', icon: MessageSquare },
   { value: 'PROFILE', label: 'Profile', icon: User },
 ];
 
 // ─── Root Screen ──────────────────────────────────────────────────────────────
 
 export default function ParentScreen() {
-  const [activeTab, setActiveTab] = useState<ParentTab>('FEED');
+  const [activeTab, setActiveTab] = useState<ParentTab>('CLASSES');
   const [viewState, setViewState] = useState<ViewState>('LIST');
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
@@ -165,9 +171,6 @@ export default function ParentScreen() {
         onAvatarPress={() => setIsSiblingDrawerOpen(true)}
         trailing={
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <View style={{ marginRight: 8 }}>
-              <IconButton icon={MessageSquare} onPress={() => router.push("/chat" as any)} />
-            </View>
             <IconButton icon={LogOut} onPress={() => {
               Alert.alert('Log Out', 'Are you sure you want to log out?', [
                 { text: 'Cancel', style: 'cancel' },
@@ -180,9 +183,7 @@ export default function ParentScreen() {
 
       {/* ── Content ────────────────────────────────────────────────── */}
       <View style={{ flex: 1 }}>
-        {activeTab === 'FEED' && (
-          <FeedTab selectedChild={selectedChild} tenantName={tenantName} />
-        )}
+        {/* FeedTab removed from root tab navigation */}
 
         {activeTab === 'ATTEND' && viewState === 'LIST' && (
           <AttendTab
@@ -215,6 +216,8 @@ export default function ParentScreen() {
             onBack={() => setViewState('LIST')}
           />
         )}
+
+        {activeTab === 'CHAT' && <ChatsTab />}
 
         {activeTab === 'PROFILE' && (
           <ProfileTab
@@ -618,7 +621,7 @@ function ChildClassDetail({
   className: string | null;
   onBack: () => void;
 }) {
-  const [subTab, setSubTab] = useState<'attendance' | 'info'>('attendance');
+  const [subTab, setSubTab] = useState<'attendance' | 'info' | 'notices' | 'materials'>('attendance');
 
   const attendance = useQuery({
     queryKey: ['parentChildAttendance', selectedChild?.id, classId],
@@ -649,8 +652,10 @@ function ChildClassDetail({
         options={[
           { value: 'attendance', label: 'Attendance' },
           { value: 'info', label: 'Info' },
+          { value: 'notices', label: 'Notices' },
+          { value: 'materials', label: 'Materials' },
         ]}
-        onChange={(v) => setSubTab(v as 'attendance' | 'info')}
+        onChange={(v) => setSubTab(v as any)}
       />
 
       {subTab === 'attendance' && (
@@ -712,7 +717,99 @@ function ChildClassDetail({
           </View>
         </View>
       )}
+
+      {subTab === 'notices' && (
+        <ChildNoticesView classId={classId!} />
+      )}
+
+      {subTab === 'materials' && (
+        <ChildMaterialsView classId={classId!} />
+      )}
     </ScrollView>
+  );
+}
+
+// ─── Classroom Notices & Materials Views ────────────────────────────────────────
+
+function ChildNoticesView({ classId }: { classId: string }) {
+  const qc = useQueryClient();
+  const { data: bulletinsList = [], isLoading } = useQuery({
+    queryKey: ["bulletins", classId],
+    queryFn: () => api.getBulletins({ classId }),
+    enabled: !!classId,
+  });
+
+  const readMutation = useMutation({
+    mutationFn: (bulletinId: string) => api.markBulletinRead(bulletinId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["bulletins", classId] });
+    },
+  });
+
+  const getCategoryColor = (cat: string) => {
+    switch (cat) {
+      case 'FEES': return '#EF4444';
+      case 'EXAM': return '#3B82F6';
+      case 'HOLIDAY': return '#D97706';
+      default: return '#10B981';
+    }
+  };
+
+  return (
+    <View style={{ marginTop: 16 }}>
+      {isLoading ? (
+        <ActivityIndicator color={colors.teal} style={{ marginTop: 24 }} />
+      ) : bulletinsList.length === 0 ? (
+        <Card style={{ alignItems: 'center', paddingVertical: 24 }}>
+          <Text style={{ color: colors.teal, fontSize: 13 }}>No notices for this class.</Text>
+        </Card>
+      ) : (
+        bulletinsList.map((notice: any) => (
+          <View key={notice.id} style={[s.classCard, { flexDirection: 'column', alignItems: 'stretch', gap: 6, borderLeftWidth: 4, borderLeftColor: getCategoryColor(notice.category) }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: getCategoryColor(notice.category) }}>
+                {notice.category}
+              </Text>
+              <Text style={{ fontSize: 11, color: colors.teal }}>
+                {new Date(notice.createdAt).toLocaleDateString()}
+              </Text>
+            </View>
+            <Text style={{ color: colors.navy, fontSize: 15, fontWeight: '700' }}>{notice.title}</Text>
+            <Text style={{ color: colors.teal, fontSize: 13, lineHeight: 18 }}>{notice.body}</Text>
+            <View style={{ borderTopWidth: 1, borderTopColor: '#F1F5F9', marginTop: 8, paddingTop: 8, flexDirection: 'row', justifyContent: 'flex-start' }}>
+              {!notice.isRead ? (
+                <Pressable
+                  onPress={() => readMutation.mutate(notice.id)}
+                  style={{ backgroundColor: colors.teal, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, flexDirection: 'row', alignItems: 'center' }}
+                >
+                  <Text style={{ color: colors.white, fontSize: 11, fontWeight: '600' }}>Mark Read</Text>
+                </Pressable>
+              ) : (
+                <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '600' }}>✓ Seen</Text>
+              )}
+            </View>
+          </View>
+        ))
+      )}
+    </View>
+  );
+}
+
+function ChildMaterialsView({ classId }: { classId: string }) {
+  return (
+    <Card style={{ padding: 16, alignItems: 'center', marginTop: 16 }}>
+      <BookOpen size={48} color={colors.teal} style={{ marginBottom: 12 }} />
+      <Text style={{ color: colors.navy, fontSize: 16, fontWeight: '700', marginBottom: 4 }}>Study Material Archive</Text>
+      <Text style={{ color: colors.teal, fontSize: 13, textAlign: 'center', marginBottom: 16, lineHeight: 18 }}>
+        Access reference guides, files, worksheets, and study notes shared by the classroom teacher.
+      </Text>
+      <Button
+        onPress={() => router.push(`/classes/${classId}/archive` as any)}
+        style={{ alignSelf: 'stretch' }}
+      >
+        Open Study Archive
+      </Button>
+    </Card>
   );
 }
 
@@ -817,6 +914,332 @@ function ProfileLink({ icon: Icon, label, last }: { icon: LucideIcon; label: str
     </Pressable>
   );
 }
+
+// ─── Chats Tab Component ───────────────────────────────────────────────────────
+
+function ChatsTab() {
+  const [search, setSearch] = useState("");
+
+  // Fetch Rooms
+  const { data: rooms = [], isLoading, isRefetching, refetch } = useQuery({
+    queryKey: ["chatRooms"],
+    queryFn: api.chatRooms,
+    refetchInterval: 10000, // Auto-poll every 10 seconds for new messages
+  });
+
+  const filteredRooms = useMemo(() => {
+    if (!search.trim()) return rooms;
+    const query = search.toLowerCase();
+    return rooms.filter(
+      (room) =>
+        room.name.toLowerCase().includes(query) ||
+        room.subtitle.toLowerCase().includes(query)
+    );
+  }, [rooms, search]);
+
+  const formatTime = (dateStr: string | Date) => {
+    try {
+      const d = new Date(dateStr);
+      const now = new Date();
+      if (d.toDateString() === now.toDateString()) {
+        return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      }
+      return d.toLocaleDateString([], { month: "short", day: "numeric" });
+    } catch {
+      return "";
+    }
+  };
+
+  const renderRoomItem = ({ item }: { item: any }) => {
+    const isDM = item.type === "direct_message";
+    const isStaff = item.type === "teacher_channel";
+    const isAnnouncement = item.type === "classroom" && item.chatMode === "announcement";
+
+    // Room Icon / Theme Color
+    let IconComponent = MessageSquare;
+    let iconColor: string = colors.teal;
+
+    if (isStaff) {
+      IconComponent = Lock;
+      iconColor = "#B45309"; // Muted Amber
+    } else if (isAnnouncement) {
+      IconComponent = Megaphone;
+      iconColor = colors.navy;
+    } else if (item.type === "classroom") {
+      IconComponent = Users;
+      iconColor = colors.sky;
+    }
+
+    return (
+      <Pressable
+        onPress={() => {
+          router.push(
+            `/chat/${item.id}?roomType=${item.type}&name=${encodeURIComponent(
+              item.name
+            )}&chatMode=${item.chatMode || ""}` as any
+          );
+        }}
+        style={({ pressed }) => [
+          chatStyles.roomItem,
+          pressed && chatStyles.roomItemPressed,
+        ]}
+      >
+        <View style={chatStyles.avatarContainer}>
+          <AvatarBadge label={item.name} />
+          <View style={[chatStyles.typeBadge, { backgroundColor: iconColor }]}>
+            <IconComponent color={colors.white} size={10} />
+          </View>
+        </View>
+
+        <View style={chatStyles.roomContent}>
+          <View style={chatStyles.roomHeader}>
+            <Text style={chatStyles.roomName} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <Text style={chatStyles.roomTime}>{formatTime(item.updatedAt)}</Text>
+          </View>
+
+          <View style={chatStyles.roomFooter}>
+            <Text style={chatStyles.roomSubtitle} numberOfLines={1}>
+              {item.subtitle}
+            </Text>
+            {item.unreadCount > 0 && (
+              <View style={chatStyles.unreadBadge}>
+                <Text style={chatStyles.unreadText}>{item.unreadCount}</Text>
+              </View>
+            )}
+          </View>
+          
+          <View style={chatStyles.tagRow}>
+            {isAnnouncement && (
+              <View style={chatStyles.noticeTag}>
+                <Megaphone size={10} color={colors.navy} style={{ marginRight: 2 }} />
+                <Text style={chatStyles.noticeTagText}>Notice Board</Text>
+              </View>
+            )}
+            {isStaff && (
+              <View style={[chatStyles.noticeTag, { backgroundColor: "#FEF3C7" }]}>
+                <Lock size={10} color="#B45309" style={{ marginRight: 2 }} />
+                <Text style={[chatStyles.noticeTagText, { color: "#B45309" }]}>Staff Only</Text>
+              </View>
+            )}
+            {isDM && (
+              <View style={[chatStyles.noticeTag, { backgroundColor: `${colors.teal}12` }]}>
+                <MessageSquare size={10} color={colors.teal} style={{ marginRight: 2 }} />
+                <Text style={[chatStyles.noticeTagText, { color: colors.teal }]}>
+                  {item.otherParticipant?.role === "teacher" ? "Teacher DM" : "Parent DM"}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+        
+        <ChevronRight size={16} color={colors.teal} style={chatStyles.chevron} />
+      </Pressable>
+    );
+  };
+
+  return (
+    <View style={chatStyles.container}>
+      {/* Search Bar */}
+      <View style={chatStyles.searchContainer}>
+        <View style={chatStyles.searchBar}>
+          <Search color={colors.teal} size={18} style={chatStyles.searchIcon} />
+          <TextInput
+            placeholder="Search conversations..."
+            placeholderTextColor={colors.teal}
+            value={search}
+            onChangeText={setSearch}
+            style={chatStyles.searchInput}
+          />
+        </View>
+      </View>
+
+      {/* Conversations List */}
+      {isLoading ? (
+        <View style={chatStyles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.navy} />
+          <Text style={chatStyles.loadingText}>Loading conversations...</Text>
+        </View>
+      ) : filteredRooms.length === 0 ? (
+        <View style={chatStyles.emptyContainer}>
+          <MessageSquare size={48} color={colors.teal} style={{ marginBottom: 12 }} />
+          <Text style={chatStyles.emptyTitle}>No chats found</Text>
+          <Text style={chatStyles.emptyDesc}>
+            {search ? "Try adjusting your search query." : "No active classroom chats or direct messages."}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredRooms}
+          keyExtractor={(item) => item.id}
+          renderItem={renderRoomItem}
+          contentContainerStyle={chatStyles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching}
+              onRefresh={refetch}
+              colors={[colors.navy]}
+              tintColor={colors.navy}
+            />
+          }
+        />
+      )}
+    </View>
+  );
+}
+
+const chatStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.paper,
+  },
+  searchContainer: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.paper,
+  },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    height: 44,
+  },
+  searchIcon: {
+    marginRight: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.navy,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: 14,
+    color: colors.teal,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xl,
+    paddingVertical: 80,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: colors.navy,
+    marginBottom: 4,
+  },
+  emptyDesc: {
+    fontSize: 14,
+    color: colors.teal,
+    textAlign: "center",
+  },
+  listContent: {
+    paddingBottom: 110,
+  },
+  roomItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  roomItemPressed: {
+    backgroundColor: "#F8FAFC",
+  },
+  avatarContainer: {
+    position: "relative",
+  },
+  typeBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    borderRadius: 8,
+    width: 16,
+    height: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: colors.paper,
+  },
+  roomContent: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  roomHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  roomName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.navy,
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  roomTime: {
+    fontSize: 11,
+    color: colors.teal,
+  },
+  roomFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  roomSubtitle: {
+    fontSize: 13,
+    color: colors.teal,
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  unreadBadge: {
+    backgroundColor: colors.teal,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 5,
+  },
+  unreadText: {
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  tagRow: {
+    flexDirection: "row",
+    marginTop: 6,
+  },
+  noticeTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: `${colors.navy}08`,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  noticeTagText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: colors.navy,
+  },
+  chevron: {
+    marginLeft: spacing.sm,
+  },
+});
 
 // ─── StyleSheet ───────────────────────────────────────────────────────────────
 

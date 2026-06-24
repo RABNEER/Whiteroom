@@ -51,7 +51,7 @@ export async function otpSendHandler(c: Context) {
       )
     );
 
-  if (result && result.total >= Limits.OTP_RATE_LIMIT_PER_HOUR && env.ENABLE_DEV_BYPASS !== "true") {
+  if (result && result.total >= Limits.OTP_RATE_LIMIT_PER_HOUR) {
     throw Errors.rateLimited(
       `OTP limit reached. Try again after ${Math.ceil((60 * 60 * 1000 - (Date.now() - oneHourAgo.getTime())) / 1000 / 60)} minutes.`
     );

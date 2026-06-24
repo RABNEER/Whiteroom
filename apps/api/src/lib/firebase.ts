@@ -50,19 +50,8 @@ export function getFirebaseMessaging() {
 /**
  * Verifies a Firebase client-side ID Token (JWT) cryptographically.
  * Returns the verified phone number.
- * Supports a local offline development bypass ("dev-bypass-[phone]") in development.
  */
 export async function verifyFirebaseIdToken(token: string): Promise<{ phone: string; uid: string }> {
-  // Requires ENABLE_DEV_BYPASS explicitly set to "true"
-  if (
-    env.ENABLE_DEV_BYPASS === "true" &&
-    token.startsWith("dev-bypass-")
-  ) {
-    const phone = token.replace("dev-bypass-", "");
-    console.log(`📱 [FIREBASE DEV BYPASS] Bypassing verification for: ${phone}`);
-    return { phone, uid: `dev-uid-${phone}` };
-  }
-
   const auth = getFirebaseAuth();
   if (!auth) {
     throw new Error("Firebase Admin SDK is not initialized. Please check your environment variables.");

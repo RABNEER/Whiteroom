@@ -13,7 +13,6 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   NODE_ENV: z.enum(["development", "production", "test"]),
   PORT: z.coerce.number().default(3000),
-  ENABLE_DEV_BYPASS: z.string().optional(),
 
   // ─── MSG91 (OTP Provider) ───
   MSG91_API_KEY: z.string().min(1).optional(),
