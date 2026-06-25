@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Image,
-  Linking,
   AppState,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
@@ -102,7 +101,7 @@ export default function AuthScreen() {
     }
   };
 
-  // Splash dot animations (plain state — no reanimated needed)
+  // Splash dot animations (plain state  no reanimated needed)
   const [activeDot, setActiveDot] = useState(0);
 
   useEffect(() => {
@@ -314,19 +313,6 @@ export default function AuthScreen() {
       ]).catch(err => console.error("Failed to save pending WhatsApp session:", err));
 
       setStep('WHATSAPP_POLL');
-
-      const botNumber = process.env.EXPO_PUBLIC_WHATSAPP_BOT_NUMBER || "+919999999999";
-      const cleanBotNumber = botNumber.replace(/\+/g, '');
-      const messageText = `Verify my device: ${session.id}`;
-      const url = `https://wa.me/${cleanBotNumber}?text=${encodeURIComponent(messageText)}`;
-
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        // Fallback if Linking fails (like on some Web / simulator environments)
-        await Linking.openURL(url);
-      }
     } catch (err: any) {
       setError(err instanceof ApiError ? err.message : 'Failed to start WhatsApp verification.');
     } finally {
@@ -335,11 +321,7 @@ export default function AuthScreen() {
   };
 
   const handleReopenWhatsApp = async () => {
-    if (!whatsappSessionId) return;
-    const botNumber = process.env.EXPO_PUBLIC_WHATSAPP_BOT_NUMBER || "+919999999999";
-    const cleanBotNumber = botNumber.replace(/\+/g, '');
-    const url = `https://wa.me/${cleanBotNumber}?text=${encodeURIComponent(`Verify my device: ${whatsappSessionId}`)}`;
-    await Linking.openURL(url);
+    await checkActiveSession();
   };
 
   // Handlers
@@ -394,7 +376,7 @@ export default function AuthScreen() {
     });
   };
 
-  // ─── S1: Splash ──────────────────────────────────────────────────────────────
+  //  S1: Splash 
   if (step === 'SPLASH') {
     return (
       <View style={[styles.container, styles.splashContainer]}>
@@ -402,7 +384,7 @@ export default function AuthScreen() {
           <Image source={LogoImage} style={{ width: 32, height: 32 }} resizeMode="contain" />
         </View>
         <Text style={styles.splashWordmark}>WHITEROOM</Text>
-        <Text style={styles.splashTagline}>SCHOOL · TUITION · COACHING</Text>
+        <Text style={styles.splashTagline}>SCHOOL / TUITION / COACHING</Text>
         <View style={styles.splashDotRow}>
           <View style={[styles.splashDot, { opacity: activeDot === 0 ? 1 : 0.2 }]} />
           <View style={[styles.splashDot, { opacity: activeDot === 1 ? 1 : 0.2 }]} />
@@ -412,7 +394,7 @@ export default function AuthScreen() {
     );
   }
 
-  // ─── S2: Welcome Carousel ────────────────────────────────────────────────────
+  //  S2: Welcome Carousel 
   if (step === 'WELCOME') {
     const slides = [
       {
@@ -482,7 +464,7 @@ export default function AuthScreen() {
     );
   }
 
-  // ─── S3–S6: Form Screens ─────────────────────────────────────────────────────
+  //  S3S6: Form Screens 
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -494,7 +476,7 @@ export default function AuthScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Back button — hidden on Consent */}
+          {/* Back button  hidden on Consent */}
           {step !== 'CONSENT' && (
             <Pressable
               accessibilityRole="button"
@@ -509,7 +491,7 @@ export default function AuthScreen() {
             </Pressable>
           )}
 
-          {/* ─── S3: Phone ─────────────────────────────────────────────────── */}
+          {/*  S3: Phone  */}
           {step === 'PHONE' && (
             <>
               <Text style={styles.eyebrow}>STEP 1 OF 2</Text>
@@ -523,7 +505,7 @@ export default function AuthScreen() {
               </Text>
               <View style={styles.phoneRow}>
                 <View style={styles.countryChip}>
-                  <Text style={styles.chipText}>🇮🇳 +91</Text>
+                  <Text style={styles.chipText}>+91</Text>
                 </View>
                 <TextInput
                   style={styles.phoneInput}
@@ -559,7 +541,7 @@ export default function AuthScreen() {
                 ) : (
                   <>
                     <MessageCircle color="#FFF" size={20} />
-                    <Text style={styles.buttonText}>VERIFY VIA WHATSAPP (1-TAP)</Text>
+                    <Text style={styles.buttonText}>VERIFY PHONE</Text>
                   </>
                 )}
               </Pressable>
@@ -576,7 +558,7 @@ export default function AuthScreen() {
             </>
           )}
 
-          {/* ─── WhatsApp Poll Step ─── */}
+          {/*  WhatsApp Poll Step  */}
           {step === 'WHATSAPP_POLL' && (
             <>
               <View style={styles.whatsappPollCard}>
@@ -585,7 +567,7 @@ export default function AuthScreen() {
                 </View>
                 <Text style={styles.pollTitle}>Verifying your number...</Text>
                 <Text style={styles.pollSub}>
-                  We opened WhatsApp. Send the pre-filled verification code message from your phone.
+                  Keep this screen open while we verify the session.
                 </Text>
                 
                 <View style={styles.codeBanner}>
@@ -601,7 +583,7 @@ export default function AuthScreen() {
                 <View style={styles.pollLoaderRow}>
                   <ActivityIndicator color={colors.navy} size="small" />
                   <Text style={styles.pollLoaderText}>
-                    Waiting for you to send the message...
+                    Checking verification status...
                   </Text>
                 </View>
 
@@ -615,7 +597,7 @@ export default function AuthScreen() {
                   onPress={handleReopenWhatsApp}
                 >
                   <MessageCircle color="#FFF" size={20} />
-                  <Text style={styles.buttonText}>REOPEN WHATSAPP 📱</Text>
+                  <Text style={styles.buttonText}>CHECK AGAIN</Text>
                 </Pressable>
 
                 <Pressable
@@ -637,7 +619,7 @@ export default function AuthScreen() {
 
 
 
-          {/* ─── S5: Consent ───────────────────────────────────────────────── */}
+          {/*  S5: Consent  */}
           {step === 'CONSENT' && (
             <>
               <View style={styles.consentIconBox}>
@@ -716,12 +698,12 @@ export default function AuthScreen() {
                 disabled={!agreed}
                 onPress={() => setStep('ROLE_SELECT')}
               >
-                <Text style={styles.buttonText}>I AGREE & CONTINUE →</Text>
+                <Text style={styles.buttonText}>I AGREE & CONTINUE</Text>
               </Pressable>
             </>
           )}
 
-          {/* ─── S6: Role Select ───────────────────────────────────────────── */}
+          {/*  S6: Role Select  */}
           {step === 'ROLE_SELECT' && (
             <>
               <Text style={styles.eyebrow}>ALMOST THERE</Text>
@@ -860,7 +842,7 @@ export default function AuthScreen() {
                       <Text style={styles.resolvedTenantName}>
                         {resolvedTenant}
                       </Text>
-                      <Text style={styles.resolvedVerified}>✓ Verified School</Text>
+                      <Text style={styles.resolvedVerified}>Verified School</Text>
                     </View>
                   )}
                 </View>
@@ -899,7 +881,7 @@ export default function AuthScreen() {
                       <Text style={styles.resolvedTenantName}>
                         {resolvedTenant}
                       </Text>
-                      <Text style={styles.resolvedVerified}>✓ Verified School</Text>
+                      <Text style={styles.resolvedVerified}>Verified School</Text>
                     </View>
                   )}
 
@@ -950,10 +932,10 @@ export default function AuthScreen() {
                 ) : (
                   <Text style={styles.buttonText}>
                     {selectedRole === 'school_admin'
-                      ? 'CREATE INSTITUTION →'
+                      ? 'CREATE INSTITUTION'
                       : selectedRole === 'teacher'
-                      ? 'CONTINUE AS TEACHER →'
-                      : 'CONTINUE AS PARENT →'}
+                      ? 'CONTINUE AS TEACHER'
+                      : 'CONTINUE AS PARENT'}
                   </Text>
                 )}
               </Pressable>
@@ -966,13 +948,13 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  // ─── Base ──────────────────────────────────────────────────────────────────
+  //  Base 
   container: {
     flex: 1,
     backgroundColor: colors.paper,
   },
 
-  // ─── S1 Splash ─────────────────────────────────────────────────────────────
+  //  S1 Splash 
   splashContainer: {
     backgroundColor: colors.navy,
     justifyContent: 'center',
@@ -1017,7 +999,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sky,
   },
 
-  // ─── S2 Welcome ────────────────────────────────────────────────────────────
+  //  S2 Welcome 
   welcomeTop: {
     flex: 0.55,
     backgroundColor: colors.navy,
@@ -1086,7 +1068,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  // ─── S3–S6 Form Shared ─────────────────────────────────────────────────────
+  //  S3S6 Form Shared 
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 24,
@@ -1154,7 +1136,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // ─── S3 Phone ──────────────────────────────────────────────────────────────
+  //  S3 Phone 
   phoneRow: {
     flexDirection: 'row',
     gap: 8,
@@ -1212,7 +1194,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
 
-  // ─── S4 OTP ────────────────────────────────────────────────────────────────
+  //  S4 OTP 
   otpGrid: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -1287,7 +1269,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
 
-  // ─── S5 Consent ────────────────────────────────────────────────────────────
+  //  S5 Consent 
   consentIconBox: {
     width: 52,
     height: 52,
@@ -1376,7 +1358,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  // ─── S6 Role Select ────────────────────────────────────────────────────────
+  //  S6 Role Select 
   roleCard: {
     backgroundColor: '#FFF',
     borderWidth: 1,
@@ -1469,7 +1451,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
-  // ── DEV bypass hint (only rendered in __DEV__ builds) ──────────────────────
+  //  DEV bypass hint (only rendered in __DEV__ builds) 
   devBypassHint: {
     backgroundColor: '#FFF3CD',
     borderWidth: 1,
@@ -1486,7 +1468,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.3,
   },
-  // ─── WhatsApp verification UI styles ───
+  //  WhatsApp verification UI styles 
   orDivider: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1570,3 +1552,4 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 });
+
