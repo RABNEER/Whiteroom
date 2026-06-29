@@ -1,4 +1,4 @@
-﻿import type { Context } from "hono";
+import type { Context } from "hono";
 import crypto from "node:crypto";
 import { z } from "zod";
 import { db } from "../../lib/db.js";
@@ -43,9 +43,8 @@ export async function whatsappSessionCreateHandler(c: Context) {
     const token = crypto.randomBytes(32).toString("hex");
     const expiresIn = 5 * 60;
     
-    // TEMPORARY FIX: Auto-verify in all environments until WhatsApp bot is implemented
-    // TODO: Remove this once WhatsApp bot webhook is integrated
-    const autoVerify = true; // Was: env.NODE_ENV !== "production"
+    // Real bot verification in production, auto-verify in development
+    const autoVerify = env.NODE_ENV !== "production";
     
     console.log("[WHATSAPP SESSION CREATE] Creating session with auto-verify:", autoVerify);
     

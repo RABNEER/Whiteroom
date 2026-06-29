@@ -394,7 +394,7 @@ export default function App() {
               <span>Users Directory</span>
             </div>
             <a 
-              href="https://supabase.com/dashboard/project/pcioxampulptqaegsqlw" 
+              href="https://supabase.com/dashboard/project/tcjepmsvkrexzvtzuopd" 
               target="_blank" 
               rel="noreferrer" 
               className="nav-link"
