@@ -11,6 +11,7 @@ import {
   ScrollView,
   Image,
   AppState,
+  Linking,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
@@ -311,6 +312,20 @@ export default function AuthScreen() {
         secureStorage.setItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY, session.token),
         secureStorage.setItem(PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY, expiresAt.toString()),
       ]).catch(err => console.error("Failed to save pending WhatsApp session:", err));
+
+      // Redirect to WhatsApp bot
+      const botNumber = process.env.EXPO_PUBLIC_WHATSAPP_BOT_NUMBER || '+917667217247';
+      const cleanBotNumber = botNumber.replace(/\D/g, '');
+      const verificationMessage = `Verify ${session.id}`;
+      const whatsappUrl = `whatsapp://send?phone=${cleanBotNumber}&text=${encodeURIComponent(verificationMessage)}`;
+      const fallbackUrl = `https://wa.me/${cleanBotNumber}?text=${encodeURIComponent(verificationMessage)}`;
+
+      Linking.openURL(whatsappUrl).catch(async (err) => {
+        console.log("[WHATSAPP REDIRECT] Failed to open native app protocol, attempting web fallback:", err);
+        await Linking.openURL(fallbackUrl).catch((webErr) => {
+          console.error("[WHATSAPP REDIRECT] Failed to open fallback link:", webErr);
+        });
+      });
 
       setStep('WHATSAPP_POLL');
     } catch (err: any) {
