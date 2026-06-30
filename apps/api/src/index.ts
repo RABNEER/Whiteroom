@@ -175,3 +175,10 @@ serve({ fetch: app.fetch, port: env.PORT }, (info) => {
 startJobs().catch((err) => {
   console.error("[jobs] Failed to start background workers:", err);
 });
+
+if (env.WHATSAPP_WEBHOOK_SECRET) {
+  console.log("🤖 [WHATSAPP BOT] Starting WhatsApp bot daemon...");
+  import("./services/whatsapp-bot.js").catch((err) => {
+    console.error("💥 [WHATSAPP BOT] Failed to start WhatsApp bot daemon:", err);
+  });
+}

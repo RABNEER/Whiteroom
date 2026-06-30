@@ -11,9 +11,10 @@ const { DisconnectReason, useMultiFileAuthState } = pkg as any;
 config({ path: path.resolve(process.cwd(), ".env") });
 config({ path: path.resolve(process.cwd(), "../../.env") });
 
+const port = process.env.PORT || 3000;
 const webhookUrl =
   process.env.WHATSAPP_WEBHOOK_URL ||
-  "http://localhost:3000/api/v1/auth/whatsapp/webhook";
+  `http://localhost:${port}/api/v1/auth/whatsapp/webhook`;
 const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET;
 
 if (!webhookSecret) {
