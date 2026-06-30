@@ -39,7 +39,6 @@ authRoutes.get("/whatsapp/qr", async (c) => {
     <html>
     <head>
       <title>Whiteroom WhatsApp Pairing</title>
-      <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
       <style>
         body {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -61,7 +60,7 @@ authRoutes.get("/whatsapp/qr", async (c) => {
           flex-direction: column;
           align-items: center;
         }
-        canvas {
+        img {
           margin: 20px 0;
           border: 1px solid #ddd;
           padding: 10px;
@@ -90,35 +89,22 @@ authRoutes.get("/whatsapp/qr", async (c) => {
         <h1>Pair WhatsApp Bot</h1>
         <p>Scan this QR code with WhatsApp Linked Devices to pair the verification bot.</p>
         <div id="loader" class="loading"></div>
-        <canvas id="qr-canvas"></canvas>
+        <img id="qr-image" width="300" height="300" alt="WhatsApp QR Code" />
         <div id="status">Waiting for QR code generation...</div>
       </div>
       <script>
         let currentQr = null;
-        let pendingQr = null;
-        const canvas = document.getElementById('qr-canvas');
+        const img = document.getElementById('qr-image');
         const loader = document.getElementById('loader');
         const statusDiv = document.getElementById('status');
 
         function renderQr(qrData) {
           if (qrData === currentQr) return;
-          if (typeof QRCode === 'undefined') {
-            console.log('QRCode library not loaded yet, queueing...');
-            pendingQr = qrData;
-            return;
-          }
           currentQr = qrData;
           loader.style.display = 'none';
-          canvas.style.display = 'block';
-          
-          QRCode.toCanvas(canvas, qrData, { width: 300 }, function (error) {
-            if (error) {
-              console.error(error);
-              statusDiv.innerText = 'Failed to render QR code';
-            } else {
-              statusDiv.innerText = 'Ready to scan! (Auto-updates in real-time)';
-            }
-          });
+          img.style.display = 'block';
+          img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qrData);
+          statusDiv.innerText = 'Ready to scan! (Auto-updates in real-time)';
         }
 
         async function pollQr() {
@@ -129,7 +115,7 @@ authRoutes.get("/whatsapp/qr", async (c) => {
               renderQr(data.qr);
             } else {
               currentQr = null;
-              canvas.style.display = 'none';
+              img.style.display = 'none';
               loader.style.display = 'block';
               statusDiv.innerText = 'No QR code available. Already connected or starting up...';
             }
@@ -139,14 +125,7 @@ authRoutes.get("/whatsapp/qr", async (c) => {
         }
 
         window.onload = function() {
-          console.log('Library loaded and window ready.');
-          const initialQr = ${JSON.stringify(qr)};
-          if (initialQr) {
-            renderQr(initialQr);
-          } else if (pendingQr) {
-            renderQr(pendingQr);
-          }
-          
+          pollQr();
           // Poll every 2 seconds for updates
           setInterval(pollQr, 2000);
         };
