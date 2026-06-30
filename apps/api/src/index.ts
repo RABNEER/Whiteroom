@@ -37,6 +37,10 @@ import { secureHeaders } from "hono/secure-headers";
 import { startJobs } from "./jobs/index.js";
 import { authMiddleware, requireRole } from "./middleware/auth.js";
 import { UserRole } from "@whiteroom/shared";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { db } from "./lib/db.js";
+import fs from "node:fs";
+import path from "node:path";
 
 const app = new Hono();
 
@@ -160,16 +164,48 @@ app.notFound((c) => {
   );
 });
 
+// ─── Programmatic DB Migrations ───
+async function runDbMigrations() {
+  console.log("⚙️ [DB] Running automatic migrations...");
+  try {
+    const possiblePaths = [
+      path.resolve(process.cwd(), "packages/db/drizzle"),
+      path.resolve(process.cwd(), "../../packages/db/drizzle"),
+      path.resolve(process.cwd(), "../db/drizzle"),
+    ];
+    
+    let migrationsFolder = "";
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        migrationsFolder = p;
+        break;
+      }
+    }
+    
+    if (!migrationsFolder) {
+      throw new Error(`Could not find Drizzle migrations folder in any of the searched paths: ${JSON.stringify(possiblePaths)}`);
+    }
+    
+    console.log(`⚙️ [DB] Applying migrations from folder: ${migrationsFolder}`);
+    await migrate(db, { migrationsFolder });
+    console.log("✅ [DB] Migrations applied successfully programmatically.");
+  } catch (err) {
+    console.error("❌ [DB] Migrations failed:", err);
+  }
+}
+
 // ─── Start Server ───
-serve({ fetch: app.fetch, port: env.PORT }, (info) => {
-  console.log(`
-  ╦ ╦┬ ┬┬┌┬┐┌─┐┬─┐┌─┐┌─┐┌┬┐
-  ║║║├─┤│ │ ├┤ ├┬┘│ ││ ││││
-  ╚╩╝┴ ┴┴ ┴ └─┘┴└─└─┘└─┘┴ ┴
-  API running on port ${info.port}
-  Environment: ${env.NODE_ENV}
-  Routes: /api/v1/auth, /api/v1/tenants, /api/v1/invite, /api/v1/classes, /api/v1/students, /api/v1/schedules, /api/v1/devices, /api/v1/parent, /api/v1/attendance, /api/v1/announcements, /api/v1/payments, /api/v1/reports, /api/v1/admin, /api/v1/chat
-`);
+runDbMigrations().then(() => {
+  serve({ fetch: app.fetch, port: env.PORT }, (info) => {
+    console.log(`
+    ╦ ╦┬ ┬┬┌┬┐┌─┐┬─┐┌─┐┌─┐┌┬┐
+    ║║║├─┤│ │ ├┤ ├┬┘│ ││ ││││
+    ╚╩╝┴ ┴┴ ┴ └─┘┴└─└─┘└─┘┴ ┴
+    API running on port ${info.port}
+    Environment: ${env.NODE_ENV}
+    Routes: /api/v1/auth, /api/v1/tenants, /api/v1/invite, /api/v1/classes, /api/v1/students, /api/v1/schedules, /api/v1/devices, /api/v1/parent, /api/v1/attendance, /api/v1/announcements, /api/v1/payments, /api/v1/reports, /api/v1/admin, /api/v1/chat
+  `);
+  });
 });
 
 startJobs().catch((err) => {
