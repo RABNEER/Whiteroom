@@ -26,15 +26,19 @@ export async function startJobs() {
   const boss = getBoss();
   await boss.start();
 
-  await Promise.all([
-    boss.createQueue("attendance-reminder"),
-    boss.createQueue("attendance-auto-close"),
-    boss.createQueue("absent-follow-up"),
-    boss.createQueue("subscription-expiry"),
-    boss.createQueue("registration-token-cleanup"),
-    boss.createQueue("assemble-file-upload"),
-    boss.createQueue("cleanup-expired-uploads"),
-  ]);
+  const queues = [
+    "attendance-reminder",
+    "attendance-auto-close",
+    "absent-follow-up",
+    "subscription-expiry",
+    "registration-token-cleanup",
+    "assemble-file-upload",
+    "cleanup-expired-uploads",
+  ];
+
+  for (const queue of queues) {
+    await boss.createQueue(queue);
+  }
 
   await Promise.all([
     registerAttendanceReminderWorker(),
