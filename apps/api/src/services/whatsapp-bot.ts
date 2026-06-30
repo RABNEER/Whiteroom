@@ -60,6 +60,8 @@ export async function startBot() {
     printQRInTerminal: false, // We'll print it ourselves using qrcode-terminal with customizable options
   });
 
+  (globalThis as any).whatsappSocket = sock;
+
   // Save credentials when updated
   sock.ev.on("creds.update", saveCreds);
 
