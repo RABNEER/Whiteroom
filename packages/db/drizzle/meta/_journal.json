@@ -85,6 +85,13 @@
       "when": 1782192359528,
       "tag": "0011_colorful_queen_noir",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782805600000,
+      "tag": "0012_add_registration_tokens",
+      "breakpoints": true
     }
   ]
 }

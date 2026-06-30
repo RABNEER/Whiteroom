@@ -165,6 +165,7 @@ app.notFound((c) => {
 });
 
 // ─── Programmatic DB Migrations ───
+// Trigger deployment to apply registration_tokens migration SQL file
 async function runDbMigrations() {
   console.log("⚙️ [DB] Running automatic migrations...");
   try {
