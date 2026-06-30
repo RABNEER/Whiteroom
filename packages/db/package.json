@@ -23,11 +23,11 @@
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.44.1",
     "pg": "^8.21.0",
-    "postgres": "^3.4.7"
+    "postgres": "^3.4.7",
+    "drizzle-kit": "^0.31.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.17",
-    "drizzle-kit": "^0.31.1",
     "typescript": "^5.8.3"
   }
 }
