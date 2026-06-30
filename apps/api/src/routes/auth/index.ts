@@ -95,12 +95,18 @@ authRoutes.get("/whatsapp/qr", async (c) => {
       </div>
       <script>
         let currentQr = null;
+        let pendingQr = null;
         const canvas = document.getElementById('qr-canvas');
         const loader = document.getElementById('loader');
         const statusDiv = document.getElementById('status');
 
         function renderQr(qrData) {
           if (qrData === currentQr) return;
+          if (typeof QRCode === 'undefined') {
+            console.log('QRCode library not loaded yet, queueing...');
+            pendingQr = qrData;
+            return;
+          }
           currentQr = qrData;
           loader.style.display = 'none';
           canvas.style.display = 'block';
@@ -132,14 +138,18 @@ authRoutes.get("/whatsapp/qr", async (c) => {
           }
         }
 
-        // Initial render if pre-loaded
-        const initialQr = ${JSON.stringify(qr)};
-        if (initialQr) {
-          renderQr(initialQr);
-        }
-
-        // Poll every 2 seconds for updates
-        setInterval(pollQr, 2000);
+        window.onload = function() {
+          console.log('Library loaded and window ready.');
+          const initialQr = ${JSON.stringify(qr)};
+          if (initialQr) {
+            renderQr(initialQr);
+          } else if (pendingQr) {
+            renderQr(pendingQr);
+          }
+          
+          // Poll every 2 seconds for updates
+          setInterval(pollQr, 2000);
+        };
       </script>
     </body>
     </html>

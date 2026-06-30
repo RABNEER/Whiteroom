@@ -29,7 +29,13 @@ if (!webhookSecret) {
 
 console.log("🤖 [WHATSAPP BOT] Target Webhook URL:", webhookUrl);
 
-async function startBot() {
+export async function startBot() {
+  if ((globalThis as any).whatsappBotStarted) {
+    console.log("ℹ️ [WHATSAPP BOT] Bot daemon already running, skipping duplicate start.");
+    return;
+  }
+  (globalThis as any).whatsappBotStarted = true;
+
   const authFolder = path.resolve(process.cwd(), "auth_info_baileys");
   console.log("📂 [WHATSAPP BOT] Saving auth state in:", authFolder);
 
