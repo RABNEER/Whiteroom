@@ -1,8 +1,11 @@
 import pkg from "@whiskeysockets/baileys";
 import qrcode from "qrcode-terminal";
 import path from "node:path";
+import fs from "node:fs";
 import { config } from "dotenv";
 import { normalizePhone, hashSHA256 } from "../lib/otp.js";
+import { db } from "../lib/db.js";
+import { sql } from "drizzle-orm";
 
 const makeWASocket = (pkg as any).default || pkg;
 const { DisconnectReason, useMultiFileAuthState } = pkg as any;
@@ -12,9 +15,20 @@ config({ path: path.resolve(process.cwd(), ".env") });
 config({ path: path.resolve(process.cwd(), "../../.env") });
 
 const port = process.env.PORT || 3000;
-const webhookUrl =
+let webhookUrl =
   process.env.WHATSAPP_WEBHOOK_URL ||
   `http://localhost:${port}/api/v1/auth/whatsapp/webhook`;
+
+// If target is localhost, ensure it uses the correct running port
+if (webhookUrl.includes("localhost") || webhookUrl.includes("127.0.0.1")) {
+  try {
+    const urlObj = new URL(webhookUrl);
+    urlObj.port = String(port);
+    webhookUrl = urlObj.toString().replace(/\/$/, "");
+  } catch (err) {
+    console.error("Failed to parse webhookUrl:", err);
+  }
+}
 const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET;
 
 export function getLatestQr(): string | null {
@@ -29,6 +43,94 @@ if (!webhookSecret) {
 
 console.log("🤖 [WHATSAPP BOT] Target Webhook URL:", webhookUrl);
 
+async function ensureDbTable() {
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS whatsapp_bot_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+}
+
+async function syncAuthFilesFromDb(folder: string) {
+  try {
+    await ensureDbTable();
+    const rows = await db.execute(sql`
+      SELECT key, value FROM whatsapp_bot_state;
+    `);
+
+    if (rows && rows.length > 0) {
+      console.log(`📥 [WHATSAPP BOT] Restoring ${rows.length} auth files from PostgreSQL...`);
+      if (!fs.existsSync(folder)) {
+        fs.mkdirSync(folder, { recursive: true });
+      }
+      for (const row of rows) {
+        const filePath = path.join(folder, row.key as string);
+        fs.writeFileSync(filePath, row.value as string, "utf8");
+      }
+      console.log("✅ [WHATSAPP BOT] Auth state restored successfully from database.");
+    } else {
+      console.log("ℹ️ [WHATSAPP BOT] No saved auth state found in database.");
+    }
+  } catch (err) {
+    console.error("❌ [WHATSAPP BOT] Failed to restore auth state from database:", err);
+  }
+}
+
+async function syncAuthFilesToDb(folder: string) {
+  try {
+    if (!fs.existsSync(folder)) return;
+    const files = fs.readdirSync(folder);
+    console.log(`📤 [WHATSAPP BOT] Syncing ${files.length} auth files to PostgreSQL...`);
+    
+    for (const file of files) {
+      const filePath = path.join(folder, file);
+      const stat = fs.statSync(filePath);
+      if (stat.isFile()) {
+        const content = fs.readFileSync(filePath, "utf8");
+        await db.execute(sql`
+          INSERT INTO whatsapp_bot_state (key, value, updated_at)
+          VALUES (${file}, ${content}, NOW())
+          ON CONFLICT (key) DO UPDATE
+          SET value = EXCLUDED.value, updated_at = NOW();
+        `);
+      }
+    }
+    
+    // Clean up deleted files from the database
+    const dbKeys = await db.execute(sql`SELECT key FROM whatsapp_bot_state;`);
+    for (const row of dbKeys) {
+      const key = row.key as string;
+      if (!files.includes(key)) {
+        await db.execute(sql`DELETE FROM whatsapp_bot_state WHERE key = ${key};`);
+      }
+    }
+    console.log("✅ [WHATSAPP BOT] Auth state successfully backed up in database.");
+  } catch (err) {
+    console.error("❌ [WHATSAPP BOT] Failed to sync auth state to database:", err);
+  }
+}
+
+let isWatcherActive = false;
+let syncTimeout: NodeJS.Timeout | null = null;
+
+function setupFolderWatcher(folder: string) {
+  if (isWatcherActive) return;
+  if (!fs.existsSync(folder)) {
+    fs.mkdirSync(folder, { recursive: true });
+  }
+  isWatcherActive = true;
+  console.log("👀 [WHATSAPP BOT] Watching auth state folder for real-time PostgreSQL backup...");
+  
+  fs.watch(folder, (eventType, filename) => {
+    if (syncTimeout) clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(() => {
+      syncAuthFilesToDb(folder);
+    }, 1500); // 1.5 seconds debounce
+  });
+}
+
 export async function startBot(isReconnect = false) {
   if (!isReconnect && (globalThis as any).whatsappBotStarted) {
     console.log("ℹ️ [WHATSAPP BOT] Bot daemon already running, skipping duplicate start.");
@@ -39,9 +141,15 @@ export async function startBot(isReconnect = false) {
   }
 
   const authFolder = path.resolve(process.cwd(), "auth_info_baileys");
-  console.log("📂 [WHATSAPP BOT] Saving auth state in:", authFolder);
+  
+  // Restore files from DB before Baileys initializes
+  await syncAuthFilesFromDb(authFolder);
 
+  console.log("📂 [WHATSAPP BOT] Saving auth state in:", authFolder);
   const { state, saveCreds } = await useMultiFileAuthState(authFolder);
+
+  // Watch for updates to sync files back to DB
+  setupFolderWatcher(authFolder);
 
   // Fetch the latest WhatsApp Web version to prevent 405 Method Not Allowed connection errors
   let version = [2, 3000, 1019707846]; // Default fallback
