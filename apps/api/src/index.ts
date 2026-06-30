@@ -181,4 +181,6 @@ if (env.WHATSAPP_WEBHOOK_SECRET) {
   import("./services/whatsapp-bot.js").catch((err) => {
     console.error("💥 [WHATSAPP BOT] Failed to start WhatsApp bot daemon:", err);
   });
+} else {
+  console.log("⚠️ [WHATSAPP BOT] WHATSAPP_WEBHOOK_SECRET is not configured. WhatsApp bot daemon skipped.");
 }
