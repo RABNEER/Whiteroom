@@ -10,6 +10,7 @@ import type { ApiResponse } from "@whiteroom/shared";
 const webhookSchema = z.object({
   from: z.string().min(10),
   text: z.string().min(1),
+  isLid: z.boolean().optional(),
 });
 
 export async function whatsappWebhookHandler(c: Context) {
@@ -37,7 +38,7 @@ export async function whatsappWebhookHandler(c: Context) {
       });
     }
 
-    const { from, text } = parsed.data;
+    const { from, text, isLid } = parsed.data;
     const match = text.match(/Verify\s+([A-Za-z0-9_-]+)/i);
 
     if (!match) {
@@ -50,29 +51,33 @@ export async function whatsappWebhookHandler(c: Context) {
     const code = match[1];
     const now = new Date();
 
-    const phone = normalizePhone(from);
-    if (!isValidIndianPhone(phone)) {
-      return c.json({
-        success: false,
-        error: "Invalid phone number format. Only Indian numbers (+91) are supported.",
-      }, 400);
+    const queryConditions = [
+      eq(whatsappSessions.id, code),
+      eq(whatsappSessions.verified, false),
+      gte(whatsappSessions.expiresAt, now),
+    ];
+
+    if (isLid) {
+      console.log(`[WHATSAPP WEBHOOK] Verifying session ${code} for LID sender ${from} (bypassing phone hash check).`);
+    } else {
+      const phone = normalizePhone(from);
+      if (!isValidIndianPhone(phone)) {
+        return c.json({
+          success: false,
+          error: "Invalid phone number format. Only Indian numbers (+91) are supported.",
+        }, 400);
+      }
+
+      const phoneHash = hashSHA256(phone);
+      console.log(`[WHATSAPP WEBHOOK] Verifying session ${code} for phone hash: ${phoneHash.substring(0, 10)}...`);
+      queryConditions.push(eq(whatsappSessions.phone, phoneHash));
     }
 
-    const phoneHash = hashSHA256(phone);
-    console.log(`[WHATSAPP WEBHOOK] Verifying session ${code} for phone hash: ${phoneHash.substring(0, 10)}...`);
-
-    // Find active, unverified session with matching phone number to prevent session fixation
+    // Find active, unverified session
     const [session] = await db
       .select()
       .from(whatsappSessions)
-      .where(
-        and(
-          eq(whatsappSessions.id, code),
-          eq(whatsappSessions.phone, phoneHash),
-          eq(whatsappSessions.verified, false),
-          gte(whatsappSessions.expiresAt, now)
-        )
-      )
+      .where(and(...queryConditions))
       .limit(1);
 
     if (!session) {

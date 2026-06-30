@@ -270,17 +270,23 @@ export async function startBot(isReconnect = false) {
         // Verify that the sender JID belongs to the registered phone number
         let isValidSender = false;
         const cleanFrom = from.split("@")[0]?.split(":")[0];
+        const isLid = from.endsWith("@lid");
         
         try {
-          const normalizedSenderPhone = normalizePhone(cleanFrom);
-          const senderPhoneHash = hashSHA256(normalizedSenderPhone);
-          
-          console.log(`🔍 [WHATSAPP BOT] Comparing sender phone hash with registered phone hash`);
-          console.log(`🔍 [WHATSAPP BOT] Sender JID: ${from} -> Cleaned JID: ${cleanFrom} -> Normalized: ${normalizedSenderPhone}`);
-          console.log(`🔍 [WHATSAPP BOT] Sender Phone Hash: ${senderPhoneHash}`);
-          console.log(`🔍 [WHATSAPP BOT] Registered Phone Hash: ${registeredPhoneHash}`);
-          if (senderPhoneHash === registeredPhoneHash) {
+          if (isLid) {
+            console.log(`ℹ️ [WHATSAPP BOT] Sender is using a LID JID (${from}). Bypassing local phone hash check for compatibility.`);
             isValidSender = true;
+          } else {
+            const normalizedSenderPhone = normalizePhone(cleanFrom);
+            const senderPhoneHash = hashSHA256(normalizedSenderPhone);
+            
+            console.log(`🔍 [WHATSAPP BOT] Comparing sender phone hash with registered phone hash`);
+            console.log(`🔍 [WHATSAPP BOT] Sender JID: ${from} -> Cleaned JID: ${cleanFrom} -> Normalized: ${normalizedSenderPhone}`);
+            console.log(`🔍 [WHATSAPP BOT] Sender Phone Hash: ${senderPhoneHash}`);
+            console.log(`🔍 [WHATSAPP BOT] Registered Phone Hash: ${registeredPhoneHash}`);
+            if (senderPhoneHash === registeredPhoneHash) {
+              isValidSender = true;
+            }
           }
         } catch (err) {
           console.error(`❌ [WHATSAPP BOT] Phone normalization or hashing error:`, err);
@@ -306,6 +312,7 @@ export async function startBot(isReconnect = false) {
             body: JSON.stringify({
               from: cleanFrom,
               text: text,
+              isLid: isLid,
             }),
           });
 
