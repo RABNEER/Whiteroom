@@ -28,7 +28,10 @@ authRoutes.post("/whatsapp/session", otpSendLimiter, whatsappSessionCreateHandle
 authRoutes.get("/whatsapp/session/:id", whatsappSessionGetHandler);
 authRoutes.get("/whatsapp/session/:id/phone", whatsappSessionPhoneHandler);
 authRoutes.get("/whatsapp/qr/raw", async (c) => {
-  return c.json({ qr: getLatestQr() });
+  return c.json({
+    qr: getLatestQr(),
+    connected: !!(globalThis as any).whatsappBotConnected,
+  });
 });
 
 authRoutes.get("/whatsapp/qr", async (c) => {
@@ -111,7 +114,12 @@ authRoutes.get("/whatsapp/qr", async (c) => {
           try {
             const res = await fetch('/api/v1/auth/whatsapp/qr/raw');
             const data = await res.json();
-            if (data.qr) {
+            if (data.connected) {
+              currentQr = null;
+              img.style.display = 'none';
+              loader.style.display = 'none';
+              statusDiv.innerHTML = '<span style="color: #128c7e; font-size: 24px; font-weight: bold;">✅ Connected!</span><br/><br/>The WhatsApp bot is paired and ready.';
+            } else if (data.qr) {
               renderQr(data.qr);
             } else {
               currentQr = null;

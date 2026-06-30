@@ -80,6 +80,7 @@ export async function startBot() {
       console.log(
         `❌ [WHATSAPP BOT] Connection closed. Reason Status: ${statusCode}. Reconnecting: ${shouldReconnect}`
       );
+      (globalThis as any).whatsappBotConnected = false;
 
       if (shouldReconnect) {
         startBot();
@@ -89,6 +90,7 @@ export async function startBot() {
     } else if (connection === "open") {
       console.log("\n✅ [WHATSAPP BOT] Connected successfully to WhatsApp network!");
       (globalThis as any).whatsappLatestQr = null;
+      (globalThis as any).whatsappBotConnected = true;
     }
   });
 
