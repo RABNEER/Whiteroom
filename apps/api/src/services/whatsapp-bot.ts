@@ -99,11 +99,11 @@ async function startBot() {
       // Ignore messages containing our bot's own response template to prevent infinite loops
       if (text.includes("Whiteroom Verification")) continue;
 
-      // Match the validation pattern (e.g. WH-XXXX)
-      const match = text.match(/WH-[A-Z0-9]{4}/i);
+      // Match the validation pattern (e.g. Verify <session_id>)
+      const match = text.match(/Verify\s+([A-Za-z0-9_-]+)/i);
 
       if (match) {
-        const code = match[0].toUpperCase();
+        const code = match[1];
         console.log(`📩 [WHATSAPP BOT] Found verification code ${code} from sender: ${from}`);
 
         // Resolve phone number corresponding to the verification session from backend

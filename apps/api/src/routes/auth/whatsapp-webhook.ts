@@ -38,7 +38,7 @@ export async function whatsappWebhookHandler(c: Context) {
     }
 
     const { from, text } = parsed.data;
-    const match = text.match(/WH-[A-Z0-9]{4}/i);
+    const match = text.match(/Verify\s+([A-Za-z0-9_-]+)/i);
 
     if (!match) {
       return c.json({
@@ -47,7 +47,7 @@ export async function whatsappWebhookHandler(c: Context) {
       }, 400);
     }
 
-    const code = match[0].toUpperCase();
+    const code = match[1];
     const now = new Date();
 
     const phone = normalizePhone(from);
