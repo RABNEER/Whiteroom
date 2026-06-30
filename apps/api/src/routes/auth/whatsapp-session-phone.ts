@@ -1,0 +1,53 @@
+import type { Context } from "hono";
+import { db } from "../../lib/db.js";
+import { whatsappSessions, eq } from "@whiteroom/db";
+import { env } from "../../lib/env.js";
+import { Errors } from "@whiteroom/shared";
+import type { ApiResponse } from "@whiteroom/shared";
+
+type WhatsappSessionPhoneResponse = {
+  phone: string | null;
+};
+
+export async function whatsappSessionPhoneHandler(c: Context) {
+  try {
+    const secret = c.req.header("x-webhook-secret");
+    const configSecret = env.WHATSAPP_WEBHOOK_SECRET;
+
+    if (!configSecret) {
+      console.error("❌ [WHATSAPP] WHATSAPP_WEBHOOK_SECRET is not configured in .env");
+      throw Errors.unauthorized("Webhook secret not configured on server");
+    }
+
+    if (secret !== configSecret) {
+      console.error("❌ [WHATSAPP] Webhook secret mismatch.");
+      throw Errors.unauthorized("Invalid webhook secret");
+    }
+
+    const id = (c.req.param("id") || "").toUpperCase();
+    console.log(`[WHATSAPP SESSION PHONE] Looking up phone for session: ${id}`);
+
+    const [session] = await db
+      .select({ phone: whatsappSessions.phone })
+      .from(whatsappSessions)
+      .where(eq(whatsappSessions.id, id))
+      .limit(1);
+
+    if (!session) {
+      console.error(`[WHATSAPP SESSION PHONE] Session not found: ${id}`);
+      throw Errors.notFound("Verification session");
+    }
+
+    const response: ApiResponse<WhatsappSessionPhoneResponse> = {
+      success: true,
+      data: {
+        phone: session.phone,
+      },
+    };
+
+    return c.json(response, 200);
+  } catch (error) {
+    console.error("[WHATSAPP SESSION PHONE] Error:", error);
+    throw error;
+  }
+}

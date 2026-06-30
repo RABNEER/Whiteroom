@@ -44,6 +44,8 @@ const envSchema = z.object({
   MOBILE_WEB_URL: z.string().url().optional(),
   ADMIN_URL: z.string().url().optional(),
   GEMINI_API_KEY: z.string().optional(),
+  WHATSAPP_WEBHOOK_SECRET: z.string().min(1).optional(),
+  WHATSAPP_WEBHOOK_URL: z.string().url().optional(),
 }).superRefine((value, ctx) => {
   if (value.NODE_ENV === "production" && !value.DM_ENCRYPTION_SECRET) {
     ctx.addIssue({
