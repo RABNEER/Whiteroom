@@ -24,7 +24,7 @@ export async function whatsappSessionPhoneHandler(c: Context) {
       throw Errors.unauthorized("Invalid webhook secret");
     }
 
-    const id = (c.req.param("id") || "").toUpperCase();
+    const id = c.req.param("id") || "";
     console.log(`[WHATSAPP SESSION PHONE] Looking up phone for session: ${id}`);
 
     const [session] = await db
