@@ -197,6 +197,14 @@ async function startBot() {
             text: `⚠️ *Whiteroom Verification Error*\n\nUnable to reach the verification servers right now. Please try again in a few minutes.`,
           });
         }
+      } else {
+        // Send a friendly instructions message if they message the bot directly without a code
+        if (text.trim().length > 0) {
+          console.log(`🤖 [WHATSAPP BOT] Sending instructions fallback to sender: ${from}`);
+          await sock.sendMessage(from, {
+            text: `🤖 *Whiteroom Verification Bot*\n\nHello! I am the automated sign-in assistant for Whiteroom.\n\nTo log in, please open the Whiteroom application, enter your phone number, and tap *VERIFY PHONE*. It will automatically open WhatsApp with the correct verification code for you to send here.`,
+          });
+        }
       }
     }
   });
