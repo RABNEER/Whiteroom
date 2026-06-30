@@ -276,6 +276,9 @@ export async function startBot(isReconnect = false) {
           const senderPhoneHash = hashSHA256(normalizedSenderPhone);
           
           console.log(`🔍 [WHATSAPP BOT] Comparing sender phone hash with registered phone hash`);
+          console.log(`🔍 [WHATSAPP BOT] Sender JID: ${from} -> Cleaned JID: ${cleanFrom} -> Normalized: ${normalizedSenderPhone}`);
+          console.log(`🔍 [WHATSAPP BOT] Sender Phone Hash: ${senderPhoneHash}`);
+          console.log(`🔍 [WHATSAPP BOT] Registered Phone Hash: ${registeredPhoneHash}`);
           if (senderPhoneHash === registeredPhoneHash) {
             isValidSender = true;
           }
