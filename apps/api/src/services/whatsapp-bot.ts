@@ -29,12 +29,14 @@ if (!webhookSecret) {
 
 console.log("🤖 [WHATSAPP BOT] Target Webhook URL:", webhookUrl);
 
-export async function startBot() {
-  if ((globalThis as any).whatsappBotStarted) {
+export async function startBot(isReconnect = false) {
+  if (!isReconnect && (globalThis as any).whatsappBotStarted) {
     console.log("ℹ️ [WHATSAPP BOT] Bot daemon already running, skipping duplicate start.");
     return;
   }
-  (globalThis as any).whatsappBotStarted = true;
+  if (!isReconnect) {
+    (globalThis as any).whatsappBotStarted = true;
+  }
 
   const authFolder = path.resolve(process.cwd(), "auth_info_baileys");
   console.log("📂 [WHATSAPP BOT] Saving auth state in:", authFolder);
@@ -85,7 +87,7 @@ export async function startBot() {
       (globalThis as any).whatsappBotConnected = false;
 
       if (shouldReconnect) {
-        startBot();
+        startBot(true);
       } else {
         console.log("⚠️ [WHATSAPP BOT] Logged out. Delete 'auth_info_baileys' folder and restart to pair again.");
       }
