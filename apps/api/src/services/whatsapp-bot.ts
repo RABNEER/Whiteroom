@@ -17,6 +17,12 @@ const webhookUrl =
   `http://localhost:${port}/api/v1/auth/whatsapp/webhook`;
 const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET;
 
+let latestQr: string | null = null;
+
+export function getLatestQr(): string | null {
+  return latestQr;
+}
+
 if (!webhookSecret) {
   console.warn(
     "⚠️  [WARNING] WHATSAPP_WEBHOOK_SECRET is not defined in your environment variables. Webhook calls might fail security checks."
@@ -60,6 +66,7 @@ async function startBot() {
     if (qr) {
       console.log("\n📱 [WHATSAPP BOT] Scan this QR code using Linked Devices in WhatsApp:");
       qrcode.generate(qr, { small: true });
+      latestQr = qr;
     }
 
     if (connection === "close") {
@@ -77,6 +84,7 @@ async function startBot() {
       }
     } else if (connection === "open") {
       console.log("\n✅ [WHATSAPP BOT] Connected successfully to WhatsApp network!");
+      latestQr = null;
     }
   });
 
