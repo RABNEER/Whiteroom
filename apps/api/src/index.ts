@@ -165,7 +165,7 @@ app.notFound((c) => {
 });
 
 // ─── Programmatic DB Migrations ───
-// Trigger deployment to apply registration_tokens migration SQL file
+// Trigger deployment to apply teacher_id migration SQL file and WhatsApp bot update
 async function runDbMigrations() {
   console.log("⚙️ [DB] Running automatic migrations...");
   try {

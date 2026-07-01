@@ -92,6 +92,13 @@
       "when": 1782805600000,
       "tag": "0012_add_registration_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1782805700000,
+      "tag": "0013_add_classes_teacher_id",
+      "breakpoints": true
     }
   ]
 }
