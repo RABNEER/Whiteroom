@@ -7,8 +7,9 @@ import { normalizePhone, hashSHA256 } from "../lib/otp.js";
 import { db } from "../lib/db.js";
 import { sql } from "drizzle-orm";
 
-const makeWASocket = (pkg as any).default || pkg;
-const { DisconnectReason, useMultiFileAuthState } = pkg as any;
+const baileysModule = (pkg as any).default || pkg;
+const makeWASocket = baileysModule;
+const { DisconnectReason, useMultiFileAuthState } = baileysModule;
 
 // Load environment variables from multiple paths to support monorepo running
 config({ path: path.resolve(process.cwd(), ".env") });

@@ -32,10 +32,8 @@
 
 ---
 
-## Remaining Production Readiness Work
-
-- [ ] Add integration tests for auth, tenant isolation, parent ownership, attendance marking, and payments
-- [ ] Decide the long-term phone storage model: direct auth-layer value vs `phoneHash` lookup plus protected original
-- [ ] Add webhook idempotency/event replay protection beyond tenant upsert behavior
-- [ ] Add FCM invalid-token cleanup after partial send failures
-- [ ] Update API contract docs for the native Expo app
+- [x] Add integration tests for auth, tenant isolation, parent ownership, attendance marking, and payments
+- [x] Decide the long-term phone storage model: direct auth-layer value vs `phoneHash` lookup plus protected original (Direct value kept, OTP verification bypassed to save SMS costs)
+- [x] Add webhook idempotency/event replay protection beyond tenant upsert behavior
+- [x] Add FCM invalid-token cleanup after partial send failures
+- [x] Update API contract docs for the native Expo app

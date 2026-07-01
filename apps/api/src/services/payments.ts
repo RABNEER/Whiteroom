@@ -1,6 +1,6 @@
 import { db } from "../lib/db.js";
 import { getRazorpayClient, verifyRazorpaySignature } from "../lib/razorpay.js";
-import { subscriptions, eq, lt, and } from "@whiteroom/db";
+import { subscriptions, idempotencyKeys, eq, lt, and, or } from "@whiteroom/db";
 import { Errors, PlanTier } from "@whiteroom/shared";
 import { env } from "../lib/env.js";
 
@@ -73,6 +73,7 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
   }
 
   const event = JSON.parse(body) as {
+    id?: string;
     event?: string;
     payload?: {
       payment?: {
@@ -91,6 +92,7 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
     };
   };
 
+  const eventId = event.id;
   const payment = event.payload?.payment?.entity;
   const order = event.payload?.order?.entity;
   const tenantId = payment?.notes?.tenantId ?? order?.notes?.tenantId;
@@ -102,6 +104,54 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
 
   if (planKey !== SubscriptionPlanKey.PRO_YEARLY) {
     return { processed: false };
+  }
+
+  const paymentId = payment?.id ?? null;
+  const orderId = payment?.order_id ?? order?.id ?? null;
+
+  // 1. Webhook Event ID replay check
+  if (eventId) {
+    const existingKey = await db
+      .select()
+      .from(idempotencyKeys)
+      .where(and(eq(idempotencyKeys.tenantId, tenantId), eq(idempotencyKeys.key, eventId)))
+      .limit(1);
+
+    if (existingKey.length > 0) {
+      console.log(`💳 [PAYMENTS IDEMPOTENCY] Webhook event ${eventId} already processed (manual check).`);
+      return { processed: true, alreadyProcessed: true };
+    }
+
+    await db
+      .insert(idempotencyKeys)
+      .values({
+        tenantId,
+        key: eventId,
+        scope: "webhook.razorpay",
+        resourceId: orderId ?? "unknown",
+        response: { processed: true },
+      })
+      .onConflictDoNothing();
+  }
+
+  // 2. Razorpay Order/Payment ID duplicate check
+  if (paymentId || orderId) {
+    const conditions: any[] = [];
+    if (paymentId) conditions.push(eq(subscriptions.razorpayPaymentId, paymentId));
+    if (orderId) conditions.push(eq(subscriptions.razorpayOrderId, orderId));
+
+    if (conditions.length > 0) {
+      const existing = await db
+        .select()
+        .from(subscriptions)
+        .where(conditions.length === 1 ? conditions[0] : or(...conditions))
+        .limit(1);
+
+      if (existing.length > 0) {
+        console.log(`💳 [PAYMENTS IDEMPOTENCY] Order/Payment already processed for order: ${orderId}, payment: ${paymentId}`);
+        return { processed: true, alreadyProcessed: true, subscription: existing[0] };
+      }
+    }
   }
 
   const catalogEntry = subscriptionCatalog[planKey];

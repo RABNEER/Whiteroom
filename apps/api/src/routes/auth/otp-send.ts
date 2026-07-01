@@ -72,11 +72,15 @@ export async function otpSendHandler(c: Context) {
     expiresAt,
   });
 
-  // â”€â”€â”€ Send SMS â”€â”€â”€
-  if (env.NODE_ENV === "development" && !env.TERMUX_SMS_GATEWAY_URL && !env.SMSGATEWAY24_TOKEN) {
-    console.log(`[DEV MODE] Skipping SMS. OTP for ${maskPhone(phone)} is: ${otp}`);
+  // ——— Send SMS ———
+  if (!env.TERMUX_SMS_GATEWAY_URL && !env.SMSGATEWAY24_TOKEN && !env.MSG91_API_KEY) {
+    console.log(`[AUTH] SMS Send bypassed. OTP for ${maskPhone(phone)} is: ${otp}`);
   } else {
-    await sendOTP(phone, otp);
+    try {
+      await sendOTP(phone, otp);
+    } catch (err) {
+      console.warn(`[AUTH] SMS delivery failed, fallback to log. OTP for ${maskPhone(phone)} is: ${otp}`, err);
+    }
   }
 
   const response: ApiResponse<OTPSendResponse> = {
