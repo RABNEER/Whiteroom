@@ -161,9 +161,15 @@ export function HeroPanel({
 export function AvatarBadge({
   label,
   small = false,
+  size,
+  style,
+  textStyle,
 }: {
   label: string;
   small?: boolean;
+  size?: number;
+  style?: any;
+  textStyle?: any;
 }) {
   const firstLetter = label.slice(0, 1).toUpperCase();
   
@@ -192,9 +198,20 @@ export function AvatarBadge({
     }
   }
 
+  const customAvatarStyle = size ? {
+    width: size,
+    height: size,
+    borderRadius: size / 2,
+    borderWidth: 1.5,
+  } : null;
+
+  const customTextStyle = size ? {
+    fontSize: Math.round(size * 0.4),
+  } : null;
+
   return (
-    <View style={[styles.avatarBadge, small && styles.avatarBadgeSmall, { backgroundColor: bgColor }]}>
-      <Text style={[styles.avatarBadgeText, small && styles.avatarBadgeSmallText, { color: textColor }]}>
+    <View style={[styles.avatarBadge, small && styles.avatarBadgeSmall, customAvatarStyle, style, { backgroundColor: bgColor }]}>
+      <Text style={[styles.avatarBadgeText, small && styles.avatarBadgeSmallText, customTextStyle, textStyle, { color: textColor }]}>
         {firstLetter}
       </Text>
     </View>

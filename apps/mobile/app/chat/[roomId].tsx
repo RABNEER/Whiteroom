@@ -298,7 +298,16 @@ export default function ChatRoomScreen() {
           isMe ? styles.messageRowRight : styles.messageRowLeft,
         ]}
       >
-        <View style={[styles.bubble, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
+        {!isMe && (
+          <View style={styles.avatarContainer}>
+            <AvatarBadge label={item.senderName || "User"} size={32} />
+          </View>
+        )}
+        <View style={[
+          styles.bubble,
+          isMe ? styles.bubbleRight : styles.bubbleLeft,
+          item.attachments && item.attachments.length > 0 && styles.bubbleWithAttachment
+        ]}>
           {/* Sender Name in group chats */}
           {!isMe && roomType !== "direct_message" && (
             <Text style={styles.senderName}>{item.senderName || "User"}</Text>
@@ -306,38 +315,39 @@ export default function ChatRoomScreen() {
 
           {/* Attachments */}
           {item.attachments && item.attachments.map((att: any, idx: number) => (
-            <View key={idx} style={styles.attachmentBox}>
+            <View key={idx} style={[styles.attachmentBox, isMe && styles.attachmentBoxRight]}>
               {att.type === "image" ? (
-                <ImageIcon size={20} color={colors.teal} style={{ marginRight: 8 }} />
+                <ImageIcon size={18} color={isMe ? colors.white : "#3B82F6"} style={{ marginRight: 8 }} />
               ) : att.type === "video" ? (
-                <VideoIcon size={20} color={colors.teal} style={{ marginRight: 8 }} />
+                <VideoIcon size={18} color={isMe ? colors.white : "#3B82F6"} style={{ marginRight: 8 }} />
               ) : (
-                <FileText size={20} color={colors.teal} style={{ marginRight: 8 }} />
+                <FileText size={18} color={isMe ? colors.white : "#3B82F6"} style={{ marginRight: 8 }} />
               )}
               <View style={{ flex: 1 }}>
-                <Text style={styles.attachmentName} numberOfLines={1}>{att.name}</Text>
-                <Text style={styles.attachmentSize}>
+                <Text style={[styles.attachmentName, isMe && styles.attachmentNameRight]} numberOfLines={1}>
+                  {att.name}
+                </Text>
+                <Text style={[styles.attachmentSize, isMe && styles.attachmentSizeRight]}>
                   {(att.size / 1024).toFixed(1)} KB
                 </Text>
               </View>
             </View>
           ))}
 
-          <Text style={styles.messageText}>{item.content}</Text>
+          <Text style={[styles.messageText, isMe ? styles.messageTextRight : styles.messageTextLeft]}>
+            {item.content}
+          </Text>
 
           <View style={styles.bubbleMeta}>
             {item.isPinned && (
-              <Pin size={10} color={colors.teal} style={{ marginRight: 4 }} />
+              <Pin size={10} color={isMe ? "rgba(255, 255, 255, 0.8)" : "#64748B"} style={{ marginRight: 4 }} />
             )}
-            <Text style={styles.messageTime}>{formatMessageTime(item.createdAt)}</Text>
+            <Text style={[styles.messageTime, isMe ? styles.messageTimeRight : styles.messageTimeLeft]}>
+              {formatMessageTime(item.createdAt)}
+            </Text>
             {isMe && (
               <View style={{ marginLeft: 4 }}>
-                {roomType === "direct_message" ? (
-                  // Double blue ticks if read, else double grey ticks
-                  <CheckCheck size={14} color={colors.teal} />
-                ) : (
-                  <CheckCheck size={14} color={colors.teal} />
-                )}
+                <CheckCheck size={14} color="rgba(255, 255, 255, 0.9)" />
               </View>
             )}
           </View>
@@ -660,7 +670,7 @@ export default function ChatRoomScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#E5DDD5", // Traditional WhatsApp Chat Background colour
+    backgroundColor: "#F8FAFC", // Sleek soft slate background
   },
   header: {
     flexDirection: "row",
@@ -669,8 +679,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.paper,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomWidth: 1.5,
+    borderBottomColor: "#F1F5F9",
   },
   iconBtn: {
     padding: spacing.xs,
@@ -680,32 +690,35 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "700",
-    color: colors.navy,
+    color: "#0F172A",
   },
   headerSub: {
-    fontSize: 11,
-    color: colors.teal,
-    marginTop: 2,
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 1,
   },
   pinnedBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#EFF6FF", // Premium blue notification banner
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: "#DBEAFE",
   },
   pinnedTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
-    color: colors.navy,
+    color: "#1E40AF",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   pinnedText: {
-    fontSize: 12,
-    color: colors.teal,
+    fontSize: 13,
+    color: "#1E3A8A",
+    marginTop: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -727,36 +740,52 @@ const styles = StyleSheet.create({
   messageRowRight: {
     justifyContent: "flex-end",
   },
+  avatarContainer: {
+    marginRight: 8,
+    alignSelf: "flex-end", // Align to bubble tail at bottom-left
+    marginBottom: 2,
+  },
   bubble: {
-    maxWidth: "80%",
-    borderRadius: radius.md,
-    paddingHorizontal: 10,
-    paddingTop: 6,
-    paddingBottom: 4,
-    shadowColor: "#000",
+    maxWidth: "75%",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 6,
+    shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
     elevation: 1,
   },
   bubbleLeft: {
     backgroundColor: colors.white,
-    borderTopLeftRadius: 0,
+    borderBottomLeftRadius: 4,
+    borderColor: "rgba(0, 0, 0, 0.04)",
+    borderWidth: 1,
   },
   bubbleRight: {
-    backgroundColor: "#D9FDD3", // WhatsApp green bubble color
-    borderTopRightRadius: 0,
+    backgroundColor: "#3B82F6", // Vibrant iOS primary blue
+    borderBottomRightRadius: 4,
+  },
+  bubbleWithAttachment: {
+    paddingHorizontal: 8,
+    paddingTop: 8,
   },
   senderName: {
     fontSize: 12,
     fontWeight: "700",
-    color: colors.navy,
-    marginBottom: 2,
+    color: "#2563EB",
+    marginBottom: 4,
   },
   messageText: {
     fontSize: 15,
-    color: colors.navy,
     lineHeight: 20,
+  },
+  messageTextLeft: {
+    color: "#0F172A",
+  },
+  messageTextRight: {
+    color: colors.white,
   },
   bubbleMeta: {
     flexDirection: "row",
@@ -766,24 +795,38 @@ const styles = StyleSheet.create({
   },
   messageTime: {
     fontSize: 10,
-    color: colors.teal,
+  },
+  messageTimeLeft: {
+    color: "#64748B",
+  },
+  messageTimeRight: {
+    color: "rgba(255, 255, 255, 0.7)",
   },
   attachmentBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.04)",
+    backgroundColor: "rgba(0,0,0,0.03)",
     borderRadius: radius.sm,
     padding: spacing.sm,
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  attachmentBoxRight: {
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
   },
   attachmentName: {
     fontSize: 13,
     fontWeight: "600",
     color: colors.navy,
   },
+  attachmentNameRight: {
+    color: colors.white,
+  },
   attachmentSize: {
     fontSize: 10,
     color: colors.teal,
+  },
+  attachmentSizeRight: {
+    color: "rgba(255, 255, 255, 0.7)",
   },
   disabledInputBar: {
     flexDirection: "row",
@@ -802,36 +845,40 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     backgroundColor: colors.paper,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: "#F1F5F9",
+    paddingBottom: Platform.OS === "ios" ? 4 : 8,
   },
   attachBtn: {
     padding: spacing.sm,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
+    marginRight: 4,
   },
   input: {
     flex: 1,
     backgroundColor: "#F1F5F9",
-    borderRadius: radius.xl,
+    borderRadius: 20,
     paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    marginHorizontal: spacing.xs,
+    paddingVertical: 10,
     fontSize: 15,
     maxHeight: 100,
-    color: colors.navy,
+    color: "#0F172A",
   },
   sendBtn: {
-    backgroundColor: colors.teal,
-    borderRadius: 22,
-    width: 44,
-    height: 44,
+    backgroundColor: "#3B82F6",
+    borderRadius: 20,
+    width: 40,
+    height: 40,
     justifyContent: "center",
     alignItems: "center",
+    marginLeft: 6,
   },
   sendBtnDisabled: {
-    backgroundColor: `${colors.teal}50`,
+    backgroundColor: "#E2E8F0",
   },
   mentionsContainer: {
     backgroundColor: colors.paper,
