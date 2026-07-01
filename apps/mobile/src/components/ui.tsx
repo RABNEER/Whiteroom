@@ -396,21 +396,27 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <View style={styles.segmented}>
-      {options.map((option) => {
-        const active = option.value === value;
-        return (
-          <Pressable
-            key={option.value}
-            onPress={() => onChange(option.value)}
-            style={[styles.segment, active && styles.segmentActive]}
-          >
-            <Text style={[styles.segmentText, active && styles.segmentActiveText]}>
-              {option.label}
-            </Text>
-          </Pressable>
-        );
-      })}
+    <View style={styles.segmentedContainer}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={[styles.segmented, { minWidth: "100%" }]}
+      >
+        {options.map((option) => {
+          const active = option.value === value;
+          return (
+            <Pressable
+              key={option.value}
+              onPress={() => onChange(option.value)}
+              style={[styles.segment, active && styles.segmentActive]}
+            >
+              <Text style={[styles.segmentText, active && styles.segmentActiveText]}>
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }
@@ -1005,6 +1011,9 @@ export const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 20,
   },
+  segmentedContainer: {
+    width: "100%",
+  },
   segmented: {
     backgroundColor: "rgba(0, 0, 0, 0.04)",
     borderRadius: radius.full,
@@ -1014,11 +1023,12 @@ export const styles = StyleSheet.create({
   },
   segment: {
     borderRadius: radius.full,
-    flex: 1,
     minHeight: 36,
     justifyContent: "center",
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
+    flexGrow: 1,
+    flexShrink: 0,
   },
   segmentActive: {
     backgroundColor: colors.white,
