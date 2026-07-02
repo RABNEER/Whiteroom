@@ -9,6 +9,14 @@
     "newArchEnabled": true,
     "icon": "./src/assets/logo.png",
     "assetBundlePatterns": ["**/*"],
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.whiteroom.mobile"
