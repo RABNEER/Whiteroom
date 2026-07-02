@@ -1,3 +1,4 @@
 <resources>
   <string name="app_name">Whiteroom</string>
+  <string name="expo_runtime_version">0.0.1</string>
 </resources>
