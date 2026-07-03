@@ -7,6 +7,30 @@ import { normalizePhone, hashSHA256 } from "../lib/otp.js";
 import { db } from "../lib/db.js";
 import { sql } from "drizzle-orm";
 
+const originalLog = console.log;
+const originalError = console.error;
+const originalWarn = console.warn;
+
+export const inMemoryLogs: string[] = [];
+
+console.log = (...args) => {
+  inMemoryLogs.push(`[LOG] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`);
+  if (inMemoryLogs.length > 500) inMemoryLogs.shift();
+  originalLog(...args);
+};
+
+console.error = (...args) => {
+  inMemoryLogs.push(`[ERROR] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`);
+  if (inMemoryLogs.length > 500) inMemoryLogs.shift();
+  originalError(...args);
+};
+
+console.warn = (...args) => {
+  inMemoryLogs.push(`[WARN] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`);
+  if (inMemoryLogs.length > 500) inMemoryLogs.shift();
+  originalWarn(...args);
+};
+
 const baileysModule = (pkg as any).default || pkg;
 const makeWASocket = baileysModule;
 const { DisconnectReason, useMultiFileAuthState } = baileysModule;

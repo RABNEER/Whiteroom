@@ -12,7 +12,7 @@ import { whatsappWebhookHandler } from "./whatsapp-webhook.js";
 import { whatsappVerifyHandler } from "./whatsapp-verify.js";
 import { authMiddleware } from "../../middleware/auth.js";
 import { rateLimitMiddleware } from "../../middleware/rate-limit.js";
-import { getLatestQr, logoutBot } from "../../services/whatsapp-bot.js";
+import { getLatestQr, logoutBot, inMemoryLogs } from "../../services/whatsapp-bot.js";
 
 const authRoutes = new Hono();
 
@@ -37,6 +37,10 @@ authRoutes.get("/whatsapp/qr/raw", async (c) => {
 authRoutes.post("/whatsapp/reset", async (c) => {
   await logoutBot();
   return c.json({ success: true, message: "WhatsApp bot credentials cleared and restarted successfully." });
+});
+
+authRoutes.get("/whatsapp/logs", async (c) => {
+  return c.json({ logs: inMemoryLogs });
 });
 
 authRoutes.post("/whatsapp/pair-code", async (c) => {
