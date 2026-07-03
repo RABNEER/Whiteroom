@@ -217,7 +217,10 @@ export async function startBot(isReconnect = false) {
   const baileys = await import("@whiskeysockets/baileys");
   const useMultiFileAuthState = baileys.useMultiFileAuthState;
   const DisconnectReason = baileys.DisconnectReason;
-  const makeWASocket = baileys.default || baileys;
+  let makeWASocket = baileys.default;
+  if (typeof makeWASocket === "object" && makeWASocket !== null) {
+    makeWASocket = (makeWASocket as any).default || makeWASocket;
+  }
 
   const authFolder = path.resolve(process.cwd(), "auth_info_baileys");
   
