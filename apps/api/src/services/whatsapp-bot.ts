@@ -20,7 +20,19 @@ console.log = (...args) => {
 };
 
 console.error = (...args) => {
-  inMemoryLogs.push(`[ERROR] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`);
+  inMemoryLogs.push(`[ERROR] ${args.map(a => {
+    if (a instanceof Error) {
+      return `${a.name}: ${a.message}\n${a.stack}`;
+    }
+    if (a && typeof a === 'object') {
+      try {
+        return JSON.stringify(a);
+      } catch {
+        return String(a);
+      }
+    }
+    return a;
+  }).join(' ')}`);
   if (inMemoryLogs.length > 500) inMemoryLogs.shift();
   originalError(...args);
 };
