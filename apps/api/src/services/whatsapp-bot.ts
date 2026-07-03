@@ -1,4 +1,4 @@
-import pkg, { DisconnectReason, useMultiFileAuthState } from "@whiskeysockets/baileys";
+import pkg from "@whiskeysockets/baileys";
 import qrcode from "qrcode-terminal";
 import path from "node:path";
 import fs from "node:fs";
@@ -44,7 +44,6 @@ console.warn = (...args) => {
 };
 
 const baileysModule = (pkg as any).default || pkg;
-const makeWASocket = baileysModule;
 
 // Load environment variables from multiple paths to support monorepo running
 config({ path: path.resolve(process.cwd(), ".env") });
@@ -214,6 +213,12 @@ export async function startBot(isReconnect = false) {
     (globalThis as any).whatsappBotStarted = true;
   }
 
+  // Load Baileys module dynamically to bypass ESM/CJS named exports interop issues
+  const baileys = await import("@whiskeysockets/baileys");
+  const useMultiFileAuthState = baileys.useMultiFileAuthState;
+  const DisconnectReason = baileys.DisconnectReason;
+  const makeWASocket = baileys.default || baileys;
+
   const authFolder = path.resolve(process.cwd(), "auth_info_baileys");
   
   // Restore files from DB before Baileys initializes
@@ -226,12 +231,12 @@ export async function startBot(isReconnect = false) {
   setupFolderWatcher(authFolder);
 
   // Fetch the latest WhatsApp Web version to prevent 405 Method Not Allowed connection errors
-  let version = [2, 3000, 1019707846]; // Default fallback
+  let version: [number, number, number] = [2, 3000, 1019707846]; // Default fallback
   try {
     const { fetchLatestBaileysVersion } = pkg as any;
     if (fetchLatestBaileysVersion) {
       const fetched = await fetchLatestBaileysVersion();
-      version = fetched.version;
+      version = fetched.version as [number, number, number];
       console.log(`ℹ️ [WHATSAPP BOT] Using WhatsApp Web version: ${version.join(".")}`);
     }
   } catch (err) {
