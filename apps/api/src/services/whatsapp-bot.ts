@@ -1,4 +1,4 @@
-import pkg from "@whiskeysockets/baileys";
+import pkg, { DisconnectReason, useMultiFileAuthState } from "@whiskeysockets/baileys";
 import qrcode from "qrcode-terminal";
 import path from "node:path";
 import fs from "node:fs";
@@ -45,7 +45,6 @@ console.warn = (...args) => {
 
 const baileysModule = (pkg as any).default || pkg;
 const makeWASocket = baileysModule;
-const { DisconnectReason, useMultiFileAuthState } = baileysModule;
 
 // Load environment variables from multiple paths to support monorepo running
 config({ path: path.resolve(process.cwd(), ".env") });
