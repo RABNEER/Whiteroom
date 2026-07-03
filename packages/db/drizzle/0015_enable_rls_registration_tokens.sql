@@ -1,0 +1,1 @@
+ALTER TABLE "registration_tokens" ENABLE ROW LEVEL SECURITY;

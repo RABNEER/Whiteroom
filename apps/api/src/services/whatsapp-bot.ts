@@ -88,6 +88,9 @@ async function ensureDbTable() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  await db.execute(sql`
+    ALTER TABLE whatsapp_bot_state ENABLE ROW LEVEL SECURITY;
+  `);
 }
 
 async function syncAuthFilesFromDb(folder: string) {
