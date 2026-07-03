@@ -132,6 +132,44 @@ function setupFolderWatcher(folder: string) {
   });
 }
 
+export async function logoutBot() {
+  console.log("🗑️ [WHATSAPP BOT] Resetting session credentials...");
+  const authFolder = path.resolve(process.cwd(), "auth_info_baileys");
+  
+  const sock = (globalThis as any).whatsappSocket;
+  if (sock) {
+    try {
+      sock.logout();
+    } catch {}
+    try {
+      sock.end();
+    } catch {}
+  }
+  
+  try {
+    await db.execute(sql`DELETE FROM whatsapp_bot_state;`);
+    console.log("✅ [WHATSAPP BOT] Cleared bot state from database.");
+  } catch (err) {
+    console.error("❌ [WHATSAPP BOT] Failed to delete database state:", err);
+  }
+  
+  try {
+    if (fs.existsSync(authFolder)) {
+      fs.rmSync(authFolder, { recursive: true, force: true });
+      console.log("✅ [WHATSAPP BOT] Cleared local auth folder.");
+    }
+  } catch (err) {
+    console.error("❌ [WHATSAPP BOT] Failed to delete local folder:", err);
+  }
+  
+  (globalThis as any).whatsappBotConnected = false;
+  (globalThis as any).whatsappLatestQr = null;
+  (globalThis as any).whatsappBotStarted = false;
+
+  // Start fresh
+  startBot(true).catch(err => console.error("Failed to restart bot:", err));
+}
+
 export async function startBot(isReconnect = false) {
   if (!isReconnect && (globalThis as any).whatsappBotStarted) {
     console.log("ℹ️ [WHATSAPP BOT] Bot daemon already running, skipping duplicate start.");
@@ -198,7 +236,8 @@ export async function startBot(isReconnect = false) {
       if (shouldReconnect) {
         startBot(true);
       } else {
-        console.log("⚠️ [WHATSAPP BOT] Logged out. Delete 'auth_info_baileys' folder and restart to pair again.");
+        console.log("⚠️ [WHATSAPP BOT] Logged out. Clearing session state to restart cleanly...");
+        logoutBot();
       }
     } else if (connection === "open") {
       console.log("\n✅ [WHATSAPP BOT] Connected successfully to WhatsApp network!");
