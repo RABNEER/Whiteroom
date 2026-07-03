@@ -11,20 +11,22 @@ const envSchema = z.object({
   DIRECT_URL: z.string().min(1).optional(),
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
-  DM_ENCRYPTION_SECRET: z.string().min(32).optional(),
+  JWT_PRIVATE_KEY: z.string().optional(),
+  JWT_PUBLIC_KEY: z.string().optional(),
+  DM_ENCRYPTION_SECRET: z.string().min(32),
   NODE_ENV: z.enum(["development", "production", "test"]),
   PORT: z.coerce.number().default(3000),
 
-  // â”€â”€â”€ MSG91 (OTP Provider) â”€â”€â”€
+  // ─── MSG91 (OTP Provider) ───
   MSG91_API_KEY: z.string().min(1).optional(),
   MSG91_TEMPLATE_ID: z.string().min(1).optional(),
   MSG91_SENDER_ID: z.string().min(1).optional(),
 
-  // â”€â”€â”€ SMS Gateway 24 (SIM Gateway) â”€â”€â”€
+  // ─── SMS Gateway 24 (SIM Gateway) ───
   SMSGATEWAY24_TOKEN: z.string().optional(),
   SMSGATEWAY24_DEVICE_ID: z.string().optional(),
 
-  // â”€â”€â”€ Termux Custom SMS Gateway â”€â”€â”€
+  // ─── Termux Custom SMS Gateway ───
   TERMUX_SMS_GATEWAY_URL: z.string().optional(),
 
   FIREBASE_PROJECT_ID: z.string().min(1).optional(),
@@ -47,12 +49,21 @@ const envSchema = z.object({
   WHATSAPP_WEBHOOK_SECRET: z.string().min(1).optional(),
   WHATSAPP_WEBHOOK_URL: z.string().url().optional(),
 }).superRefine((value, ctx) => {
-  if (value.NODE_ENV === "production" && !value.DM_ENCRYPTION_SECRET) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["DM_ENCRYPTION_SECRET"],
-      message: "DM_ENCRYPTION_SECRET is required in production",
-    });
+  if (value.NODE_ENV === "production") {
+    if (!value.JWT_PRIVATE_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["JWT_PRIVATE_KEY"],
+        message: "JWT_PRIVATE_KEY is required in production",
+      });
+    }
+    if (!value.JWT_PUBLIC_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["JWT_PUBLIC_KEY"],
+        message: "JWT_PUBLIC_KEY is required in production",
+      });
+    }
   }
 });
 

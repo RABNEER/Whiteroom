@@ -99,6 +99,13 @@
       "when": 1782805700000,
       "tag": "0013_add_classes_teacher_id",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1783099699767,
+      "tag": "0014_bizarre_bromley",
+      "breakpoints": true
     }
   ]
 }

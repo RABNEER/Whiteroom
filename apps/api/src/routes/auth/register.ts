@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { z } from "zod";
 import { db } from "../../lib/db.js";
+import { env } from "../../lib/env.js";
 import {
   registrationTokens,
   users,
@@ -9,7 +10,6 @@ import {
   teacherProfiles,
   parentProfiles,
   consentLogs,
-  students,
   userTenants,
 } from "@whiteroom/db";
 import {
@@ -26,7 +26,7 @@ import {
   PlanTier,
 } from "@whiteroom/shared";
 import type { ApiResponse, OTPVerifyResponse, JWTPayload } from "@whiteroom/shared";
-import { eq, and, gte, lt, isNull, count } from "@whiteroom/db";
+import { eq, and, gte, count } from "@whiteroom/db";
 
 const registerSchema = z.object({
   registrationToken: z.string().uuid(),
@@ -38,6 +38,7 @@ const registerSchema = z.object({
   designation: z.preprocess(val => val === "" ? undefined : val, z.string().trim().min(2).max(80).optional()),
   studentName: z.preprocess(val => val === "" ? undefined : val, z.string().trim().min(1).max(120).optional()),
   rollNumber: z.preprocess(val => val === "" ? undefined : val, z.string().trim().min(1).max(40).optional()),
+  turnstileToken: z.string().optional(),
 });
 
 /**
@@ -72,10 +73,34 @@ export async function registerHandler(c: Context) {
     designation,
     studentName,
     rollNumber,
+    turnstileToken,
   } = parsed.data;
 
   if (!consentAccepted) {
     throw Errors.validation("Consent is required to complete registration.");
+  }
+
+  // Cloudflare Turnstile Verification in production
+  if (env.NODE_ENV === "production") {
+    if (!turnstileToken) {
+      throw Errors.validation("CAPTCHA token is required in production.");
+    }
+    const secret = process.env.TURNSTILE_SECRET_KEY;
+    if (secret) {
+      const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          secret,
+          response: turnstileToken,
+          remoteip: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "",
+        }),
+      });
+      const data = (await response.json()) as { success: boolean };
+      if (!data.success) {
+        throw Errors.validation("CAPTCHA verification failed. Please try again.");
+      }
+    }
   }
 
   // â”€â”€â”€ 1. Retrieve Registration Token â”€â”€â”€
@@ -128,8 +153,7 @@ export async function registerHandler(c: Context) {
   const tenantContactPhone = tokenRecord.phone.startsWith("+91")
     ? tokenRecord.phone
     : phoneLookup;
-  let userId: string;
-  let tenantId: string;
+
 
   // â”€â”€â”€ 4. Execute Registration Transaction â”€â”€â”€
   const txnResult = await db.transaction(async (tx) => {
@@ -290,8 +314,8 @@ export async function registerHandler(c: Context) {
     }
   });
 
-  userId = txnResult.user.id;
-  tenantId = txnResult.tenantId;
+  const userId = txnResult.user.id;
+  const tenantId = txnResult.tenantId;
 
   // â”€â”€â”€ 5. Resolve Tenant Payload & Sign JWTs â”€â”€â”€
   const userTenantRecords = await db

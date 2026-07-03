@@ -37,6 +37,7 @@ export { classPromotions } from "./schema/class-promotions.js";
 export { fileUploadSessions } from "./schema/file-upload-sessions.js";
 export { fileUploadChunks } from "./schema/file-upload-chunks.js";
 export { whatsappSessions } from "./schema/whatsapp-sessions.js";
+export { rateLimits } from "./schema/rate-limits.js";
 
 // Utilities
 export { createId } from "./utils.js";

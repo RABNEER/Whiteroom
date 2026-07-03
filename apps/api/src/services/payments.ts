@@ -35,6 +35,9 @@ export async function createSubscriptionOrder(
 
   // Gracefully fallback to simulated mock order if credentials are not set
   if (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET) {
+    if (env.NODE_ENV === "production") {
+      throw Errors.internal("Razorpay credentials are not configured in production");
+    }
     console.log(`💳 [PAYMENTS MOCK FALLBACK] Razorpay not configured. Simulating order for Tenant: ${tenantId}`);
     return {
       id: `mock_order_${Math.random().toString(36).substring(2, 9)}`,

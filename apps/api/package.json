@@ -7,6 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "pnpm --filter @whiteroom/shared build && pnpm --filter @whiteroom/db build && tsc && tsc-alias",
     "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "start": "pnpm --filter @whiteroom/db db:migrate && node dist/index.js",
     "seed": "tsx src/seed.ts",

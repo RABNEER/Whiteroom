@@ -22,18 +22,11 @@ function deriveTenantKey(rootSecret: string, tenantId: string): Buffer {
 }
 
 function getCurrentTenantKey(tenantId: string): Buffer {
-  const rootSecret = env.DM_ENCRYPTION_SECRET ?? env.JWT_ACCESS_SECRET;
-  return deriveTenantKey(rootSecret, tenantId);
+  return deriveTenantKey(env.DM_ENCRYPTION_SECRET, tenantId);
 }
 
 function getDecryptionKeys(tenantId: string): Buffer[] {
-  const keys = [getCurrentTenantKey(tenantId)];
-
-  if (env.DM_ENCRYPTION_SECRET && env.DM_ENCRYPTION_SECRET !== env.JWT_ACCESS_SECRET) {
-    keys.push(deriveTenantKey(env.JWT_ACCESS_SECRET, tenantId));
-  }
-
-  return keys;
+  return [getCurrentTenantKey(tenantId)];
 }
 
 function decryptWithKey(encryptedData: string, key: Buffer): string {

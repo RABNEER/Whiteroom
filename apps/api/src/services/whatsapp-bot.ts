@@ -13,35 +13,37 @@ const originalWarn = console.warn;
 
 export const inMemoryLogs: string[] = [];
 
-console.log = (...args) => {
-  inMemoryLogs.push(`[LOG] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`);
-  if (inMemoryLogs.length > 500) inMemoryLogs.shift();
-  originalLog(...args);
-};
+if (process.env.DEBUG_WHATSAPP === "true") {
+  console.log = (...args) => {
+    inMemoryLogs.push(`[LOG] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`);
+    if (inMemoryLogs.length > 500) inMemoryLogs.shift();
+    originalLog(...args);
+  };
 
-console.error = (...args) => {
-  inMemoryLogs.push(`[ERROR] ${args.map(a => {
-    if (a instanceof Error) {
-      return `${a.name}: ${a.message}\n${a.stack}`;
-    }
-    if (a && typeof a === 'object') {
-      try {
-        return JSON.stringify(a);
-      } catch {
-        return String(a);
+  console.error = (...args) => {
+    inMemoryLogs.push(`[ERROR] ${args.map(a => {
+      if (a instanceof Error) {
+        return `${a.name}: ${a.message}\n${a.stack}`;
       }
-    }
-    return a;
-  }).join(' ')}`);
-  if (inMemoryLogs.length > 500) inMemoryLogs.shift();
-  originalError(...args);
-};
+      if (a && typeof a === 'object') {
+        try {
+          return JSON.stringify(a);
+        } catch {
+          return String(a);
+        }
+      }
+      return a;
+    }).join(' ')}`);
+    if (inMemoryLogs.length > 500) inMemoryLogs.shift();
+    originalError(...args);
+  };
 
-console.warn = (...args) => {
-  inMemoryLogs.push(`[WARN] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`);
-  if (inMemoryLogs.length > 500) inMemoryLogs.shift();
-  originalWarn(...args);
-};
+  console.warn = (...args) => {
+    inMemoryLogs.push(`[WARN] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`);
+    if (inMemoryLogs.length > 500) inMemoryLogs.shift();
+    originalWarn(...args);
+  };
+}
 
 const baileysModule = (pkg as any).default || pkg;
 
