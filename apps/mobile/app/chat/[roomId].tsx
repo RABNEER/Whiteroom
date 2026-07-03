@@ -32,6 +32,7 @@ import {
   X,
   Eye,
   Megaphone,
+  Smile,
 } from "lucide-react-native";
 import { api, ApiError } from "@/api/client";
 import { useSession } from "@/auth/session-store";
@@ -358,6 +359,11 @@ export default function ChatRoomScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+      {/* Abstract Background Glows for Premium Aesthetic */}
+      <View style={styles.bgGlow1} pointerEvents="none" />
+      <View style={styles.bgGlow2} pointerEvents="none" />
+      <View style={styles.bgGlow3} pointerEvents="none" />
+
       {/* Header */}
       <View style={styles.header}>
         <Pressable
@@ -467,21 +473,33 @@ export default function ChatRoomScreen() {
           </View>
         ) : (
           <View style={styles.inputContainer}>
-            <Pressable
-              onPress={() => setShowAttachmentMenu(true)}
-              style={styles.attachBtn}
-            >
-              <Plus color={colors.teal} size={22} />
-            </Pressable>
+            {/* WhatsApp-style Input Pill */}
+            <View style={styles.inputPill}>
+              <Pressable
+                style={styles.emojiBtn}
+                onPress={() => {}}
+              >
+                <Smile color="#64748B" size={22} />
+              </Pressable>
 
-            <TextInput
-              style={styles.input}
-              placeholder={roomType === "direct_message" ? "Message..." : "Message group..."}
-              value={inputText}
-              onChangeText={handleInputChange}
-              multiline
-            />
+              <TextInput
+                style={styles.input}
+                placeholder={roomType === "direct_message" ? "Message" : "Message group"}
+                placeholderTextColor="#94A3B8"
+                value={inputText}
+                onChangeText={handleInputChange}
+                multiline
+              />
 
+              <Pressable
+                onPress={() => setShowAttachmentMenu(true)}
+                style={styles.attachBtn}
+              >
+                <Paperclip color="#64748B" size={20} />
+              </Pressable>
+            </View>
+
+            {/* Separate Circle Send Button */}
             <Pressable
               onPress={handleSend}
               disabled={!inputText.trim()}
@@ -490,7 +508,7 @@ export default function ChatRoomScreen() {
                 !inputText.trim() && styles.sendBtnDisabled,
               ]}
             >
-              <Send color={colors.white} size={18} />
+              <Send color={colors.white} size={18} style={{ marginLeft: 2 }} />
             </Pressable>
           </View>
         )}
@@ -670,17 +688,50 @@ export default function ChatRoomScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC", // Sleek soft slate background
+    backgroundColor: "#F1F5F9", 
+  },
+  bgGlow1: {
+    position: "absolute",
+    top: 100,
+    right: -100,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: "#6366F1",
+    opacity: 0.04,
+  },
+  bgGlow2: {
+    position: "absolute",
+    bottom: 150,
+    left: -100,
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    backgroundColor: "#10B981",
+    opacity: 0.05,
+  },
+  bgGlow3: {
+    position: "absolute",
+    top: "50%",
+    left: "30%",
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: "#EC4899",
+    opacity: 0.03,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: 12,
     backgroundColor: colors.paper,
-    borderBottomWidth: 1.5,
-    borderBottomColor: "#F1F5F9",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   iconBtn: {
     padding: spacing.xs,
@@ -702,7 +753,7 @@ const styles = StyleSheet.create({
   pinnedBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#EFF6FF", // Premium blue notification banner
+    backgroundColor: "#EFF6FF", 
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
@@ -731,7 +782,7 @@ const styles = StyleSheet.create({
   },
   messageRow: {
     flexDirection: "row",
-    marginBottom: 8,
+    marginBottom: 10,
     width: "100%",
   },
   messageRowLeft: {
@@ -741,48 +792,48 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   avatarContainer: {
-    marginRight: 8,
-    alignSelf: "flex-end", // Align to bubble tail at bottom-left
-    marginBottom: 2,
+    marginRight: 6,
+    alignSelf: "flex-end", 
+    marginBottom: 1,
   },
   bubble: {
-    maxWidth: "75%",
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 6,
+    maxWidth: "78%",
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 8,
     shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
     elevation: 1,
   },
   bubbleLeft: {
     backgroundColor: colors.white,
-    borderBottomLeftRadius: 4,
-    borderColor: "rgba(0, 0, 0, 0.04)",
-    borderWidth: 1,
+    borderBottomLeftRadius: 2,
+    borderBottomRightRadius: 18,
   },
   bubbleRight: {
-    backgroundColor: "#3B82F6", // Vibrant iOS primary blue
-    borderBottomRightRadius: 4,
+    backgroundColor: "#059669", 
+    borderBottomRightRadius: 2,
+    borderBottomLeftRadius: 18,
   },
   bubbleWithAttachment: {
-    paddingHorizontal: 8,
-    paddingTop: 8,
+    paddingHorizontal: 10,
+    paddingTop: 10,
   },
   senderName: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#2563EB",
+    color: "#059669",
     marginBottom: 4,
   },
   messageText: {
     fontSize: 15,
-    lineHeight: 20,
+    lineHeight: 21,
   },
   messageTextLeft: {
-    color: "#0F172A",
+    color: "#1E293B",
   },
   messageTextRight: {
     color: colors.white,
@@ -791,16 +842,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
-    marginTop: 4,
+    marginTop: 6,
   },
   messageTime: {
     fontSize: 10,
+    fontWeight: "500",
   },
   messageTimeLeft: {
     color: "#64748B",
   },
   messageTimeRight: {
-    color: "rgba(255, 255, 255, 0.7)",
+    color: "rgba(255, 255, 255, 0.75)",
   },
   attachmentBox: {
     flexDirection: "row",
@@ -844,41 +896,70 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: "row",
+    alignItems: "flex-end", // Aligns to bottom when input grows multiline
+    marginHorizontal: 8,
+    marginBottom: Platform.OS === "ios" ? 28 : 12,
+    marginTop: 4,
+    backgroundColor: "transparent",
+  },
+  inputPill: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-end", // Align icons to bottom when text grows
+    backgroundColor: "#FFFFFF",
+    borderRadius: 25,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+    minHeight: 48,
+  },
+  emojiBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.paper,
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    paddingBottom: Platform.OS === "ios" ? 4 : 8,
+    marginBottom: 0,
   },
   attachBtn: {
-    padding: spacing.sm,
-    borderRadius: 20,
-    backgroundColor: "#F1F5F9",
-    marginRight: 4,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 0,
   },
   input: {
     flex: 1,
-    backgroundColor: "#F1F5F9",
-    borderRadius: 20,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    fontSize: 15,
-    maxHeight: 100,
+    backgroundColor: "transparent",
+    paddingHorizontal: 6,
+    paddingTop: 8,
+    paddingBottom: 8,
+    fontSize: 16,
+    maxHeight: 120,
     color: "#0F172A",
+    textAlignVertical: "center",
   },
   sendBtn: {
-    backgroundColor: "#3B82F6",
-    borderRadius: 20,
-    width: 40,
-    height: 40,
+    backgroundColor: "#00A884", // WhatsApp's modern green color
+    borderRadius: 24,
+    width: 48,
+    height: 48,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 6,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   sendBtnDisabled: {
-    backgroundColor: "#E2E8F0",
+    backgroundColor: "#A0AEC0", // Matches the grayed out send button/mic look
   },
   mentionsContainer: {
     backgroundColor: colors.paper,
