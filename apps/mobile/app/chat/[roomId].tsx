@@ -97,6 +97,16 @@ export default function ChatRoomScreen() {
     markReadMutation.mutate();
   }, [roomId]);
 
+  // Auto-scroll to bottom on message list update (including optimistic inserts)
+  useEffect(() => {
+    if (messages.length > 0) {
+      const timer = setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [messages.length]);
+
   // Send Message Mutation
   const sendMessageMutation = useMutation({
     mutationFn: (input: { content: string; attachments?: any[]; mentions?: string[] }) =>
@@ -118,6 +128,7 @@ export default function ChatRoomScreen() {
         id: `temp-${Date.now()}`,
         content: newMsgInput.content,
         senderId: user?.id,
+        senderName: (user as any)?.name || "Me",
         sender: {
           id: user?.id,
           name: (user as any)?.name || "Me",
@@ -473,6 +484,10 @@ export default function ChatRoomScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderMessageItem}
           contentContainerStyle={styles.listContent}
+          initialNumToRender={20}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          removeClippedSubviews={Platform.OS === "android"}
           onLayout={() => {
             // Scroll to end when messages are loaded
             if (messages.length > 0) {
