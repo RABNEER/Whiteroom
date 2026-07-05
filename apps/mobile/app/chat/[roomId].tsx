@@ -19,7 +19,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Info,
-  SendHorizontal,
+  Send,
   Clock,
   Plus,
   Pin,
@@ -565,7 +565,7 @@ export default function ChatRoomScreen() {
                 !inputText.trim() && styles.sendBtnDisabled,
               ]}
             >
-              <SendHorizontal color={colors.white} size={18} />
+              <Send color={colors.white} size={18} style={{ marginLeft: 2 }} />
             </Pressable>
           </View>
         )}
