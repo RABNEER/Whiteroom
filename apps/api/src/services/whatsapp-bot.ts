@@ -311,6 +311,8 @@ export async function startBot(isReconnect = false) {
         msg.message.extendedTextMessage?.text ||
         "";
 
+      console.log(`✉️ [WHATSAPP BOT] Received message from ${from}: "${text}" (Raw: ${JSON.stringify(msg.message)})`);
+
       // Ignore messages containing our bot's own response template to prevent infinite loops
       if (text.includes("Whiteroom Verification")) continue;
 
