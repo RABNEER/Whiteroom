@@ -239,9 +239,9 @@ export async function startBot(isReconnect = false) {
   setupFolderWatcher(authFolder);
 
   // Fetch the latest WhatsApp Web version to prevent 405 Method Not Allowed connection errors
-  let version: [number, number, number] = [2, 3000, 1019707846]; // Default fallback
+  let version: [number, number, number] = [2, 3000, 1015978430]; // Default fallback
   try {
-    const { fetchLatestBaileysVersion } = pkg as any;
+    const fetchLatestBaileysVersion = baileys.fetchLatestBaileysVersion;
     if (fetchLatestBaileysVersion) {
       const fetched = await fetchLatestBaileysVersion();
       version = fetched.version as [number, number, number];
