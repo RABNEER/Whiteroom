@@ -12,17 +12,25 @@ const refreshSecret = new TextEncoder().encode(env.JWT_REFRESH_SECRET);
 let privateKey: crypto.KeyObject | any;
 let publicKey: crypto.KeyObject | any;
 
+// Stable development fallback EC key pair to prevent logouts on local server hot-reloads
+const DEV_PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgfXkL8qK37e6gY8qL
+0jGrImUbJATxXPCSihKyMf8d4gVzYqRFLZcv5tOhRANCAAR62x7G9T3sB4yRfXjY
+p6JGrImUbJATxXPCSihKyMf8d4gVzYqRFLZcv5tPzl9mRjwVVGEDWP+E9VOhRANC
+-----END PRIVATE KEY-----`;
+
+const DEV_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEetoexvU97AeMkX142KeiRqyJlGwQ
+E8Vz4gVzYqRFLZcv50/OX2ZGPBVUYNn/hPVToUQRDQ==
+-----END PUBLIC KEY-----`;
+
 if (env.JWT_PRIVATE_KEY && env.JWT_PUBLIC_KEY) {
-  // jose can import private/public keys asynchronously, or we can use Node's crypto synchronously
   privateKey = crypto.createPrivateKey(env.JWT_PRIVATE_KEY);
   publicKey = crypto.createPublicKey(env.JWT_PUBLIC_KEY);
 } else {
-  // Dynamically generate stable-per-process EC key pair
-  const pair = crypto.generateKeyPairSync("ec", {
-    namedCurve: "P-256",
-  });
-  privateKey = pair.privateKey;
-  publicKey = pair.publicKey;
+  // Use stable dev fallback keys to maintain persistent sessions across development restarts
+  privateKey = crypto.createPrivateKey(DEV_PRIVATE_KEY);
+  publicKey = crypto.createPublicKey(DEV_PUBLIC_KEY);
 }
 
 /**
