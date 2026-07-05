@@ -329,7 +329,23 @@ export default function AuthScreen() {
 
       setStep('WHATSAPP_POLL');
     } catch (err: any) {
-      setError(err instanceof ApiError ? err.message : 'Failed to start WhatsApp verification.');
+      console.error('[WHATSAPP FLOW ERROR]', {
+        name: err?.name,
+        message: err?.message,
+        code: err?.code,
+        status: err?.status,
+        stack: err?.stack?.substring(0, 300),
+      });
+
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else if (err?.message?.includes('Network request failed') || err?.message?.includes('Failed to fetch')) {
+        setError('Network error — check your internet connection and try again.');
+      } else if (err?.message?.includes('timeout') || err?.message?.includes('Timeout')) {
+        setError('Server is taking too long to respond. Please try again in a moment.');
+      } else {
+        setError(`Failed to start WhatsApp verification: ${err?.message || 'Unknown error'}`);
+      }
     } finally {
       setLoading(false);
     }

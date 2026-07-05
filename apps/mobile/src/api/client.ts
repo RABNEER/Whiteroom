@@ -77,10 +77,25 @@ async function request<T>(
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  // 15s timeout to prevent hanging on cold starts
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15_000);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+  } catch (fetchErr: any) {
+    clearTimeout(timeoutId);
+    if (fetchErr?.name === 'AbortError') {
+      throw new ApiError('TIMEOUT', 'Request timed out. The server may be waking up — please try again.', 0);
+    }
+    throw fetchErr;
+  }
+  clearTimeout(timeoutId);
 
   if (response.status === 401 && retry && refreshToken) {
     try {
