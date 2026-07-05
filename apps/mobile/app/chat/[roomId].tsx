@@ -19,7 +19,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Info,
-  Send,
+  SendHorizontal,
+  Clock,
   Plus,
   Pin,
   Trash2,
@@ -105,16 +106,45 @@ export default function ChatRoomScreen() {
         attachments: input.attachments,
         mentions: input.mentions,
       }),
-    onSuccess: () => {
-      setInputText("");
-      refetch();
-      // Scroll to bottom
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 200);
+    onMutate: async (newMsgInput) => {
+      // Cancel any outgoing refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: ["chatMessages", roomId] });
+
+      // Snapshot the previous messages
+      const previousMessages = queryClient.getQueryData<any[]>(["chatMessages", roomId]) || [];
+
+      // Create a temporary optimistic message
+      const optimisticMsg = {
+        id: `temp-${Date.now()}`,
+        content: newMsgInput.content,
+        senderId: user?.id,
+        sender: {
+          id: user?.id,
+          name: (user as any)?.name || "Me",
+          role: user?.role || "user",
+        },
+        createdAt: new Date().toISOString(),
+        isOptimistic: true,
+        attachments: newMsgInput.attachments || [],
+        mentions: newMsgInput.mentions || [],
+      };
+
+      // Optimistically update to the new list
+      queryClient.setQueryData(["chatMessages", roomId], [...previousMessages, optimisticMsg]);
+
+      // Return context with previous messages for rollback
+      return { previousMessages };
     },
-    onError: (err: any) => {
+    onError: (err: any, newMsgInput, context: any) => {
+      // Rollback to snapshotted messages
+      if (context?.previousMessages) {
+        queryClient.setQueryData(["chatMessages", roomId], context.previousMessages);
+      }
       Alert.alert("Error", err instanceof ApiError ? err.message : "Failed to send message");
+    },
+    onSettled: () => {
+      // Refetch from server to sync actual states
+      queryClient.invalidateQueries({ queryKey: ["chatMessages", roomId] });
     },
   });
 
@@ -177,9 +207,17 @@ export default function ChatRoomScreen() {
   const handleSend = () => {
     if (!inputText.trim()) return;
 
+    const textToSend = inputText;
+    setInputText(""); // Clear input field instantly
+
+    // Scroll to bottom instantly
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 60);
+
     // Parse mentions
     const mentions: string[] = [];
-    const parts = inputText.split("@");
+    const parts = textToSend.split("@");
     if (parts.length > 1) {
       parts.slice(1).forEach((part) => {
         const studentName = part.trim().split(" ")[0];
@@ -192,7 +230,7 @@ export default function ChatRoomScreen() {
       });
     }
 
-    sendMessageMutation.mutate({ content: inputText, mentions });
+    sendMessageMutation.mutate({ content: textToSend, mentions });
   };
 
   const handleInputChange = (text: string) => {
@@ -348,7 +386,11 @@ export default function ChatRoomScreen() {
             </Text>
             {isMe && (
               <View style={{ marginLeft: 4 }}>
-                <CheckCheck size={14} color="rgba(255, 255, 255, 0.9)" />
+                {item.isOptimistic ? (
+                  <Clock size={12} color="rgba(255, 255, 255, 0.6)" />
+                ) : (
+                  <CheckCheck size={14} color="rgba(255, 255, 255, 0.9)" />
+                )}
               </View>
             )}
           </View>
@@ -508,7 +550,7 @@ export default function ChatRoomScreen() {
                 !inputText.trim() && styles.sendBtnDisabled,
               ]}
             >
-              <Send color={colors.white} size={18} style={{ marginLeft: 2 }} />
+              <SendHorizontal color={colors.white} size={18} />
             </Pressable>
           </View>
         )}
