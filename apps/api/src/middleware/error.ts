@@ -17,6 +17,12 @@ export async function errorHandler(err: Error, c: Context) {
 
   // Unknown error — log and return generic 500
   console.error("Unhandled error:", err);
-  const internal = Errors.internal();
-  return c.json(internal.toJSON(), 500);
+  return c.json({
+    success: false,
+    error: {
+      code: "INTERNAL_SERVER_ERROR",
+      message: err.message || "Internal server error occurred",
+      stack: err.stack,
+    }
+  }, 500);
 }
