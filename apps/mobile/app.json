@@ -8,7 +8,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "icon": "./src/assets/logo.png",
+    "icon": "./src/assets/logo.jpg",
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -27,13 +27,13 @@
       "package": "app.whiteroom.mobile",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./src/assets/logo.png",
-        "backgroundColor": "#F5F0E6"
+        "foregroundImage": "./src/assets/logo.jpg",
+        "backgroundColor": "#FFFFFF"
       }
     },
     "web": {
       "bundler": "metro",
-      "favicon": "./src/assets/logo.png",
+      "favicon": "./src/assets/logo.jpg",
       "name": "Whiteroom"
     },
     "plugins": [
