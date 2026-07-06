@@ -27,7 +27,7 @@ archiveRoutes.use("*", authMiddleware);
  * School Admins & Teachers have access to classes in their tenant.
  * Parents have access if they have a student enrolled in the class.
  */
-async function verifyClassAccess(
+export async function verifyClassAccess(
   userId: string,
   tenantId: string,
   role: string,

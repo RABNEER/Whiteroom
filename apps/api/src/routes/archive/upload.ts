@@ -10,6 +10,7 @@ import {
   validateFileSize,
   validateMimeType,
 } from "../../lib/storage.js";
+import { verifyClassAccess } from "./index.js";
 
 const uploadRoutes = new Hono<{ Variables: { user: JWTPayload } }>();
 
@@ -27,21 +28,8 @@ uploadRoutes.post("/", async (c) => {
     throw Errors.validation("Class ID is required");
   }
 
-  // Only teachers and admins can upload files
-  if (user.role !== UserRole.TEACHER && user.role !== UserRole.SCHOOL_ADMIN) {
-    throw Errors.forbidden("Only teachers and school admins can upload materials");
-  }
-
-  // Verify class access
-  const [classRow] = await db
-    .select()
-    .from(classes)
-    .where(and(eq(classes.id, classId), eq(classes.tenantId, user.tenantId)))
-    .limit(1);
-
-  if (!classRow) {
-    throw Errors.forbidden("Class not found in tenant");
-  }
+  // Verify class access (enforces that teachers/admins belong to tenant, and parents have enrolled students)
+  await verifyClassAccess(user.userId, user.tenantId, user.role, classId);
 
   // Parse multipart form data
   const formData = await c.req.formData();

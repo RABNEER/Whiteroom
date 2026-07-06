@@ -37,6 +37,8 @@ import {
 } from "lucide-react-native";
 import { api, ApiError } from "@/api/client";
 import { useSession } from "@/auth/session-store";
+import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import { colors, spacing, font, radius } from "@/theme/tokens";
 import { AvatarBadge } from "@/components/ui";
 
@@ -53,6 +55,7 @@ export default function ChatRoomScreen() {
   const user = useSession((state) => state.user);
 
   const [inputText, setInputText] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
   const [showMessageInfo, setShowMessageInfo] = useState(false);
@@ -83,6 +86,19 @@ export default function ChatRoomScreen() {
     },
     enabled: roomType === "classroom",
   });
+
+  // Fetch chat rooms to resolve a fallback classroom ID for DM attachment uploads
+  const { data: rooms = [] } = useQuery({
+    queryKey: ["chatRooms"],
+    queryFn: api.chatRooms,
+    enabled: roomType !== "classroom",
+  });
+
+  const uploadClassId = useMemo(() => {
+    if (roomType === "classroom") return roomId;
+    const classroom = rooms.find((r) => r.type === "classroom");
+    return classroom ? classroom.id : null;
+  }, [roomId, roomType, rooms]);
 
   // Mark room as read on load
   const markReadMutation = useMutation({
@@ -268,45 +284,86 @@ export default function ChatRoomScreen() {
     setShowMentions(false);
   };
 
-  const handleSimulateAttachment = (type: "image" | "video" | "document") => {
+  const handlePickAttachment = async (type: "image" | "video" | "document") => {
     setShowAttachmentMenu(false);
     
-    // Simulate uploading a file by calling API with mock attachments
-    const mockFileNames = {
-      image: "photo_receipt.png",
-      video: "class_activity.mp4",
-      document: "syllabus_2026.pdf",
-    };
+    if (!uploadClassId) {
+      Alert.alert("Upload Error", "Could not find a valid classroom for file uploads.");
+      return;
+    }
 
-    const mockSizes = {
-      image: 1024 * 350,
-      video: 1024 * 1024 * 8,
-      document: 1024 * 120,
-    };
+    try {
+      let fileUri = "";
+      let fileName = "";
+      let fileType = "";
 
-    Alert.alert(
-      `Attach ${type.toUpperCase()}`,
-      `Simulate uploading ${mockFileNames[type]}?`,
-      [
-        { text: "Cancel", style: "cancel" },
+      if (type === "image" || type === "video") {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert("Permission Required", "Please allow camera roll access to pick photos/videos.");
+          return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: type === "image" ? ImagePicker.MediaTypeOptions.Images : ImagePicker.MediaTypeOptions.Videos,
+          allowsEditing: false,
+          quality: 1.0,
+        });
+
+        if (result.canceled || !result.assets || result.assets.length === 0) {
+          return;
+        }
+
+        const asset = result.assets[0];
+        fileUri = asset.uri;
+        fileName = asset.fileName || (type === "image" ? `photo_${Date.now()}.png` : `video_${Date.now()}.mp4`);
+        fileType = asset.mimeType || (type === "image" ? "image/png" : "video/mp4");
+      } else {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: "*/*",
+          copyToCacheDirectory: true,
+        });
+
+        if (result.canceled || !result.assets || result.assets.length === 0) {
+          return;
+        }
+
+        const asset = result.assets[0];
+        fileUri = asset.uri;
+        fileName = asset.name;
+        fileType = asset.mimeType || "application/octet-stream";
+      }
+
+      setIsUploading(true);
+
+      const uploadedFile = await api.uploadArchiveFile(
+        uploadClassId,
         {
-          text: "Upload",
-          onPress: () => {
-            sendMessageMutation.mutate({
-              content: `📎 Sent attachment: ${mockFileNames[type]}`,
-              attachments: [
-                {
-                  type,
-                  url: `https://storage.whiteroom.in/${type}s/${Date.now()}_${mockFileNames[type]}`,
-                  name: mockFileNames[type],
-                  size: mockSizes[type],
-                },
-              ],
-            });
-          },
+          uri: fileUri,
+          name: fileName,
+          type: fileType,
         },
-      ]
-    );
+        "ChatAttachments"
+      );
+
+      sendMessageMutation.mutate({
+        content: `📎 Sent attachment: ${uploadedFile.name}`,
+        attachments: [
+          {
+            type,
+            url: uploadedFile.url,
+            name: uploadedFile.name,
+            size: uploadedFile.size,
+          },
+        ],
+      });
+
+    } catch (err: any) {
+      console.error("[PICK_ATTACHMENT_ERROR]", err);
+      Alert.alert("Upload Failed", err.message || "Failed to upload selected file.");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleOpenMessageInfo = async (msg: any) => {
@@ -706,7 +763,7 @@ export default function ChatRoomScreen() {
             
             <View style={styles.attachmentGrid}>
               <Pressable
-                onPress={() => handleSimulateAttachment("image")}
+                onPress={() => handlePickAttachment("image")}
                 style={styles.attachmentGridItem}
               >
                 <View style={[styles.attachmentIconBox, { backgroundColor: "#ECFDF5" }]}>
@@ -716,7 +773,7 @@ export default function ChatRoomScreen() {
               </Pressable>
 
               <Pressable
-                onPress={() => handleSimulateAttachment("video")}
+                onPress={() => handlePickAttachment("video")}
                 style={styles.attachmentGridItem}
               >
                 <View style={[styles.attachmentIconBox, { backgroundColor: "#EFF6FF" }]}>
@@ -726,7 +783,7 @@ export default function ChatRoomScreen() {
               </Pressable>
 
               <Pressable
-                onPress={() => handleSimulateAttachment("document")}
+                onPress={() => handlePickAttachment("document")}
                 style={styles.attachmentGridItem}
               >
                 <View style={[styles.attachmentIconBox, { backgroundColor: "#FEF3C7" }]}>
@@ -738,6 +795,13 @@ export default function ChatRoomScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {isUploading && (
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 9999 }]}>
+          <ActivityIndicator size="large" color="#ffffff" />
+          <Text style={{ color: "#ffffff", marginTop: 12, fontSize: 16, fontWeight: "600" }}>Uploading attachment...</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
