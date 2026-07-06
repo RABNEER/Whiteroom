@@ -7,11 +7,13 @@ import { createHash } from "crypto";
  */
 function getSupabaseUrl() {
   if (process.env.SUPABASE_URL) return process.env.SUPABASE_URL;
+  if (env.SUPABASE_URL) return env.SUPABASE_URL;
   const dbUrl = env.DATABASE_URL || "";
-  const directMatch = dbUrl.match(/([^.]+)\.supabase\.co/);
-  if (directMatch) return `https://${directMatch[1]}.supabase.co`;
-  const poolerMatch = dbUrl.match(/postgres\.([^:@]+)/);
-  if (poolerMatch) return `https://${poolerMatch[1]}.supabase.co`;
+  // Look for any exact 20-character alphanumeric string (project ref format)
+  const refMatch = dbUrl.match(/\b[a-zA-Z0-9]{20}\b/) || dbUrl.match(/[a-zA-Z0-9]{20}/);
+  if (refMatch) {
+    return `https://${refMatch[0].toLowerCase()}.supabase.co`;
+  }
   return "";
 }
 
