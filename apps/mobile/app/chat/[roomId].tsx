@@ -12,6 +12,8 @@ import {
   Alert,
   Modal,
   ScrollView,
+  Image,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -34,6 +36,7 @@ import {
   Eye,
   Megaphone,
   Smile,
+  Play,
 } from "lucide-react-native";
 import { api, ApiError } from "@/api/client";
 import { useSession } from "@/auth/session-store";
@@ -64,6 +67,7 @@ export default function ChatRoomScreen() {
   // List of receipts for the selected message info modal
   const [messageReceipts, setMessageReceipts] = useState<any[]>([]);
   const [loadingReceipts, setLoadingReceipts] = useState(false);
+  const [activeImageUrl, setActiveImageUrl] = useState<string | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
 
@@ -422,22 +426,51 @@ export default function ChatRoomScreen() {
 
           {/* Attachments */}
           {item.attachments && item.attachments.map((att: any, idx: number) => (
-            <View key={idx} style={[styles.attachmentBox, isMe && styles.attachmentBoxRight]}>
+            <View key={idx} style={styles.imageContainer}>
               {att.type === "image" ? (
-                <ImageIcon size={18} color={isMe ? colors.white : "#3B82F6"} style={{ marginRight: 8 }} />
+                <Pressable onPress={() => setActiveImageUrl(att.url)}>
+                  <Image
+                    source={{ uri: att.url }}
+                    style={styles.chatImage}
+                    resizeMode="cover"
+                  />
+                </Pressable>
               ) : att.type === "video" ? (
-                <VideoIcon size={18} color={isMe ? colors.white : "#3B82F6"} style={{ marginRight: 8 }} />
+                <Pressable 
+                  onPress={() => Linking.openURL(att.url)}
+                  style={[styles.chatVideoContainer, isMe && styles.chatVideoContainerRight]}
+                >
+                  <View style={[styles.chatVideoPlaceholder, isMe && styles.chatVideoPlaceholderRight]}>
+                    <VideoIcon size={32} color={isMe ? "rgba(255, 255, 255, 0.8)" : "#3B82F6"} />
+                    <View style={styles.playOverlayButton}>
+                      <Play size={16} color={colors.white} fill={colors.white} style={{ marginLeft: 2 }} />
+                    </View>
+                  </View>
+                  <View style={styles.chatVideoMeta}>
+                    <Text style={[styles.attachmentName, isMe && styles.attachmentNameRight]} numberOfLines={1}>
+                      {att.name}
+                    </Text>
+                    <Text style={[styles.attachmentSize, isMe && styles.attachmentSizeRight]}>
+                      Play Video • {(att.size / (1024 * 1024)).toFixed(1)} MB
+                    </Text>
+                  </View>
+                </Pressable>
               ) : (
-                <FileText size={18} color={isMe ? colors.white : "#3B82F6"} style={{ marginRight: 8 }} />
+                <Pressable 
+                  onPress={() => Linking.openURL(att.url)}
+                  style={[styles.attachmentBox, isMe && styles.attachmentBoxRight]}
+                >
+                  <FileText size={18} color={isMe ? colors.white : "#3B82F6"} style={{ marginRight: 8 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.attachmentName, isMe && styles.attachmentNameRight]} numberOfLines={1}>
+                      {att.name}
+                    </Text>
+                    <Text style={[styles.attachmentSize, isMe && styles.attachmentSizeRight]}>
+                      {(att.size / 1024).toFixed(1)} KB
+                    </Text>
+                  </View>
+                </Pressable>
               )}
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.attachmentName, isMe && styles.attachmentNameRight]} numberOfLines={1}>
-                  {att.name}
-                </Text>
-                <Text style={[styles.attachmentSize, isMe && styles.attachmentSizeRight]}>
-                  {(att.size / 1024).toFixed(1)} KB
-                </Text>
-              </View>
             </View>
           ))}
 
@@ -802,6 +835,30 @@ export default function ChatRoomScreen() {
           <Text style={{ color: "#ffffff", marginTop: 12, fontSize: 16, fontWeight: "600" }}>Uploading attachment...</Text>
         </View>
       )}
+
+      {/* Fullscreen Image Viewer Modal */}
+      <Modal
+        visible={!!activeImageUrl}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setActiveImageUrl(null)}
+      >
+        <View style={styles.fullscreenModalContainer}>
+          <Pressable style={styles.fullscreenModalCloseArea} onPress={() => setActiveImageUrl(null)}>
+            <Image
+              source={{ uri: activeImageUrl || "" }}
+              style={styles.fullscreenImage}
+              resizeMode="contain"
+            />
+          </Pressable>
+          <Pressable
+            onPress={() => setActiveImageUrl(null)}
+            style={styles.fullscreenCloseButton}
+          >
+            <X color={colors.white} size={24} />
+          </Pressable>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -985,6 +1042,72 @@ const styles = StyleSheet.create({
   },
   attachmentBoxRight: {
     backgroundColor: "rgba(255, 255, 255, 0.15)",
+  },
+  imageContainer: {
+    marginBottom: 6,
+    borderRadius: radius.md,
+    overflow: "hidden",
+  },
+  chatImage: {
+    width: 240,
+    height: 160,
+    borderRadius: radius.md,
+  },
+  chatVideoContainer: {
+    width: 240,
+    borderRadius: radius.md,
+    overflow: "hidden",
+    backgroundColor: "rgba(0,0,0,0.03)",
+  },
+  chatVideoContainerRight: {
+    backgroundColor: "rgba(255,255,255,0.15)",
+  },
+  chatVideoPlaceholder: {
+    width: 240,
+    height: 130,
+    backgroundColor: "#E2E8F0",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  chatVideoPlaceholderRight: {
+    backgroundColor: "rgba(0,0,0,0.1)",
+  },
+  playOverlayButton: {
+    position: "absolute",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  chatVideoMeta: {
+    padding: spacing.sm,
+    backgroundColor: "rgba(0,0,0,0.02)",
+  },
+  fullscreenModalContainer: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.95)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fullscreenModalCloseArea: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fullscreenImage: {
+    width: "100%",
+    height: "80%",
+  },
+  fullscreenCloseButton: {
+    position: "absolute",
+    top: 40,
+    right: 20,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    padding: 8,
+    borderRadius: 20,
   },
   attachmentName: {
     fontSize: 13,

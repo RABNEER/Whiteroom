@@ -27,7 +27,7 @@
       "package": "app.whiteroom.mobile",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./src/assets/logo.jpg",
+        "foregroundImage": "./src/assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       }
     },
