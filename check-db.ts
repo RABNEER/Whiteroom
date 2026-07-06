@@ -8,20 +8,17 @@ async function run() {
   console.log("Connecting to:", url);
   const client = postgres(url);
   try {
-    const tables = await client`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public';
+    console.log("Querying last 5 messages with attachments...");
+    const rows = await client`
+      SELECT id, content, attachments 
+      FROM messages 
+      WHERE attachments IS NOT NULL 
+      ORDER BY created_at DESC 
+      LIMIT 5;
     `;
-    console.log("Existing tables:", tables.map(t => t.table_name));
-
-    const policies = await client`
-      SELECT policyname, tablename 
-      FROM pg_policies;
-    `;
-    console.log("Existing policies:", policies);
+    console.log("Messages with attachments:", JSON.stringify(rows, null, 2));
   } catch (err) {
-    console.error("Error connecting to DB:", err);
+    console.error("Error executing query:", err);
   } finally {
     await client.end();
   }

@@ -70,6 +70,14 @@ export default function ChatRoomScreen() {
   const [activeImageUrl, setActiveImageUrl] = useState<string | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
+  const isCloseToBottomRef = useRef(true);
+
+  const handleScroll = (event: any) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const paddingToBottom = 150;
+    const isClose = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+    isCloseToBottomRef.current = isClose;
+  };
 
   // ─── Queries ───
   
@@ -120,10 +128,14 @@ export default function ChatRoomScreen() {
   // Auto-scroll to bottom on message list update (including optimistic inserts)
   useEffect(() => {
     if (messages.length > 0) {
-      const timer = setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 50);
-      return () => clearTimeout(timer);
+      const lastMessage = messages[messages.length - 1];
+      const sentByMe = lastMessage?.senderId === user?.id;
+      if (isCloseToBottomRef.current || sentByMe) {
+        const timer = setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 50);
+        return () => clearTimeout(timer);
+      }
     }
   }, [messages.length]);
 
@@ -425,54 +437,75 @@ export default function ChatRoomScreen() {
           )}
 
           {/* Attachments */}
-          {item.attachments && item.attachments.map((att: any, idx: number) => (
-            <View key={idx} style={styles.imageContainer}>
-              {att.type === "image" ? (
-                <Pressable onPress={() => setActiveImageUrl(att.url)}>
-                  <Image
-                    source={{ uri: att.url }}
-                    style={styles.chatImage}
-                    resizeMode="cover"
-                  />
-                </Pressable>
-              ) : att.type === "video" ? (
-                <Pressable 
-                  onPress={() => Linking.openURL(att.url)}
-                  style={[styles.chatVideoContainer, isMe && styles.chatVideoContainerRight]}
-                >
-                  <View style={[styles.chatVideoPlaceholder, isMe && styles.chatVideoPlaceholderRight]}>
-                    <VideoIcon size={32} color={isMe ? "rgba(255, 255, 255, 0.8)" : "#3B82F6"} />
-                    <View style={styles.playOverlayButton}>
-                      <Play size={16} color={colors.white} fill={colors.white} style={{ marginLeft: 2 }} />
+          {item.attachments && item.attachments.map((att: any, idx: number) => {
+            const attName = (att.name || "").toLowerCase();
+            const isImage = att.type === "image" || 
+              attName.endsWith(".png") || 
+              attName.endsWith(".jpg") || 
+              attName.endsWith(".jpeg") || 
+              attName.endsWith(".gif") || 
+              attName.endsWith(".webp");
+            
+            const isVideo = att.type === "video" || 
+              attName.endsWith(".mp4") || 
+              attName.endsWith(".m4v") || 
+              attName.endsWith(".mov") || 
+              attName.endsWith(".mkv");
+
+            const attSize = att.size || 0;
+            const sizeText = isVideo 
+              ? `Play Video • ${(attSize / (1024 * 1024)).toFixed(1)} MB`
+              : `${(attSize / 1024).toFixed(1)} KB`;
+
+            return (
+              <View key={idx} style={styles.imageContainer}>
+                {isImage ? (
+                  <Pressable onPress={() => setActiveImageUrl(att.url)}>
+                    <Image
+                      source={{ uri: att.url }}
+                      style={styles.chatImage}
+                      resizeMode="cover"
+                    />
+                  </Pressable>
+                ) : isVideo ? (
+                  <Pressable 
+                    onPress={() => Linking.openURL(att.url)}
+                    style={[styles.chatVideoContainer, isMe && styles.chatVideoContainerRight]}
+                  >
+                    <View style={[styles.chatVideoPlaceholder, isMe && styles.chatVideoPlaceholderRight]}>
+                      <VideoIcon size={32} color={isMe ? "rgba(255, 255, 255, 0.8)" : "#3B82F6"} />
+                      <View style={styles.playOverlayButton}>
+                        <Play size={16} color={colors.white} fill={colors.white} style={{ marginLeft: 2 }} />
+                      </View>
                     </View>
-                  </View>
-                  <View style={styles.chatVideoMeta}>
-                    <Text style={[styles.attachmentName, isMe && styles.attachmentNameRight]} numberOfLines={1}>
-                      {att.name}
-                    </Text>
-                    <Text style={[styles.attachmentSize, isMe && styles.attachmentSizeRight]}>
-                      Play Video • {(att.size / (1024 * 1024)).toFixed(1)} MB
-                    </Text>
-                  </View>
-                </Pressable>
-              ) : (
-                <Pressable 
-                  onPress={() => Linking.openURL(att.url)}
-                  style={[styles.attachmentBox, isMe && styles.attachmentBoxRight]}
-                >
-                  <FileText size={18} color={isMe ? colors.white : "#3B82F6"} style={{ marginRight: 8 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.attachmentName, isMe && styles.attachmentNameRight]} numberOfLines={1}>
-                      {att.name}
-                    </Text>
-                    <Text style={[styles.attachmentSize, isMe && styles.attachmentSizeRight]}>
-                      {(att.size / 1024).toFixed(1)} KB
-                    </Text>
-                  </View>
-                </Pressable>
-              )}
-            </View>
-          ))}
+                    <View style={styles.chatVideoMeta}>
+                      <Text style={[styles.attachmentName, isMe && styles.attachmentNameRight]} numberOfLines={1}>
+                        {att.name}
+                      </Text>
+                      <Text style={[styles.attachmentSize, isMe && styles.attachmentSizeRight]}>
+                        {sizeText}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ) : (
+                  <Pressable 
+                    onPress={() => Linking.openURL(att.url)}
+                    style={[styles.attachmentBox, isMe && styles.attachmentBoxRight]}
+                  >
+                    <FileText size={18} color={isMe ? colors.white : "#3B82F6"} style={{ marginRight: 8 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.attachmentName, isMe && styles.attachmentNameRight]} numberOfLines={1}>
+                        {att.name}
+                      </Text>
+                      <Text style={[styles.attachmentSize, isMe && styles.attachmentSizeRight]}>
+                        {sizeText}
+                      </Text>
+                    </View>
+                  </Pressable>
+                )}
+              </View>
+            );
+          })}
 
           <Text style={[styles.messageText, isMe ? styles.messageTextRight : styles.messageTextLeft]}>
             {item.content}
@@ -578,6 +611,8 @@ export default function ChatRoomScreen() {
           maxToRenderPerBatch={10}
           windowSize={10}
           removeClippedSubviews={Platform.OS === "android"}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
           onLayout={() => {
             // Scroll to end when messages are loaded
             if (messages.length > 0) {
