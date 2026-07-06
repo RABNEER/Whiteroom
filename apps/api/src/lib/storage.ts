@@ -5,14 +5,24 @@ import { createHash } from "crypto";
 /**
  * Supabase Storage client for file uploads with original quality preservation
  */
-const supabaseUrl = env.DATABASE_URL?.match(/https?:\/\/([^.]+)\.supabase\.co/)?.[0] || "";
+function getSupabaseUrl() {
+  if (process.env.SUPABASE_URL) return process.env.SUPABASE_URL;
+  const dbUrl = env.DATABASE_URL || "";
+  const directMatch = dbUrl.match(/([^.]+)\.supabase\.co/);
+  if (directMatch) return `https://${directMatch[1]}.supabase.co`;
+  const poolerMatch = dbUrl.match(/postgres\.([^:@]+)/);
+  if (poolerMatch) return `https://${poolerMatch[1]}.supabase.co`;
+  return "";
+}
+
+const supabaseUrl = getSupabaseUrl();
 const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 let supabaseClient: ReturnType<typeof createClient> | null = null;
 
 function getSupabaseClient() {
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Supabase configuration missing. Check DATABASE_URL and SUPABASE_SERVICE_ROLE_KEY");
+    throw new Error(`Supabase configuration missing. url: "${supabaseUrl}", key exists: ${!!supabaseKey}. Check DATABASE_URL and SUPABASE_SERVICE_ROLE_KEY`);
   }
 
   if (!supabaseClient) {
