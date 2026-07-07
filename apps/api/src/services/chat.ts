@@ -300,6 +300,7 @@ export async function getMessages(
       createdAt: messages.createdAt,
       updatedAt: messages.updatedAt,
       deletedAt: messages.deletedAt,
+      readCount: sql<number>`(SELECT count(*)::int FROM message_receipts WHERE message_receipts.message_id = messages.id AND message_receipts.user_id != messages.sender_id)`
     })
     .from(messages)
     .innerJoin(users, eq(messages.senderId, users.id))

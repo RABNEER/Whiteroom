@@ -14,6 +14,8 @@ import {
   ScrollView,
   Image,
   Linking,
+  PanResponder,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -37,6 +39,7 @@ import {
   Megaphone,
   Smile,
   Play,
+  ArrowDown,
 } from "lucide-react-native";
 import { api, ApiError } from "@/api/client";
 import { useSession } from "@/auth/session-store";
@@ -81,6 +84,303 @@ const ChatImage = ({ uri, onPress }: { uri: string; onPress: () => void }) => {
   );
 };
 
+const VoiceNotePlayer = ({ name, url, size, isMe }: { name: string; url: string; size: number; isMe: boolean }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [position, setPosition] = useState(0);
+  const duration = 12; // simulated duration
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const togglePlay = () => {
+    if (isPlaying) {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      setIsPlaying(false);
+    } else {
+      setIsPlaying(true);
+      Linking.openURL(url).catch(() => {});
+      intervalRef.current = setInterval(() => {
+        setPosition((prev) => {
+          if (prev >= duration) {
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            setIsPlaying(false);
+            return 0;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  const formatTime = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainingSecs = secs % 60;
+    return `${mins}:${remainingSecs < 10 ? "0" : ""}${remainingSecs}`;
+  };
+
+  const progressPercent = (position / duration) * 100;
+
+  return (
+    <View style={[styles.voicePlayerContainer, isMe && styles.voicePlayerContainerRight]}>
+      <Pressable onPress={togglePlay} style={styles.voicePlayButton}>
+        {isPlaying ? (
+          <X size={18} color={isMe ? colors.white : "#3B82F6"} />
+        ) : (
+          <Play size={18} color={isMe ? colors.white : "#3B82F6"} fill={isMe ? colors.white : "#3B82F6"} style={{ marginLeft: 2 }} />
+        )}
+      </Pressable>
+      <View style={styles.voiceProgressArea}>
+        <View style={styles.voiceProgressBarBg}>
+          <View style={[styles.voiceProgressBarFill, { width: `${progressPercent}%` }]} />
+        </View>
+        <View style={styles.voiceMetaRow}>
+          <Text style={[styles.voiceTimeText, isMe && styles.voiceTimeTextRight]}>
+            {formatTime(position)} / {formatTime(duration)}
+          </Text>
+          <Text style={[styles.voiceSizeText, isMe && styles.voiceSizeTextRight]}>
+            {((size || 0) / 1024).toFixed(1)} KB
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+const MessageBubble = React.memo(({ 
+  item, 
+  isMe, 
+  roomType, 
+  isTeacherOrAdmin, 
+  onLongPress, 
+  onSwipe, 
+  onPlayVideo, 
+  onOpenImage,
+  formatMessageTime 
+}: { 
+  item: any; 
+  isMe: boolean; 
+  roomType: string; 
+  isTeacherOrAdmin: boolean; 
+  onLongPress: (item: any) => void; 
+  onSwipe: (item: any) => void; 
+  onPlayVideo: (url: string) => void; 
+  onOpenImage: (url: string) => void;
+  formatMessageTime: (date: string | Date) => string;
+}) => {
+  const swipeX = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        return Math.abs(gestureState.dx) > 15 && gestureState.dx > 0 && Math.abs(gestureState.dy) < 10;
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        const val = Math.min(60, Math.max(0, gestureState.dx));
+        swipeX.setValue(val);
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        if (gestureState.dx > 50) {
+          onSwipe(item);
+        }
+        Animated.spring(swipeX, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      },
+    })
+  ).current;
+
+  return (
+    <Pressable
+      onLongPress={() => onLongPress(item)}
+      style={[
+        styles.messageRow,
+        isMe ? styles.messageRowRight : styles.messageRowLeft,
+      ]}
+    >
+      {!isMe && (
+        <View style={styles.avatarContainer}>
+          <AvatarBadge label={item.senderName || "User"} size={32} />
+        </View>
+      )}
+      <Animated.View 
+        {...panResponder.panHandlers}
+        style={[
+          { transform: [{ translateX: swipeX }] },
+          styles.bubble,
+          isMe ? styles.bubbleRight : styles.bubbleLeft,
+          item.attachments && item.attachments.length > 0 && styles.bubbleWithAttachment
+        ]}
+      >
+        {/* Sender Name in group chats */}
+        {!isMe && roomType !== "direct_message" && (
+          <Text style={styles.senderName}>{item.senderName || "User"}</Text>
+        )}
+
+        {/* Quoted Message Card */}
+        {item.replyTo && (
+          <View style={[styles.quotedBubbleCard, isMe ? styles.quotedBubbleCardRight : styles.quotedBubbleCardLeft]}>
+            <View style={styles.quotedBar} />
+            <View style={{ padding: 6, flex: 1 }}>
+              <Text style={styles.quotedSenderName}>{item.replyTo.senderName}</Text>
+              <Text style={styles.quotedText} numberOfLines={2}>{item.replyTo.text}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Attachments */}
+        {item.attachments && item.attachments.map((att: any, idx: number) => {
+          const attName = (att.name || "").toLowerCase();
+          const isImage = att.type === "image" || 
+            attName.endsWith(".png") || 
+            attName.endsWith(".jpg") || 
+            attName.endsWith(".jpeg") || 
+            attName.endsWith(".gif") || 
+            attName.endsWith(".webp");
+          
+          const isVideo = att.type === "video" || 
+            attName.endsWith(".mp4") || 
+            attName.endsWith(".m4v") || 
+            attName.endsWith(".mov") || 
+            attName.endsWith(".mkv");
+
+          const isAudio = att.type === "audio" ||
+            attName.endsWith(".mp3") ||
+            attName.endsWith(".m4a") ||
+            attName.endsWith(".wav") ||
+            attName.endsWith(".ogg") ||
+            attName.endsWith(".aac");
+
+          const attSize = att.size || 0;
+
+          if (isImage) {
+            return (
+              <View key={idx} style={styles.imageContainer}>
+                <ChatImage uri={att.url} onPress={() => onOpenImage(att.url)} />
+              </View>
+            );
+          }
+
+          if (isVideo) {
+            return (
+              <View key={idx} style={styles.imageContainer}>
+                <Pressable 
+                  onPress={() => onPlayVideo(att.url)}
+                  style={[styles.chatVideoContainer, isMe && styles.chatVideoContainerRight]}
+                >
+                  <View style={[styles.chatVideoPlaceholder, isMe && styles.chatVideoPlaceholderRight]}>
+                    <VideoIcon size={32} color={isMe ? "rgba(255, 255, 255, 0.8)" : "#3B82F6"} />
+                    <View style={styles.playOverlayButton}>
+                      <Play size={16} color={colors.white} fill={colors.white} style={{ marginLeft: 2 }} />
+                    </View>
+                  </View>
+                  <View style={styles.chatVideoMeta}>
+                    <Text style={[styles.attachmentName, isMe && styles.attachmentNameRight]} numberOfLines={1}>
+                      {att.name}
+                    </Text>
+                    <Text style={[styles.attachmentSize, isMe && styles.attachmentSizeRight]}>
+                      Play Video • {(attSize / (1024 * 1024)).toFixed(1)} MB
+                    </Text>
+                  </View>
+                </Pressable>
+              </View>
+            );
+          }
+
+          if (isAudio) {
+            return (
+              <VoiceNotePlayer key={idx} name={att.name} url={att.url} size={attSize} isMe={isMe} />
+            );
+          }
+
+          return (
+            <View key={idx} style={styles.imageContainer}>
+              <Pressable 
+                onPress={() => Linking.openURL(att.url)}
+                style={[styles.attachmentBox, isMe && styles.attachmentBoxRight]}
+              >
+                <FileText size={18} color={isMe ? colors.white : "#3B82F6"} style={{ marginRight: 8 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.attachmentName, isMe && styles.attachmentNameRight]} numberOfLines={1}>
+                    {att.name}
+                  </Text>
+                  <Text style={[styles.attachmentSize, isMe && styles.attachmentSizeRight]}>
+                    {(attSize / 1024).toFixed(1)} KB
+                  </Text>
+                </View>
+              </Pressable>
+            </View>
+          );
+        })}
+
+        <Text style={[styles.messageText, isMe ? styles.messageTextRight : styles.messageTextLeft]}>
+          {item.content}
+        </Text>
+
+        {/* Reaction badges */}
+        {item.reactions && item.reactions.length > 0 && (
+          <View style={[styles.reactionBadgeRow, isMe && styles.reactionBadgeRowRight]}>
+            {item.reactions.slice(0, 3).map((r: string, rIdx: number) => (
+              <View key={rIdx} style={styles.reactionMiniBadge}>
+                <Text style={{ fontSize: 11 }}>{r}</Text>
+              </View>
+            ))}
+            {item.reactions.length > 3 && (
+              <View style={styles.reactionMiniBadge}>
+                <Text style={{ fontSize: 9, fontWeight: "700", color: "#64748B" }}>+{item.reactions.length - 3}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        <View style={styles.bubbleMeta}>
+          {item.isPinned && (
+            <Pin size={10} color={isMe ? "rgba(255, 255, 255, 0.8)" : "#64748B"} style={{ marginRight: 4 }} />
+          )}
+          <Text style={[styles.messageTime, isMe ? styles.messageTimeRight : styles.messageTimeLeft]}>
+            {formatMessageTime(item.createdAt)}
+          </Text>
+          {isMe && (
+            <View style={{ marginLeft: 4 }}>
+              {item.isOptimistic ? (
+                <Clock size={12} color="rgba(255, 255, 255, 0.6)" />
+              ) : item.readCount > 0 ? (
+                <CheckCheck size={14} color="#34B7F1" /> // WhatsApp Blue ticks
+              ) : (
+                <CheckCheck size={14} color="rgba(255, 255, 255, 0.75)" /> // WhatsApp Grey ticks
+              )}
+            </View>
+          )}
+        </View>
+      </Animated.View>
+    </Pressable>
+  );
+});
+
+const COMMON_EMOJIS = [
+  "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇", 
+  "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", 
+  "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🤩", 
+  "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", 
+  "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", 
+  "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", 
+  "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", 
+  "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", 
+  "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", 
+  "👿", "👹", "👺", "🤡", "💩", "👻", "💀", "☠️", "👽", "👾", 
+  "🤖", "🎃", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿", 
+  "😾", "👋", "🤚", "🖐️", "✋", "🖖", "👌", "🤌", "🤏", "✌️", 
+  "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️", 
+  "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌", "👐", "🤲", 
+  "🤝", "🙏", "✍️", "💅", "🤳", "💪", "🦾", "🦿", "🦵", "🦶", 
+  "👂", "🦻", "👃", "🧠", "🫀", "🫁", "🦷", "🦴", "👀", "👁️", 
+  "👅", "👄", "💋", "🩸", "❤️", "🧡", "💛", "💚", "💙", "💜"
+];
+
 export default function ChatRoomScreen() {
   const { roomId, roomType, name: initialName, chatMode: initialChatMode } = useLocalSearchParams<{
     roomId: string;
@@ -100,6 +400,11 @@ export default function ChatRoomScreen() {
   const [showMessageInfo, setShowMessageInfo] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [replyToMessage, setReplyToMessage] = useState<any | null>(null);
+  const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
   // List of receipts for the selected message info modal
   const [messageReceipts, setMessageReceipts] = useState<any[]>([]);
   const [loadingReceipts, setLoadingReceipts] = useState(false);
@@ -108,11 +413,32 @@ export default function ChatRoomScreen() {
   const flatListRef = useRef<FlatList>(null);
   const isCloseToBottomRef = useRef(true);
 
+  const messagesCountRef = useRef(0);
+
+  useEffect(() => {
+    if (!isCloseToBottomRef.current && messages.length > messagesCountRef.current && messagesCountRef.current > 0) {
+      setUnreadCount((prev) => prev + (messages.length - messagesCountRef.current));
+    }
+    messagesCountRef.current = messages.length;
+  }, [messages.length]);
+
+  const handleScrollToBottom = () => {
+    flatListRef.current?.scrollToEnd({ animated: true });
+    setUnreadCount(0);
+    setShowScrollBottomBtn(false);
+  };
+
   const handleScroll = (event: any) => {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
     const paddingToBottom = 150;
     const isClose = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
     isCloseToBottomRef.current = isClose;
+
+    const isScrolledUp = contentOffset.y < contentSize.height - layoutMeasurement.height - 300;
+    setShowScrollBottomBtn(isScrolledUp);
+    if (!isScrolledUp) {
+      setUnreadCount(0);
+    }
   };
 
   // ─── Queries ───
@@ -147,6 +473,41 @@ export default function ChatRoomScreen() {
     const classroom = rooms.find((r) => r.type === "classroom");
     return classroom ? classroom.id : null;
   }, [roomId, roomType, rooms]);
+
+  const processedMessages = useMemo(() => {
+    const reactions: Record<string, string[]> = {};
+    const filtered = messages.filter((msg: any) => {
+      if (msg.content.startsWith("reaction:")) {
+        const parts = msg.content.split(":");
+        const targetId = parts[1];
+        const emoji = parts[2];
+        if (targetId && emoji) {
+          if (!reactions[targetId]) reactions[targetId] = [];
+          reactions[targetId].push(emoji);
+        }
+        return false;
+      }
+      return true;
+    });
+
+    return filtered.map((msg: any) => {
+      let content = msg.content;
+      let replyTo = null;
+      if (msg.content.startsWith('{"replyTo":')) {
+        try {
+          const parsed = JSON.parse(msg.content);
+          content = parsed.text;
+          replyTo = parsed.replyTo;
+        } catch (e) {}
+      }
+      return {
+        ...msg,
+        content,
+        replyTo,
+        reactions: reactions[msg.id] || [],
+      };
+    });
+  }, [messages]);
 
   // Mark room as read on load
   const markReadMutation = useMutation({
@@ -286,7 +647,21 @@ export default function ChatRoomScreen() {
   const handleSend = () => {
     if (!inputText.trim()) return;
 
-    const textToSend = inputText;
+    let textToSend = inputText;
+    
+    if (replyToMessage) {
+      textToSend = JSON.stringify({
+        replyTo: {
+          senderName: replyToMessage.senderName,
+          text: replyToMessage.content.startsWith('{"replyTo":') 
+            ? JSON.parse(replyToMessage.content).text 
+            : replyToMessage.content
+        },
+        text: inputText
+      });
+      setReplyToMessage(null);
+    }
+
     setInputText(""); // Clear input field instantly
 
     // Scroll to bottom instantly
@@ -296,7 +671,7 @@ export default function ChatRoomScreen() {
 
     // Parse mentions
     const mentions: string[] = [];
-    const parts = textToSend.split("@");
+    const parts = inputText.split("@");
     if (parts.length > 1) {
       parts.slice(1).forEach((part) => {
         const studentName = part.trim().split(" ")[0];
@@ -448,118 +823,17 @@ export default function ChatRoomScreen() {
     const isMe = item.senderId === user?.id;
 
     return (
-      <Pressable
-        onLongPress={() => {
-          setSelectedMessage(item);
-        }}
-        style={[
-          styles.messageRow,
-          isMe ? styles.messageRowRight : styles.messageRowLeft,
-        ]}
-      >
-        {!isMe && (
-          <View style={styles.avatarContainer}>
-            <AvatarBadge label={item.senderName || "User"} size={32} />
-          </View>
-        )}
-        <View style={[
-          styles.bubble,
-          isMe ? styles.bubbleRight : styles.bubbleLeft,
-          item.attachments && item.attachments.length > 0 && styles.bubbleWithAttachment
-        ]}>
-          {/* Sender Name in group chats */}
-          {!isMe && roomType !== "direct_message" && (
-            <Text style={styles.senderName}>{item.senderName || "User"}</Text>
-          )}
-
-          {/* Attachments */}
-          {item.attachments && item.attachments.map((att: any, idx: number) => {
-            const attName = (att.name || "").toLowerCase();
-            const isImage = att.type === "image" || 
-              attName.endsWith(".png") || 
-              attName.endsWith(".jpg") || 
-              attName.endsWith(".jpeg") || 
-              attName.endsWith(".gif") || 
-              attName.endsWith(".webp");
-            
-            const isVideo = att.type === "video" || 
-              attName.endsWith(".mp4") || 
-              attName.endsWith(".m4v") || 
-              attName.endsWith(".mov") || 
-              attName.endsWith(".mkv");
-
-            const attSize = att.size || 0;
-            const sizeText = isVideo 
-              ? `Play Video • ${(attSize / (1024 * 1024)).toFixed(1)} MB`
-              : `${(attSize / 1024).toFixed(1)} KB`;
-
-            return (
-              <View key={idx} style={styles.imageContainer}>
-                {isImage ? (
-                  <ChatImage uri={att.url} onPress={() => setActiveImageUrl(att.url)} />
-                ) : isVideo ? (
-                  <Pressable 
-                    onPress={() => Linking.openURL(att.url)}
-                    style={[styles.chatVideoContainer, isMe && styles.chatVideoContainerRight]}
-                  >
-                    <View style={[styles.chatVideoPlaceholder, isMe && styles.chatVideoPlaceholderRight]}>
-                      <VideoIcon size={32} color={isMe ? "rgba(255, 255, 255, 0.8)" : "#3B82F6"} />
-                      <View style={styles.playOverlayButton}>
-                        <Play size={16} color={colors.white} fill={colors.white} style={{ marginLeft: 2 }} />
-                      </View>
-                    </View>
-                    <View style={styles.chatVideoMeta}>
-                      <Text style={[styles.attachmentName, isMe && styles.attachmentNameRight]} numberOfLines={1}>
-                        {att.name}
-                      </Text>
-                      <Text style={[styles.attachmentSize, isMe && styles.attachmentSizeRight]}>
-                        {sizeText}
-                      </Text>
-                    </View>
-                  </Pressable>
-                ) : (
-                  <Pressable 
-                    onPress={() => Linking.openURL(att.url)}
-                    style={[styles.attachmentBox, isMe && styles.attachmentBoxRight]}
-                  >
-                    <FileText size={18} color={isMe ? colors.white : "#3B82F6"} style={{ marginRight: 8 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.attachmentName, isMe && styles.attachmentNameRight]} numberOfLines={1}>
-                        {att.name}
-                      </Text>
-                      <Text style={[styles.attachmentSize, isMe && styles.attachmentSizeRight]}>
-                        {sizeText}
-                      </Text>
-                    </View>
-                  </Pressable>
-                )}
-              </View>
-            );
-          })}
-
-          <Text style={[styles.messageText, isMe ? styles.messageTextRight : styles.messageTextLeft]}>
-            {item.content}
-          </Text>
-
-          <View style={styles.bubbleMeta}>
-            {item.isPinned && (
-              <Pin size={10} color={isMe ? "rgba(255, 255, 255, 0.8)" : "#64748B"} style={{ marginRight: 4 }} />
-            )}
-            <Text style={[styles.messageTime, isMe ? styles.messageTimeRight : styles.messageTimeLeft]}>
-              {formatMessageTime(item.createdAt)}
-            </Text>
-            {isMe && (
-              <View style={{ marginLeft: 4 }}>
-                {item.isOptimistic ? (
-                  <Clock size={12} color="rgba(255, 255, 255, 0.6)" />
-                ) : (
-                  <CheckCheck size={14} color="rgba(255, 255, 255, 0.9)" />
-                )}
-              </View>
-            )}
-          </View>
-        </View>
-      </Pressable>
+      <MessageBubble
+        item={item}
+        isMe={isMe}
+        roomType={roomType}
+        isTeacherOrAdmin={isTeacherOrAdmin}
+        onLongPress={(msg) => setSelectedMessage(msg)}
+        onSwipe={(msg) => setReplyToMessage(msg)}
+        onPlayVideo={(url) => Linking.openURL(url)}
+        onOpenImage={(url) => setActiveImageUrl(url)}
+        formatMessageTime={formatMessageTime}
+      />
     );
   };
 
@@ -631,25 +905,39 @@ export default function ChatRoomScreen() {
           <ActivityIndicator size="large" color={colors.navy} />
         </View>
       ) : (
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderMessageItem}
-          contentContainerStyle={styles.listContent}
-          initialNumToRender={20}
-          maxToRenderPerBatch={10}
-          windowSize={10}
-          removeClippedSubviews={Platform.OS === "android"}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          onLayout={() => {
-            // Scroll to end when messages are loaded
-            if (messages.length > 0) {
-              flatListRef.current?.scrollToEnd({ animated: false });
-            }
-          }}
-        />
+        <View style={{ flex: 1 }}>
+          <FlatList
+            ref={flatListRef}
+            data={processedMessages}
+            keyExtractor={(item) => item.id}
+            renderItem={renderMessageItem}
+            contentContainerStyle={styles.listContent}
+            initialNumToRender={20}
+            maxToRenderPerBatch={10}
+            windowSize={10}
+            removeClippedSubviews={Platform.OS === "android"}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            onLayout={() => {
+              if (processedMessages.length > 0) {
+                flatListRef.current?.scrollToEnd({ animated: false });
+              }
+            }}
+          />
+          {showScrollBottomBtn && (
+            <Pressable
+              onPress={handleScrollToBottom}
+              style={styles.scrollBottomBtn}
+            >
+              <ArrowDown size={20} color="#64748B" />
+              {unreadCount > 0 && (
+                <View style={styles.scrollBottomBadge}>
+                  <Text style={styles.scrollBottomBadgeText}>{unreadCount}</Text>
+                </View>
+              )}
+            </Pressable>
+          )}
+        </View>
       )}
 
       {/* Mention Dropdown Suggestions */}
@@ -685,46 +973,93 @@ export default function ChatRoomScreen() {
           </View>
         ) : (
           <View style={styles.inputContainer}>
-            {/* WhatsApp-style Input Pill */}
-            <View style={styles.inputPill}>
-              <Pressable
-                style={styles.emojiBtn}
-                onPress={() => {}}
-              >
-                <Smile color="#64748B" size={22} />
-              </Pressable>
+            {/* WhatsApp Swipe to Reply Quoted Preview */}
+            {replyToMessage && (
+              <View style={styles.replyPreviewBar}>
+                <View style={styles.replyPreviewBorder} />
+                <View style={{ flex: 1, paddingLeft: 8 }}>
+                  <Text style={styles.replyPreviewSender} numberOfLines={1}>
+                    {replyToMessage.senderName}
+                  </Text>
+                  <Text style={styles.replyPreviewText} numberOfLines={1}>
+                    {replyToMessage.content.startsWith('{"replyTo":') 
+                      ? JSON.parse(replyToMessage.content).text 
+                      : replyToMessage.content}
+                  </Text>
+                </View>
+                <Pressable onPress={() => setReplyToMessage(null)} style={{ padding: 4 }}>
+                  <X size={16} color="#64748B" />
+                </Pressable>
+              </View>
+            )}
 
-              <TextInput
-                style={styles.input}
-                placeholder={roomType === "direct_message" ? "Message" : "Message group"}
-                placeholderTextColor="#94A3B8"
-                value={inputText}
-                onChangeText={handleInputChange}
-                multiline
-              />
+            <View style={styles.inputRowContainer}>
+              {/* WhatsApp-style Input Pill */}
+              <View style={styles.inputPill}>
+                <Pressable
+                  style={styles.emojiBtn}
+                  onPress={() => setShowEmojiPicker(!showEmojiPicker)}
+                >
+                  <Smile color={showEmojiPicker ? colors.teal : "#64748B"} size={22} />
+                </Pressable>
 
+                <TextInput
+                  style={styles.input}
+                  placeholder={roomType === "direct_message" ? "Message" : "Message group"}
+                  placeholderTextColor="#94A3B8"
+                  value={inputText}
+                  onChangeText={handleInputChange}
+                  multiline
+                />
+
+                <Pressable
+                  onPress={() => setShowAttachmentMenu(true)}
+                  style={styles.attachBtn}
+                >
+                  <Paperclip color="#64748B" size={20} />
+                </Pressable>
+              </View>
+
+              {/* Separate Circle Send Button */}
               <Pressable
-                onPress={() => setShowAttachmentMenu(true)}
-                style={styles.attachBtn}
+                onPress={handleSend}
+                disabled={!inputText.trim()}
+                style={[
+                  styles.sendBtn,
+                  !inputText.trim() && styles.sendBtnDisabled,
+                ]}
               >
-                <Paperclip color="#64748B" size={20} />
+                <Send color={colors.white} size={18} style={{ marginLeft: 2 }} />
               </Pressable>
             </View>
-
-            {/* Separate Circle Send Button */}
-            <Pressable
-              onPress={handleSend}
-              disabled={!inputText.trim()}
-              style={[
-                styles.sendBtn,
-                !inputText.trim() && styles.sendBtnDisabled,
-              ]}
-            >
-              <Send color={colors.white} size={18} style={{ marginLeft: 2 }} />
-            </Pressable>
           </View>
         )}
       </KeyboardAvoidingView>
+
+      {/* ─── Emoji Picker Modal Sheet ─── */}
+      {showEmojiPicker && (
+        <View style={styles.emojiPickerContainer}>
+          <View style={styles.emojiPickerHeader}>
+            <Text style={styles.emojiPickerTitle}>Emojis</Text>
+            <Pressable onPress={() => setShowEmojiPicker(false)}>
+              <X size={20} color="#64748B" />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={styles.emojiGrid} keyboardShouldPersistTaps="handled">
+            {COMMON_EMOJIS.map((emoji) => (
+              <Pressable
+                key={emoji}
+                onPress={() => {
+                  setInputText((prev) => prev + emoji);
+                }}
+                style={styles.emojiCell}
+              >
+                <Text style={{ fontSize: 24 }}>{emoji}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {/* ─── Message Options Bottom Sheet/Modal ─── */}
       <Modal
@@ -738,6 +1073,24 @@ export default function ChatRoomScreen() {
           onPress={() => setSelectedMessage(null)}
         >
           <View style={styles.modalContent}>
+            {/* WhatsApp Quick Reactions Row */}
+            <View style={styles.reactionsQuickRow}>
+              {["👍", "❤️", "😂", "😮", "😢", "🙏"].map((emoji) => (
+                <Pressable
+                  key={emoji}
+                  onPress={() => {
+                    setSelectedMessage(null);
+                    sendMessageMutation.mutate({
+                      content: `reaction:${selectedMessage.id}:${emoji}`,
+                    });
+                  }}
+                  style={styles.reactionQuickBtn}
+                >
+                  <Text style={{ fontSize: 24 }}>{emoji}</Text>
+                </Pressable>
+              ))}
+            </View>
+
             <Text style={styles.modalHeader}>Message Options</Text>
             
             {/* Pin Message Option */}
@@ -931,7 +1284,7 @@ export default function ChatRoomScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F1F5F9", 
+    backgroundColor: "#E5DDD5", 
   },
   bgGlow1: {
     position: "absolute",
@@ -1204,8 +1557,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   inputContainer: {
-    flexDirection: "row",
-    alignItems: "flex-end", // Aligns to bottom when input grows multiline
     marginHorizontal: 8,
     marginBottom: Platform.OS === "ios" ? 28 : 12,
     marginTop: 4,
@@ -1414,5 +1765,206 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.navy,
     textAlign: "center",
+  },
+  inputRowContainer: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+  },
+  quotedBubbleCard: {
+    flexDirection: "row",
+    backgroundColor: "rgba(0,0,0,0.05)",
+    borderRadius: radius.xs,
+    overflow: "hidden",
+    marginBottom: 6,
+  },
+  quotedBubbleCardLeft: {
+    backgroundColor: "rgba(0,0,0,0.03)",
+  },
+  quotedBubbleCardRight: {
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  quotedBar: {
+    width: 4,
+    backgroundColor: "#10B981",
+  },
+  quotedSenderName: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#10B981",
+  },
+  quotedText: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  replyPreviewBar: {
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
+    borderTopLeftRadius: radius.md,
+    borderTopRightRadius: radius.md,
+    padding: spacing.sm,
+    borderLeftWidth: 4,
+    borderLeftColor: "#10B981",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  replyPreviewSender: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#10B981",
+  },
+  replyPreviewText: {
+    fontSize: 12,
+    color: "#64748B",
+  },
+  reactionsQuickRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    marginBottom: spacing.sm,
+  },
+  reactionQuickBtn: {
+    padding: 6,
+  },
+  reactionBadgeRow: {
+    flexDirection: "row",
+    position: "absolute",
+    bottom: -10,
+    right: 12,
+    zIndex: 10,
+  },
+  reactionBadgeRowRight: {
+    left: 12,
+    right: undefined,
+  },
+  reactionMiniBadge: {
+    backgroundColor: "#F1F5F9",
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginRight: 2,
+  },
+  emojiPickerContainer: {
+    height: 250,
+    backgroundColor: "#F8FAFC",
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+  },
+  emojiPickerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  emojiPickerTitle: {
+    fontWeight: "700",
+    fontSize: 14,
+    color: "#475569",
+  },
+  emojiGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    padding: 8,
+  },
+  emojiCell: {
+    width: "12.5%",
+    aspectRatio: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scrollBottomBtn: {
+    position: "absolute",
+    bottom: 12,
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 100,
+  },
+  scrollBottomBadge: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    backgroundColor: "#10B981",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 4,
+  },
+  scrollBottomBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  voicePlayerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.03)",
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+    width: 240,
+    marginBottom: 6,
+  },
+  voicePlayerContainerRight: {
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+  },
+  voicePlayButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.05)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+  voiceProgressArea: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  voiceProgressBarBg: {
+    height: 4,
+    backgroundColor: "rgba(0,0,0,0.1)",
+    borderRadius: 2,
+    marginBottom: 6,
+    width: "100%",
+  },
+  voiceProgressBarFill: {
+    height: 4,
+    backgroundColor: "#10B981",
+    borderRadius: 2,
+  },
+  voiceMetaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  voiceTimeText: {
+    fontSize: 10,
+    color: "#64748B",
+  },
+  voiceTimeTextRight: {
+    color: "rgba(255, 255, 255, 0.8)",
+  },
+  voiceSizeText: {
+    fontSize: 10,
+    color: "#64748B",
+  },
+  voiceSizeTextRight: {
+    color: "rgba(255, 255, 255, 0.8)",
   },
 });
