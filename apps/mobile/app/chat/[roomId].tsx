@@ -45,6 +45,42 @@ import * as DocumentPicker from "expo-document-picker";
 import { colors, spacing, font, radius } from "@/theme/tokens";
 import { AvatarBadge } from "@/components/ui";
 
+const ChatImage = ({ uri, onPress }: { uri: string; onPress: () => void }) => {
+  const [aspectRatio, setAspectRatio] = useState(3 / 2);
+
+  useEffect(() => {
+    if (!uri) return;
+    Image.getSize(
+      uri,
+      (width, height) => {
+        if (width && height) {
+          setAspectRatio(width / height);
+        }
+      },
+      () => {}
+    );
+  }, [uri]);
+
+  const displayWidth = 240;
+  const displayHeight = displayWidth / aspectRatio;
+  const clampedHeight = Math.max(120, Math.min(320, displayHeight));
+
+  return (
+    <Pressable onPress={onPress}>
+      <Image
+        source={{ uri }}
+        style={{
+          width: displayWidth,
+          height: clampedHeight,
+          borderRadius: radius.md,
+          backgroundColor: "#E2E8F0",
+        }}
+        resizeMode="cover"
+      />
+    </Pressable>
+  );
+};
+
 export default function ChatRoomScreen() {
   const { roomId, roomType, name: initialName, chatMode: initialChatMode } = useLocalSearchParams<{
     roomId: string;
@@ -460,13 +496,7 @@ export default function ChatRoomScreen() {
             return (
               <View key={idx} style={styles.imageContainer}>
                 {isImage ? (
-                  <Pressable onPress={() => setActiveImageUrl(att.url)}>
-                    <Image
-                      source={{ uri: att.url }}
-                      style={styles.chatImage}
-                      resizeMode="cover"
-                    />
-                  </Pressable>
+                  <ChatImage uri={att.url} onPress={() => setActiveImageUrl(att.url)} />
                 ) : isVideo ? (
                   <Pressable 
                     onPress={() => Linking.openURL(att.url)}
