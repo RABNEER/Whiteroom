@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { Errors } from "@whiteroom/shared";
+import { Errors, UserRole } from "@whiteroom/shared";
 import type { ApiResponse, JWTPayload } from "@whiteroom/shared";
 import {
   solveDoubt,
@@ -8,6 +8,7 @@ import {
   getPrincipalInsights,
   autoDraftNotice,
 } from "../../services/walt.js";
+import { verifyClassAccess } from "../archive/index.js";
 
 /**
  * POST /api/v1/chat/rooms/:roomId/walt
@@ -22,6 +23,9 @@ export async function waltDoubtHandler(c: Context) {
   if (!question) {
     throw Errors.validation("Question is required");
   }
+
+  // Verify class access
+  await verifyClassAccess(user.userId, user.tenantId, user.role, roomId);
 
   const result = await solveDoubt(user.tenantId, roomId, question);
 
@@ -46,6 +50,9 @@ export async function waltQuizHandler(c: Context) {
     throw Errors.validation("Quiz title is required");
   }
 
+  // Verify class access
+  await verifyClassAccess(user.userId, user.tenantId, user.role, classId);
+
   const quiz = await generateQuizFromFiles(user.tenantId, classId, title);
 
   const response: ApiResponse = {
@@ -63,6 +70,9 @@ export async function waltFlashcardHandler(c: Context) {
   const user = c.get("user") as JWTPayload;
   const classId = c.req.param("id")!;
 
+  // Verify class access
+  await verifyClassAccess(user.userId, user.tenantId, user.role, classId);
+
   const flashcards = await generateFlashcardsFromFiles(user.tenantId, classId);
 
   const response: ApiResponse = {
@@ -78,6 +88,11 @@ export async function waltFlashcardHandler(c: Context) {
  */
 export async function waltInsightsHandler(c: Context) {
   const user = c.get("user") as JWTPayload;
+
+  // Only school admins can access school-wide insights
+  if (user.role !== UserRole.SCHOOL_ADMIN && user.role !== UserRole.SUPER_ADMIN) {
+    throw Errors.forbidden("Only school administrators can access principal insights");
+  }
 
   const insights = await getPrincipalInsights(user.tenantId);
 
@@ -99,6 +114,11 @@ export async function waltDraftNoticeHandler(c: Context) {
 
   if (!instructions) {
     throw Errors.validation("Instructions are required");
+  }
+
+  // Verify class access if classId is provided
+  if (classId) {
+    await verifyClassAccess(user.userId, user.tenantId, user.role, classId);
   }
 
   const draft = await autoDraftNotice(user.tenantId, classId || "", instructions);
