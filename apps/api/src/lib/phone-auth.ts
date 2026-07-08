@@ -1,4 +1,4 @@
-﻿import type { Context } from "hono";
+import type { Context } from "hono";
 import crypto from "node:crypto";
 import { db } from "./db.js";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@whiteroom/db";
 import { hashSHA256 } from "./otp.js";
 import { signAccessToken, signRefreshToken } from "./jwt.js";
+import { getTenantPlanTier } from "./subscription.js";
 import {
   Errors,
   PlanTier,
@@ -23,6 +24,7 @@ import type { ApiResponse, JWTPayload, OTPVerifyResult } from "@whiteroom/shared
 export async function completeVerifiedPhoneAuth(
   c: Context,
   input: {
+    phone: string;
     phoneHash: string;
     firebaseUid: string;
     inviteCode?: string;
@@ -40,7 +42,7 @@ export async function completeVerifiedPhoneAuth(
 
     await db.insert(registrationTokens).values({
       id: registrationToken,
-      phone: input.phoneHash,
+      phone: input.phone, // Save plaintext phone number
       firebaseUid: input.firebaseUid,
       expiresAt,
     });
@@ -158,11 +160,12 @@ export async function completeVerifiedPhoneAuth(
     status: record.status,
   }));
 
+  const plan = await getTenantPlanTier(tenantId);
   const jwtPayload: JWTPayload = {
     userId,
     tenantId,
     role,
-    plan: PlanTier.FREE,
+    plan,
     activeTenantId: tenantId,
     tenants: tenantsPayload,
   };

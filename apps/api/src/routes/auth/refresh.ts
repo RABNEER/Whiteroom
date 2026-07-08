@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { z } from "zod";
 import { db } from "../../lib/db.js";
 import { users } from "@whiteroom/db";
-import { verifyRefreshToken, signAccessToken } from "../../lib/jwt.js";
+import { verifyRefreshToken, signAccessToken, signRefreshToken } from "../../lib/jwt.js";
 import { hashSHA256 } from "../../lib/otp.js";
 import { Errors, AppError, ErrorCode } from "@whiteroom/shared";
 import type { ApiResponse, RefreshResponse, JWTPayload } from "@whiteroom/shared";
@@ -17,7 +17,7 @@ const refreshSchema = z.object({
  *
  * 1. Verify refresh token signature + expiry
  * 2. Check that the hashed token matches the one stored in DB
- * 3. Issue a new access token
+ * 3. Issue a new access token AND a new refresh token (RTR)
  */
 export async function refreshHandler(c: Context) {
   const body = await c.req.json();
@@ -46,23 +46,50 @@ export async function refreshHandler(c: Context) {
     .where(eq(users.id, claims.userId))
     .limit(1);
 
-  if (!user || user.refreshToken !== tokenHash) {
-    throw Errors.unauthorized("Refresh token has been revoked.");
+  if (!user) {
+    throw Errors.unauthorized("User not found.");
   }
 
-  // Issue new access token with same claims
-  const accessToken = await signAccessToken({
+  if (user.refreshToken !== tokenHash) {
+    // Reuse detected! Invalidate all refresh tokens for this user
+    await db
+      .update(users)
+      .set({ refreshToken: null, updatedAt: new Date() })
+      .where(eq(users.id, claims.userId));
+    
+    console.warn(`[AUTH] Refresh token reuse detected for user ${claims.userId}. Revoking session.`);
+    throw Errors.unauthorized("Refresh token reuse detected. All sessions revoked.");
+  }
+
+  const tenantsPayload = claims.tenants || [];
+
+  const jwtPayload: JWTPayload = {
     userId: claims.userId,
     tenantId: claims.tenantId,
     role: claims.role,
     plan: claims.plan,
     activeTenantId: claims.activeTenantId ?? claims.tenantId,
-    tenants: claims.tenants,
-  });
+    tenants: tenantsPayload,
+  };
+
+  // Issue new access token and new rotated refresh token
+  const [accessToken, newRefreshToken] = await Promise.all([
+    signAccessToken(jwtPayload),
+    signRefreshToken(jwtPayload),
+  ]);
+
+  // Update stored refresh token in DB
+  await db
+    .update(users)
+    .set({ refreshToken: hashSHA256(newRefreshToken), updatedAt: new Date() })
+    .where(eq(users.id, claims.userId));
 
   const response: ApiResponse<RefreshResponse> = {
     success: true,
-    data: { accessToken },
+    data: {
+      accessToken,
+      refreshToken: newRefreshToken,
+    },
   };
 
   return c.json(response, 200);

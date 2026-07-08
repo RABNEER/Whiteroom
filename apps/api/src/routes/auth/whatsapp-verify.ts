@@ -1,4 +1,4 @@
-﻿import type { Context } from "hono";
+import type { Context } from "hono";
 import { z } from "zod";
 import { db } from "../../lib/db.js";
 import { hashSHA256 } from "../../lib/otp.js";
@@ -81,10 +81,14 @@ export async function whatsappVerifyHandler(c: Context) {
   }
 
   console.log("[WHATSAPP VERIFY] Success! Completing auth for session:", session.id);
+  
+  const phone = session.phone!;
+  const phoneHash = hashSHA256(phone);
 
   return completeVerifiedPhoneAuth(c, {
-    phoneHash: session.phone,
-    firebaseUid: "whatsapp-session",
+    phone,
+    phoneHash,
+    firebaseUid: `whatsapp-${session.id}`,
     inviteCode: parsed.data.inviteCode,
   });
 }

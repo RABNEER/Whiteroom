@@ -43,44 +43,51 @@ export async function otpSendHandler(c: Context) {
 
   const phoneHash = hashSHA256(phone);
 
-  // â”€â”€â”€ Rate Limit Check â”€â”€â”€
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const [result] = await db
-    .select({ total: count() })
-    .from(otpAttempts)
-    .where(
-      and(
-        eq(otpAttempts.phoneHash, phoneHash),
-        gte(otpAttempts.createdAt, oneHourAgo)
-      )
-    );
-
-  if (result && result.total >= Limits.OTP_RATE_LIMIT_PER_HOUR) {
-    throw Errors.rateLimited(
-      `OTP limit reached. Try again after ${Math.ceil((60 * 60 * 1000 - (Date.now() - oneHourAgo.getTime())) / 1000 / 60)} minutes.`
-    );
-  }
-
-  // â”€â”€â”€ Generate & Store OTP â”€â”€â”€
+  // â”€â”€â”€ Rate Limit Check & Store OTP in Transaction (Bug 14) â”€â”€â”€
   const otp = generateOTP();
   const otpHash = hashSHA256(otp);
   const expiresAt = new Date(Date.now() + Limits.OTP_EXPIRY_SECONDS * 1000);
 
-  await db.insert(otpAttempts).values({
-    phoneHash,
-    otp: otpHash,
-    expiresAt,
+  await db.transaction(async (tx) => {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const [result] = await tx
+      .select({ total: count() })
+      .from(otpAttempts)
+      .where(
+        and(
+          eq(otpAttempts.phoneHash, phoneHash),
+          gte(otpAttempts.createdAt, oneHourAgo)
+        )
+      );
+
+    if (result && result.total >= Limits.OTP_RATE_LIMIT_PER_HOUR) {
+      throw Errors.rateLimited(
+        `OTP limit reached. Try again after ${Math.ceil((60 * 60 * 1000 - (Date.now() - oneHourAgo.getTime())) / 1000 / 60)} minutes.`
+      );
+    }
+
+    await tx.insert(otpAttempts).values({
+      phoneHash,
+      otp: otpHash,
+      expiresAt,
+    });
   });
 
-  // ——— Send SMS ———
+  // ——— Send SMS (Bug 7) ———
+  let smsSent = true;
   if (!env.TERMUX_SMS_GATEWAY_URL && !env.SMSGATEWAY24_TOKEN && !env.MSG91_API_KEY) {
     console.log(`[AUTH] SMS Send bypassed. OTP for ${maskPhone(phone)} is: ${otp}`);
   } else {
     try {
       await sendOTP(phone, otp);
     } catch (err) {
-      console.warn(`[AUTH] SMS delivery failed, fallback to log. OTP for ${maskPhone(phone)} is: ${otp}`, err);
+      console.error(`[AUTH] SMS delivery failed for ${maskPhone(phone)}:`, err);
+      smsSent = false;
     }
+  }
+
+  if (!smsSent) {
+    throw Errors.internal("Failed to deliver verification SMS. Please try again later.");
   }
 
   const response: ApiResponse<OTPSendResponse> = {

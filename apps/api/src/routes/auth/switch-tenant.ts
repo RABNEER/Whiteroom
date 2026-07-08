@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "../../lib/db.js";
 import { userTenants, users, tenants } from "@whiteroom/db";
 import { signAccessToken, signRefreshToken } from "../../lib/jwt.js";
+import { getTenantPlanTier } from "../../lib/subscription.js";
 import { hashSHA256 } from "../../lib/otp.js";
 import { Errors, AppError, ErrorCode, PlanTier } from "@whiteroom/shared";
 import type { ApiResponse, OTPVerifyResponse, JWTPayload } from "@whiteroom/shared";
@@ -21,7 +22,7 @@ const switchTenantSchema = z.object({
  * 4. Issue new access and refresh JWT pair
  */
 export async function switchTenantHandler(c: Context) {
-  // FIX: Parents cannot join multiple tenants — breaks multi-school families
+  // Switch active tenant for users (including parents with multiple tenant associations)
   const user = c.get("user") as JWTPayload;
   if (!user) {
     throw Errors.unauthorized();
@@ -78,11 +79,12 @@ export async function switchTenantHandler(c: Context) {
     status: r.status,
   }));
 
+  const plan = await getTenantPlanTier(targetTenantId);
   const jwtPayload: JWTPayload = {
     userId: user.userId,
     tenantId: targetTenantId,
     role: mapping.role,
-    plan: user.plan || PlanTier.FREE,
+    plan,
     activeTenantId: targetTenantId,
     tenants: tenantsPayload,
   };

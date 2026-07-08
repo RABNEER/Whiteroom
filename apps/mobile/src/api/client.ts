@@ -107,7 +107,7 @@ async function request<T>(
         },
         false
       );
-      await setTokens(refreshed.accessToken, refreshToken);
+      await setTokens(refreshed.accessToken, refreshed.refreshToken || refreshToken);
       return request<T>(path, options, false);
     } catch {
       await clear();

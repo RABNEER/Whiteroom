@@ -21,6 +21,7 @@ import {
   slugify,
 } from "../../lib/otp.js";
 import { signAccessToken, signRefreshToken } from "../../lib/jwt.js";
+import { getTenantPlanTier } from "../../lib/subscription.js";
 import crypto from "node:crypto";
 import {
   Errors,
@@ -30,7 +31,7 @@ import {
   PlanTier,
 } from "@whiteroom/shared";
 import type { ApiResponse, OTPVerifyResponse, JWTPayload } from "@whiteroom/shared";
-import { eq, and, gte, lt, isNull, count, or } from "@whiteroom/db";
+import { eq, and, gte, lt, isNull, count, or, desc } from "@whiteroom/db";
 import { verifyFirebaseIdToken } from "../../lib/firebase.js";
 
 const verifySchema = z.object({
@@ -93,8 +94,78 @@ export async function otpVerifyHandler(c: Context) {
     phone = reqPhone;
     phoneHash = hashSHA256(phone);
 
-    // OTP verification fully bypassed/removed!
-    console.log(`[AUTH] Bypassing OTP verification for phone: ${phone}, OTP entered: ${parsed.data.otp}`);
+    // Enforce OTP lockout check (Bug 4)
+    const [lockout] = await db
+      .select()
+      .from(otpLockouts)
+      .where(eq(otpLockouts.phone, phoneHash))
+      .limit(1);
+
+    if (lockout && lockout.lockedUntil && lockout.lockedUntil > new Date()) {
+      throw Errors.unauthorized(`Too many verification attempts. Locked until ${lockout.lockedUntil.toLocaleTimeString()}`);
+    }
+
+    // Verify OTP against otpAttempts (Bug 1)
+    const [latestAttempt] = await db
+      .select()
+      .from(otpAttempts)
+      .where(
+        and(
+          eq(otpAttempts.phoneHash, phoneHash),
+          eq(otpAttempts.verified, false)
+        )
+      )
+      .orderBy(desc(otpAttempts.createdAt))
+      .limit(1);
+
+    const enteredOtpHash = hashSHA256(parsed.data.otp || "");
+    if (!latestAttempt || latestAttempt.expiresAt <= new Date() || latestAttempt.otp !== enteredOtpHash) {
+      // Increment lockout counter
+      const currentAttempts = (lockout?.attempts ?? 0) + 1;
+      const isLockoutThreshold = currentAttempts >= 5;
+      const lockedUntil = isLockoutThreshold ? new Date(Date.now() + 15 * 60 * 1000) : null;
+
+      if (lockout) {
+        await db
+          .update(otpLockouts)
+          .set({
+            attempts: currentAttempts,
+            lockedUntil,
+            updatedAt: new Date()
+          })
+          .where(eq(otpLockouts.phone, phoneHash));
+      } else {
+        await db.insert(otpLockouts).values({
+          phone: phoneHash,
+          attempts: currentAttempts,
+          lockedUntil
+        });
+      }
+
+      if (isLockoutThreshold) {
+        throw Errors.unauthorized("Too many failed OTP verification attempts. Locked for 15 minutes.");
+      }
+      throw new AppError(
+        ErrorCode.INVALID_OTP,
+        "Invalid or expired OTP code.",
+        401
+      );
+    }
+
+    // Successfully verified! Update attempt and reset lockout
+    await db
+      .update(otpAttempts)
+      .set({ verified: true })
+      .where(eq(otpAttempts.id, latestAttempt.id));
+
+    if (lockout) {
+      await db
+        .update(otpLockouts)
+        .set({ attempts: 0, lockedUntil: null, updatedAt: new Date() })
+        .where(eq(otpLockouts.phone, phoneHash));
+    }
+    
+    console.log(`[AUTH] Successfully verified OTP for phone: ${phone}`);
   }
 
   // Ensure phone is valid Indian phone format
@@ -102,8 +173,8 @@ export async function otpVerifyHandler(c: Context) {
     throw Errors.validation("Invalid phone number format.");
   }
 
-  // â”€â”€â”€ Find or Create User â”€â”€â”€
-  // FIX: Parents cannot join multiple tenants â€” breaks multi-school families
+  // ——— Find or Create User ———
+  // Parents can join multiple tenants (e.g., multi-school families)
   const [existingUser] = await db
     .select()
     .from(users)
@@ -111,13 +182,13 @@ export async function otpVerifyHandler(c: Context) {
     .limit(1);
 
   if (!existingUser) {
-    // â”€â”€â”€ NEW USER FLOW: Generate Registration Token â”€â”€â”€
+    // ——— NEW USER FLOW: Generate Registration Token ———
     const registrationToken = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     await db.insert(registrationTokens).values({
       id: registrationToken,
-      phone: phoneHash,
+      phone: phone, // Save plaintext phone number
       firebaseUid,
       expiresAt,
     });
@@ -373,12 +444,12 @@ export async function otpVerifyHandler(c: Context) {
     status: r.status,
   }));
 
-  // â”€â”€â”€ Issue JWT Pair â”€â”€â”€
+  const plan = await getTenantPlanTier(tenantId);
   const jwtPayload: JWTPayload = {
     userId,
     tenantId,
     role,
-    plan: PlanTier.FREE, // Default for new users
+    plan,
     activeTenantId: tenantId,
     tenants: tenantsPayload,
   };

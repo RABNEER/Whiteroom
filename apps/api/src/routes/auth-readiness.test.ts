@@ -15,6 +15,7 @@ import {
   subscriptions,
   attendanceSessions,
   attendanceRecords,
+  otpAttempts,
   eq,
   inArray,
 } from "@whiteroom/db";
@@ -200,12 +201,21 @@ describe("Auth Readiness & Security Integration Tests", () => {
 
   describe("OTP verification bypass & registration", () => {
     it("should bypass OTP verification and return new_user type with registration token", async () => {
+      // Insert valid OTP attempt for test execution
+      const phoneHash = hashSHA256("+919999999994");
+      const otpHash = hashSHA256("000000");
+      await db.insert(otpAttempts).values({
+        phoneHash,
+        otp: otpHash,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+      });
+
       const res = await testApp.request("/api/v1/auth/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone: "+919999999994",
-          otp: "000000", // completely dummy OTP
+          otp: "000000",
         }),
       });
 

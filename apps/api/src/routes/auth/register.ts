@@ -18,6 +18,7 @@ import {
   hashSHA256,
 } from "../../lib/otp.js";
 import { signAccessToken, signRefreshToken } from "../../lib/jwt.js";
+import { getTenantPlanTier } from "../../lib/subscription.js";
 import {
   Errors,
   AppError,
@@ -31,6 +32,7 @@ import { eq, and, gte, count } from "@whiteroom/db";
 const registerSchema = z.object({
   registrationToken: z.string().uuid(),
   role: z.enum([UserRole.SCHOOL_ADMIN, UserRole.TEACHER, UserRole.PARENT]),
+  name: z.string().trim().min(2).max(120).optional(),
   consentAccepted: z.boolean(),
   consentAcceptedAt: z.string().optional(),
   inviteCode: z.preprocess(val => val === "" ? undefined : val, z.string().length(6).optional()),
@@ -67,6 +69,7 @@ export async function registerHandler(c: Context) {
   const {
     registrationToken,
     role,
+    name,
     consentAccepted,
     inviteCode,
     schoolName,
@@ -80,18 +83,18 @@ export async function registerHandler(c: Context) {
     throw Errors.validation("Consent is required to complete registration.");
   }
 
-  // Cloudflare Turnstile Verification in production
-  if (env.NODE_ENV === "production") {
+  // Cloudflare Turnstile Verification (Bug 13)
+  const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+  if (env.NODE_ENV === "production" || turnstileSecret) {
     if (!turnstileToken) {
-      throw Errors.validation("CAPTCHA token is required in production.");
+      throw Errors.validation("CAPTCHA token is required to register.");
     }
-    const secret = process.env.TURNSTILE_SECRET_KEY;
-    if (secret) {
+    if (turnstileSecret) {
       const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
-          secret,
+          secret: turnstileSecret,
           response: turnstileToken,
           remoteip: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "",
         }),
@@ -184,6 +187,7 @@ export async function registerHandler(c: Context) {
         .insert(users)
         .values({
           phone: phoneLookup,
+          name: name || null,
           role: UserRole.SCHOOL_ADMIN,
           tenantId: newTenant!.id,
         })
@@ -214,7 +218,7 @@ export async function registerHandler(c: Context) {
 
       return { user: newUser!, tenantId: newTenant!.id };
     } else if (role === UserRole.TEACHER) {
-      // â”€â”€â”€ Teacher Signup (Joins existing Tenant) â”€â”€â”€
+      // ——— Teacher Signup (Joins existing Tenant) ———
       if (!inviteCode) {
         throw Errors.validation("Invite code is required for teacher registration.");
       }
@@ -233,6 +237,7 @@ export async function registerHandler(c: Context) {
         .insert(users)
         .values({
           phone: phoneLookup,
+          name: name || null,
           role: UserRole.TEACHER,
           tenantId: tenant.id,
         })
@@ -262,7 +267,7 @@ export async function registerHandler(c: Context) {
 
       return { user: newUser!, tenantId: tenant.id };
     } else {
-      // â”€â”€â”€ Parent Signup â”€â”€â”€
+      // ——— Parent Signup ———
       if (!inviteCode) {
         throw Errors.validation("Invite code is required for parent registration.");
       }
@@ -281,6 +286,7 @@ export async function registerHandler(c: Context) {
         .insert(users)
         .values({
           phone: phoneLookup,
+          name: name || null,
           role: UserRole.PARENT,
           tenantId: tenant.id,
         })
@@ -335,11 +341,12 @@ export async function registerHandler(c: Context) {
     status: r.status,
   }));
 
+  const plan = await getTenantPlanTier(tenantId);
   const jwtPayload: JWTPayload = {
     userId,
     tenantId,
     role,
-    plan: PlanTier.FREE,
+    plan,
     activeTenantId: tenantId,
     tenants: tenantsPayload,
   };
