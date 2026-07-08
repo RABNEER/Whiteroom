@@ -88,7 +88,7 @@ export async function sendPushToUsers(
   );
 
   // Don't await — fire-and-forget per constitution
-  Promise.allSettled(promises).catch(() => { });
+  Promise.allSettled(promises);
 }
 
 /**

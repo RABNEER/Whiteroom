@@ -34,7 +34,7 @@ export async function blockUserHandler(c: Context) {
   const [targetUser] = await db
     .select()
     .from(users)
-    .where(eq(users.id, blockedUserId))
+    .where(and(eq(users.id, blockedUserId), eq(users.tenantId, user.tenantId)))
     .limit(1);
 
   if (!targetUser) {
@@ -65,6 +65,10 @@ export async function blockUserHandler(c: Context) {
 export async function unblockUserHandler(c: Context) {
   const user = c.get("user") as JWTPayload;
   const blockedUserId = c.req.param("userId")!;
+
+  if (blockedUserId === user.userId) {
+    throw Errors.validation("You cannot unblock yourself.");
+  }
 
   await db
     .delete(userBlocks)

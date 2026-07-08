@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import type { ApiResponse, JWTPayload } from "@whiteroom/shared";
-import { Errors } from "@whiteroom/shared";
+import { Errors, UserRole } from "@whiteroom/shared";
 import { and, classEnrollments, classes, eq, isNull, students } from "@whiteroom/db";
 import { db } from "../../lib/db.js";
 import { getStudentAttendanceHistory } from "../../services/attendance.js";
@@ -16,11 +16,14 @@ export async function studentHistoryHandler(c: Context) {
   const permissionConditions = [
     eq(classEnrollments.studentId, studentId),
     eq(classes.tenantId, user.tenantId),
-    eq(classes.teacherId, user.userId),
     isNull(classes.deletedAt),
     eq(students.tenantId, user.tenantId),
     isNull(students.deletedAt),
   ];
+
+  if (user.role !== UserRole.SCHOOL_ADMIN) {
+    permissionConditions.push(eq(classes.teacherId, user.userId));
+  }
 
   if (classId) {
     permissionConditions.push(eq(classes.id, classId));

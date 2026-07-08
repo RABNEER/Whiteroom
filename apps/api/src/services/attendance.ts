@@ -466,12 +466,9 @@ export async function markAllPresent(
       const { classes } = await import("@whiteroom/db");
       const [classInfo] = await db
         .select({ name: classes.name })
-        .from(classes)
-        .where(eq(classes.id, result.enrolledStudents[0]?.studentId ?
-          (await db.select({ classId: classEnrollments.classId })
-            .from(classEnrollments)
-            .where(eq(classEnrollments.studentId, result.enrolledStudents[0].studentId))
-            .limit(1))[0]?.classId || "" : ""))
+        .from(attendanceSessions)
+        .innerJoin(classes, eq(attendanceSessions.classId, classes.id))
+        .where(eq(attendanceSessions.id, sessionId))
         .limit(1);
 
       sendPushToUsers(tenantId, parentIds, {

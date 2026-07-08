@@ -9,7 +9,7 @@ export async function markRoomReadHandler(c: Context) {
   const user = c.get("user") as JWTPayload;
   const roomId = c.req.param("roomId")!;
 
-  const res = await markRoomRead(user.tenantId, roomId, user.userId);
+  const res = await markRoomRead(user.tenantId, roomId, user.userId, user.role);
 
   const response: ApiResponse<any> = {
     success: true,
@@ -26,7 +26,7 @@ export async function getMessageReceiptsHandler(c: Context) {
   const user = c.get("user") as JWTPayload;
   const messageId = c.req.param("messageId")!;
 
-  const receipts = await getMessageReceipts(user.tenantId, messageId);
+  const receipts = await getMessageReceipts(user.tenantId, messageId, user.userId, user.role);
 
   const response: ApiResponse<any[]> = {
     success: true,

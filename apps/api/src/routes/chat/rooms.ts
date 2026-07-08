@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "../../lib/db.js";
 import {
   classes,
@@ -29,44 +30,20 @@ export async function listRoomsHandler(c: Context) {
 
   const activeRooms: any[] = [];
 
-  // Helper function to get unread count
-  const getUnreadCount = async (roomId: string) => {
-    const [res] = await db
-      .select({ value: count() })
-      .from(messages)
-      .leftJoin(
-        messageReceipts,
-        and(eq(messages.id, messageReceipts.messageId), eq(messageReceipts.userId, userId))
-      )
-      .where(
-        and(
-          eq(messages.roomId, roomId),
-          eq(messages.tenantId, tenantId),
-          isNull(messages.deletedAt),
-          isNull(messageReceipts.id)
-        )
-      );
-    return res?.value ?? 0;
-  };
-
   // 1. CLASSROOMS
   let enrolledClasses: any[] = [];
 
   if (role === UserRole.SCHOOL_ADMIN || role === UserRole.SUPER_ADMIN) {
-    // School Admin sees all classrooms in the tenant
     enrolledClasses = await db
       .select()
       .from(classes)
       .where(and(eq(classes.tenantId, tenantId), isNull(classes.deletedAt)));
   } else if (role === UserRole.TEACHER) {
-    // Teacher sees classrooms they teach
     enrolledClasses = await db
       .select()
       .from(classes)
       .where(and(eq(classes.tenantId, tenantId), eq(classes.teacherId, userId), isNull(classes.deletedAt)));
   } else if (role === UserRole.PARENT) {
-    // Parent sees classrooms where their children are enrolled
-    // Find parent profile ID
     const [profile] = await db
       .select({ id: parentProfiles.id })
       .from(parentProfiles)
@@ -74,7 +51,6 @@ export async function listRoomsHandler(c: Context) {
       .limit(1);
 
     if (profile) {
-      // Find all enrolled student IDs linked to parent
       const parentStudents = await db
         .select({ id: students.id })
         .from(students)
@@ -85,7 +61,12 @@ export async function listRoomsHandler(c: Context) {
         const enrollments = await db
           .select({ classId: classEnrollments.classId })
           .from(classEnrollments)
-          .where(inArray(classEnrollments.studentId, studentIds));
+          .where(
+            and(
+              inArray(classEnrollments.studentId, studentIds),
+              eq(classEnrollments.status, "active")
+            )
+          );
 
         if (enrollments.length > 0) {
           const classIds = enrollments.map((e) => e.classId);
@@ -99,37 +80,32 @@ export async function listRoomsHandler(c: Context) {
   }
 
   for (const cls of enrolledClasses) {
-    const unread = await getUnreadCount(cls.id);
     activeRooms.push({
       id: cls.id,
       name: cls.name,
       type: "classroom",
       subtitle: cls.subject || cls.teacherName || "Classroom Chat",
       chatMode: cls.chatMode,
-      unreadCount: unread,
       updatedAt: cls.updatedAt,
     });
   }
 
   // 2. TEACHER PRIVATE STAFF CHANNEL
-  // Only visible to teachers and admins
   if (role === UserRole.TEACHER || role === UserRole.SCHOOL_ADMIN || role === UserRole.SUPER_ADMIN) {
     const staffRoomId = `staff-${tenantId}`;
-    const unread = await getUnreadCount(staffRoomId);
     activeRooms.push({
       id: staffRoomId,
       name: "Staff Collaboration Room",
       type: "teacher_channel",
       subtitle: "Visible to school staff only",
-      unreadCount: unread,
-      updatedAt: new Date(), // Staff room always present
+      updatedAt: new Date(),
     });
   }
 
   // 3. DIRECT MESSAGES (1-on-1)
   let userDMs: any[] = [];
   if (role === UserRole.SCHOOL_ADMIN || role === UserRole.SUPER_ADMIN) {
-    // School Admin can view all DMs in their tenant for compliance & auditing
+    const users2 = alias(users, "users2");
     userDMs = await db
       .select({
         id: dmRooms.id,
@@ -138,12 +114,14 @@ export async function listRoomsHandler(c: Context) {
         updatedAt: dmRooms.updatedAt,
         p1Name: users.name,
         p1Role: users.role,
+        p2Name: users2.name,
+        p2Role: users2.role,
       })
       .from(dmRooms)
       .innerJoin(users, eq(dmRooms.participant1Id, users.id))
+      .innerJoin(users2, eq(dmRooms.participant2Id, users2.id))
       .where(eq(dmRooms.tenantId, tenantId));
   } else {
-    // Regular users see DMs they are part of
     userDMs = await db
       .select({
         id: dmRooms.id,
@@ -160,28 +138,29 @@ export async function listRoomsHandler(c: Context) {
       );
   }
 
+  // Collect all other participant IDs for batch user lookup
+  const otherParticipantIds = [...new Set(userDMs.map((dm) =>
+    dm.participant1Id === userId ? dm.participant2Id : dm.participant1Id
+  ))];
+
+  const otherUsers = otherParticipantIds.length > 0
+    ? await db
+        .select({ id: users.id, name: users.name, role: users.role })
+        .from(users)
+        .where(and(inArray(users.id, otherParticipantIds), eq(users.tenantId, tenantId)))
+    : [];
+  const otherUserMap = new Map(otherUsers.map((u) => [u.id, u]));
+
   for (const dm of userDMs) {
     const otherParticipantId = dm.participant1Id === userId ? dm.participant2Id : dm.participant1Id;
-    
-    // Fetch details of other participant
-    const [otherUser] = await db
-      .select({
-        id: users.id,
-        name: users.name,
-        role: users.role,
-      })
-      .from(users)
-      .where(eq(users.id, otherParticipantId))
-      .limit(1);
+    const otherUser = otherUserMap.get(otherParticipantId);
 
     if (otherUser) {
-      const unread = await getUnreadCount(dm.id);
       activeRooms.push({
         id: dm.id,
         name: otherUser.name || "Private DM",
         type: "direct_message",
         subtitle: `1-on-1 discussion (${otherUser.role})`,
-        unreadCount: unread,
         updatedAt: dm.updatedAt,
         otherParticipant: {
           id: otherUser.id,
@@ -192,7 +171,34 @@ export async function listRoomsHandler(c: Context) {
     }
   }
 
-  // Sort rooms by updatedAt descending
+  // 4. Batch unread counts across all rooms (BUG 4/7)
+  if (activeRooms.length > 0) {
+    const unreadCounts = await db
+      .select({
+        roomId: messages.roomId,
+        value: count(),
+      })
+      .from(messages)
+      .leftJoin(
+        messageReceipts,
+        and(eq(messages.id, messageReceipts.messageId), eq(messageReceipts.userId, userId))
+      )
+      .where(
+        and(
+          inArray(messages.roomId, activeRooms.map((r) => r.id)),
+          eq(messages.tenantId, tenantId),
+          isNull(messages.deletedAt),
+          isNull(messageReceipts.id)
+        )
+      )
+      .groupBy(messages.roomId);
+
+    const unreadMap = new Map(unreadCounts.map((r) => [r.roomId, r.value]));
+    for (const room of activeRooms) {
+      room.unreadCount = unreadMap.get(room.id) ?? 0;
+    }
+  }
+
   activeRooms.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
   const response: ApiResponse<any[]> = {

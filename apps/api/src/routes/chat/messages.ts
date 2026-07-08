@@ -73,7 +73,8 @@ export async function sendMessageHandler(c: Context) {
     roomType,
     content,
     attachments,
-    mentions
+    mentions,
+    user.role
   );
 
   const response: ApiResponse<any> = {
