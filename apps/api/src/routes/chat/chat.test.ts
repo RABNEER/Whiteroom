@@ -20,12 +20,12 @@ import { signAccessToken } from "../../lib/jwt.js";
 import { UserRole } from "@whiteroom/shared";
 
 describe("Native Chat API Routes", () => {
-  let tenantId = "test-tenant-chat-id";
-  let schoolAdminId = "test-admin-id";
-  let teacherId = "test-teacher-id";
-  let parentId = "test-parent-id";
-  let blockParentId = "test-blocked-parent-id";
-  let classId = "test-class-id";
+  const tenantId = "test-tenant-chat-id";
+  const schoolAdminId = "test-admin-id";
+  const teacherId = "test-teacher-id";
+  const parentId = "test-parent-id";
+  const blockParentId = "test-blocked-parent-id";
+  const classId = "test-class-id";
   
   let adminToken: string;
   let teacherToken: string;

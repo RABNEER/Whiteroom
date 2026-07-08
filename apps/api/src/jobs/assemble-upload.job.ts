@@ -1,5 +1,5 @@
 import { db } from "../lib/db.js";
-import { fileUploadSessions, fileUploadChunks, classroomFiles, eq, and, asc } from "@whiteroom/db";
+import { fileUploadSessions, fileUploadChunks, classroomFiles, eq, asc } from "@whiteroom/db";
 import { getBoss } from "../lib/pgboss.js";
 import { assembleChunks } from "../lib/cdn.js";
 

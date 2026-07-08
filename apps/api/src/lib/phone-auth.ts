@@ -16,7 +16,6 @@ import { signAccessToken, signRefreshToken } from "./jwt.js";
 import { getTenantPlanTier } from "./subscription.js";
 import {
   Errors,
-  PlanTier,
   UserRole,
 } from "@whiteroom/shared";
 import type { ApiResponse, JWTPayload, OTPVerifyResult } from "@whiteroom/shared";

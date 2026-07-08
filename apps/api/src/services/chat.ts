@@ -6,7 +6,6 @@ import {
   dmRooms,
   messageReceipts,
   userBlocks,
-  roomMutes,
   messageAuditLogs,
   classes,
   users,
@@ -15,7 +14,7 @@ import {
   students,
   parentProfiles,
 } from "@whiteroom/db";
-import { and, eq, or, isNull, desc, count, sql } from "@whiteroom/db";
+import { and, eq, or, isNull, desc, sql } from "@whiteroom/db";
 import { Errors, UserRole } from "@whiteroom/shared";
 
 const ENCRYPTION_ALGORITHM = "aes-256-gcm";
@@ -130,8 +129,6 @@ export async function sendMessage(
   mentions?: string[],
   senderRole?: string
 ) {
-  const now = new Date();
-
   // 1. Enforce specific room-type permissions
   if (roomType === "classroom") {
     const [classRow] = await db

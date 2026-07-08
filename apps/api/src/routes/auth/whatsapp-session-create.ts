@@ -2,7 +2,6 @@ import type { Context } from "hono";
 import crypto from "node:crypto";
 import { z } from "zod";
 import { db } from "../../lib/db.js";
-import { env } from "../../lib/env.js";
 import { normalizePhone, isValidIndianPhone, hashSHA256 } from "../../lib/otp.js";
 import { whatsappSessions } from "@whiteroom/db";
 import { Errors } from "@whiteroom/shared";

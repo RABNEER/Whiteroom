@@ -180,6 +180,7 @@ export async function completeSubscriptionPayment(
   paymentId: string,
   signature: string
 ) {
+  void signature;
   const [sub] = await db
     .select()
     .from(subscriptions)

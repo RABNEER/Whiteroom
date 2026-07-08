@@ -1,5 +1,5 @@
 import { db } from "../lib/db.js";
-import { classEnrollments, classes, classPromotions, students } from "@whiteroom/db";
+import { classEnrollments, classes, classPromotions } from "@whiteroom/db";
 import { Errors } from "@whiteroom/shared";
 import { and, eq, inArray, isNull } from "@whiteroom/db";
 import { getParentUserIdsForStudents, sendPushToUsers } from "../lib/fcm.js";

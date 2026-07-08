@@ -24,7 +24,6 @@ import {
   AppError,
   ErrorCode,
   UserRole,
-  PlanTier,
 } from "@whiteroom/shared";
 import type { ApiResponse, OTPVerifyResponse, JWTPayload } from "@whiteroom/shared";
 import { eq, and, gte, count } from "@whiteroom/db";
@@ -74,8 +73,6 @@ export async function registerHandler(c: Context) {
     inviteCode,
     schoolName,
     designation,
-    studentName,
-    rollNumber,
     turnstileToken,
   } = parsed.data;
 

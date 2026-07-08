@@ -1,4 +1,3 @@
-import pkg from "@whiskeysockets/baileys";
 import qrcode from "qrcode-terminal";
 import path from "node:path";
 import fs from "node:fs/promises";
@@ -45,8 +44,6 @@ if (process.env.DEBUG_WHATSAPP === "true") {
     originalWarn(...args);
   };
 }
-
-const baileysModule = (pkg as any).default || pkg;
 
 // Load environment variables from multiple paths to support monorepo running
 config({ path: path.resolve(process.cwd(), ".env") });
@@ -166,7 +163,7 @@ async function setupFolderWatcher(folder: string) {
   isWatcherActive = true;
   console.log("👀 [WHATSAPP BOT] Watching auth state folder for real-time PostgreSQL backup...");
   
-  fsWatch(folder, (eventType, filename) => {
+  fsWatch(folder, () => {
     if (syncTimeout) clearTimeout(syncTimeout);
     syncTimeout = setTimeout(() => {
       syncAuthFilesToDb(folder);

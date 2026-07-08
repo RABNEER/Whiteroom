@@ -9,7 +9,6 @@ import {
   teacherProfiles,
   parentProfiles,
   consentLogs,
-  students,
   userTenants,
   registrationTokens,
 } from "@whiteroom/db";
@@ -28,10 +27,9 @@ import {
   AppError,
   ErrorCode,
   UserRole,
-  PlanTier,
 } from "@whiteroom/shared";
-import type { ApiResponse, OTPVerifyResponse, JWTPayload } from "@whiteroom/shared";
-import { eq, and, gte, lt, isNull, count, or, desc } from "@whiteroom/db";
+import type { ApiResponse, JWTPayload } from "@whiteroom/shared";
+import { eq, and, or, desc } from "@whiteroom/db";
 import { verifyFirebaseIdToken } from "../../lib/firebase.js";
 
 const verifySchema = z.object({
@@ -78,7 +76,7 @@ export async function otpVerifyHandler(c: Context) {
       phone = normalizePhone(verified.phone);
       phoneHash = hashSHA256(phone);
       firebaseUid = verified.uid;
-    } catch (err: any) {
+    } catch {
       throw new AppError(
         ErrorCode.INVALID_OTP,
         "Firebase token verification failed.",
@@ -249,7 +247,7 @@ export async function otpVerifyHandler(c: Context) {
           });
 
           // Insert profile
-          const [parentProfile] = await tx
+          await tx
             .insert(parentProfiles)
             .values({
               userId,
@@ -352,7 +350,7 @@ export async function otpVerifyHandler(c: Context) {
         activeTenant: true,
       });
 
-      const [parentProfile] = await tx
+      await tx
         .insert(parentProfiles)
         .values({
           userId: newUser!.id,

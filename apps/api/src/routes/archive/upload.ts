@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../../middleware/auth.js";
 import { db } from "../../lib/db.js";
-import { classroomFiles, classes, eq, and } from "@whiteroom/db";
+import { classroomFiles } from "@whiteroom/db";
 import { Errors, UserRole } from "@whiteroom/shared";
 import type { JWTPayload, ApiResponse } from "@whiteroom/shared";
 import {

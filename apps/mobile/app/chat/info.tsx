@@ -250,6 +250,31 @@ export default function ChatInfoScreen() {
           </View>
         )}
 
+        {/* AI Assistant Section */}
+        {roomType === "classroom" && (
+          <View style={styles.section}>
+            <Text style={styles.sectionHeader}>AI Assistant</Text>
+            <Card style={styles.card}>
+              <Pressable
+                onPress={() => {
+                  router.push(`/chat/walt?roomId=${roomId}&roomName=${encodeURIComponent(name)}` as any);
+                }}
+                style={styles.row}
+              >
+                <View style={styles.rowLeft}>
+                  <BookOpen size={20} color={colors.teal} style={{ marginRight: 12 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowText}>Ask Walt AI</Text>
+                    <Text style={styles.rowDescription}>
+                      Resolve doubts grounded in uploaded materials for this classroom.
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
+            </Card>
+          </View>
+        )}
+
         {/* Direct Message specific settings (Block/Unblock) */}
         {roomType === "direct_message" && otherParticipantId && (
           <View style={styles.section}>

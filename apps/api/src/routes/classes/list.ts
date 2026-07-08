@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import type { ApiResponse, ClassResponse, JWTPayload } from "@whiteroom/shared";
+import type { ApiResponse, JWTPayload } from "@whiteroom/shared";
 import { listClasses } from "../../services/classes.js";
 import { parsePagination } from "../../lib/pagination.js";
 

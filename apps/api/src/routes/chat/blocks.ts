@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { z } from "zod";
 import { db } from "../../lib/db.js";
 import { userBlocks, users } from "@whiteroom/db";
-import { and, eq, sql } from "@whiteroom/db";
+import { and, eq } from "@whiteroom/db";
 import { Errors } from "@whiteroom/shared";
 import type { ApiResponse, JWTPayload } from "@whiteroom/shared";
 

@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify, decodeProtectedHeader, importPKCS8, importSPKI } from "jose";
+import { SignJWT, jwtVerify, decodeProtectedHeader } from "jose";
 import crypto from "node:crypto";
 import { env } from "./env.js";
 import type { JWTPayload } from "@whiteroom/shared";

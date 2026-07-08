@@ -7,12 +7,11 @@ import {
   messages,
   messageReceipts,
   users,
-  userTenants,
   classEnrollments,
   students,
   parentProfiles,
 } from "@whiteroom/db";
-import { and, eq, or, isNull, count, sql, inArray } from "@whiteroom/db";
+import { and, eq, or, isNull, count, inArray } from "@whiteroom/db";
 import { ApiResponse, UserRole } from "@whiteroom/shared";
 import type { JWTPayload } from "@whiteroom/shared";
 

@@ -1,5 +1,4 @@
 import { db } from "./db.js";
-import { env } from "./env.js";
 import { deviceTokens, notifications, students } from "@whiteroom/db";
 import { eq, and, inArray } from "@whiteroom/db";
 import { getFirebaseMessaging } from "./firebase.js";

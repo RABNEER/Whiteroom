@@ -5,7 +5,7 @@ import { userTenants, users, tenants } from "@whiteroom/db";
 import { signAccessToken, signRefreshToken } from "../../lib/jwt.js";
 import { getTenantPlanTier } from "../../lib/subscription.js";
 import { hashSHA256 } from "../../lib/otp.js";
-import { Errors, AppError, ErrorCode, PlanTier } from "@whiteroom/shared";
+import { Errors } from "@whiteroom/shared";
 import type { ApiResponse, OTPVerifyResponse, JWTPayload } from "@whiteroom/shared";
 import { eq, and } from "@whiteroom/db";
 

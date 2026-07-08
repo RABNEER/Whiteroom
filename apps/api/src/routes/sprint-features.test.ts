@@ -38,12 +38,12 @@ import {
 import { getEmbedding } from "../services/walt.js";
 
 describe("Pre-Launch B2B Sprint Features", () => {
-  let tenantId = "test-sprint-tenant-id";
-  let schoolAdminId = "test-sprint-admin-id";
-  let teacherId = "test-sprint-teacher-id";
-  let parentId = "test-sprint-parent-id";
-  let studentId = "test-sprint-student-id";
-  let classId = "test-sprint-class-id";
+  const tenantId = "test-sprint-tenant-id";
+  const schoolAdminId = "test-sprint-admin-id";
+  const teacherId = "test-sprint-teacher-id";
+  const parentId = "test-sprint-parent-id";
+  const studentId = "test-sprint-student-id";
+  const classId = "test-sprint-class-id";
 
   let adminToken: string;
   let teacherToken: string;
@@ -171,8 +171,6 @@ describe("Pre-Launch B2B Sprint Features", () => {
   }, 30000);
 
   describe("Media & Document Archive", () => {
-    let fileId: string;
-
     it("allows teachers to upload files to classroom archive", async () => {
       const res = await testApp.request(`/api/v1/classes/${classId}/archive`, {
         method: "POST",
@@ -193,7 +191,6 @@ describe("Pre-Launch B2B Sprint Features", () => {
       const body = (await res.json()) as any;
       expect(body.success).toBe(true);
       expect(body.data.name).toBe("Syllabus.pdf");
-      fileId = body.data.id;
     });
 
     it("allows parents to list classroom archive files", async () => {

@@ -40,6 +40,7 @@ import {
   Smile,
   Play,
   ArrowDown,
+  Sparkles,
 } from "lucide-react-native";
 import { api, ApiError } from "@/api/client";
 import { useSession } from "@/auth/session-store";
@@ -867,6 +868,17 @@ export default function ChatRoomScreen() {
               : "Open Discussion"}
           </Text>
         </View>
+
+        {roomType === "classroom" && (
+          <Pressable
+            onPress={() => {
+              router.push(`/chat/walt?roomId=${roomId}&roomName=${encodeURIComponent(initialName)}` as any);
+            }}
+            style={({ pressed }) => [styles.iconBtn, { marginRight: 8 }, pressed && { opacity: 0.7 }]}
+          >
+            <Sparkles color={colors.teal} size={22} />
+          </Pressable>
+        )}
 
         <Pressable
           onPress={() => {

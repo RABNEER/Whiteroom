@@ -15,7 +15,6 @@
 import { Context, Next } from "hono";
 import { db } from "../lib/db.js";
 import { rateLimits, sql } from "@whiteroom/db";
-import { env } from "../lib/env.js";
 
 interface RateLimitOptions {
   windowMs: number; // time window in milliseconds

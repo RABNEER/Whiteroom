@@ -16,22 +16,21 @@ import {
 } from "@whiteroom/db";
 import { signAccessToken } from "../lib/jwt.js";
 import { UserRole } from "@whiteroom/shared";
-import { authMiddleware } from "../middleware/auth.js";
 import { errorHandler } from "../middleware/error.js";
 import { adminRoutes } from "./admin/index.js";
 import { chunkedRoutes } from "./upload/chunked.js";
 import { calculateSubscriptionFee } from "../services/billing.js";
 
 describe("Pre-Launch Features Integration Tests", () => {
-  let tenantId = "test-prelaunch-tenant-id";
-  let schoolAdminId = "test-prelaunch-admin-id";
-  let student1Id = "test-prelaunch-student-1";
-  let student2Id = "test-prelaunch-student-2";
-  let studentGradId = "test-prelaunch-student-grad";
+  const tenantId = "test-prelaunch-tenant-id";
+  const schoolAdminId = "test-prelaunch-admin-id";
+  const student1Id = "test-prelaunch-student-1";
+  const student2Id = "test-prelaunch-student-2";
+  const studentGradId = "test-prelaunch-student-grad";
   
-  let classFromId = "test-prelaunch-class-from";
-  let classToId = "test-prelaunch-class-to";
-  let classGradId = "test-prelaunch-class-grad";
+  const classFromId = "test-prelaunch-class-from";
+  const classToId = "test-prelaunch-class-to";
+  const classGradId = "test-prelaunch-class-grad";
 
   let adminToken: string;
 
