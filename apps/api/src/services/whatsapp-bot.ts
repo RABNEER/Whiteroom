@@ -229,11 +229,23 @@ export async function startBot(isReconnect = false) {
 
   const authFolder = path.resolve(process.cwd(), "auth_info_baileys");
   
-  // Restore files from DB before Baileys initializes
-  await syncAuthFilesFromDb(authFolder);
-
-  console.log("📂 [WHATSAPP BOT] Saving auth state in:", authFolder);
-  const { state, saveCreds } = await useMultiFileAuthState(authFolder);
+  let state, saveCreds;
+  try {
+    // Restore files from DB before Baileys initializes
+    await syncAuthFilesFromDb(authFolder);
+    console.log("📂 [WHATSAPP BOT] Saving auth state in:", authFolder);
+    const authState = await useMultiFileAuthState(authFolder);
+    state = authState.state;
+    saveCreds = authState.saveCreds;
+  } catch (err: any) {
+    const errMsg = err?.message || "";
+    if (errMsg.includes("Bad MAC") || errMsg.includes("decryption")) {
+      console.error("⚠️ [WHATSAPP BOT] Bad session keys during initialization. Purging session to self-heal...", err);
+      await logoutBot();
+      return;
+    }
+    throw err;
+  }
 
   // Watch for updates to sync files back to DB
   setupFolderWatcher(authFolder);
@@ -274,14 +286,19 @@ export async function startBot(isReconnect = false) {
 
     if (connection === "close") {
       const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      const errorMessage = lastDisconnect?.error?.message || "";
+      const isBadMac = errorMessage.includes("Bad MAC") || errorMessage.includes("decryption");
+      const shouldReconnect = statusCode !== DisconnectReason.loggedOut && !isBadMac;
       
       console.log(
-        `❌ [WHATSAPP BOT] Connection closed. Reason Status: ${statusCode}. Reconnecting: ${shouldReconnect}`
+        `❌ [WHATSAPP BOT] Connection closed. Reason Status: ${statusCode}. Error: ${errorMessage}. Reconnecting: ${shouldReconnect}`
       );
       (globalThis as any).whatsappBotConnected = false;
 
-      if (shouldReconnect) {
+      if (isBadMac) {
+        console.log("⚠️ [WHATSAPP BOT] Detected Bad MAC / decryption error. Clearing session to self-heal...");
+        logoutBot();
+      } else if (shouldReconnect) {
         startBot(true);
       } else {
         console.log("⚠️ [WHATSAPP BOT] Logged out. Clearing session state to restart cleanly...");
