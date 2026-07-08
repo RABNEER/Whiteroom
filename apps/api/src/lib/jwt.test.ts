@@ -17,7 +17,7 @@ const testPayload: JWTPayload = {
   userId: "test-user-1",
   tenantId: "test-tenant-1",
   role: "teacher" as UserRole,
-  phone: "+919876543210",
+  plan: "pro",
 };
 
 describe("JWT ES256 sign & verify", () => {
@@ -27,7 +27,7 @@ describe("JWT ES256 sign & verify", () => {
     expect(decoded.userId).toBe(testPayload.userId);
     expect(decoded.tenantId).toBe(testPayload.tenantId);
     expect(decoded.role).toBe(testPayload.role);
-    expect(decoded.phone).toBe(testPayload.phone);
+    expect(decoded.plan).toBe(testPayload.plan);
   });
 
   it("signs and verifies a refresh token with correct payload", async () => {

@@ -34,7 +34,7 @@ function buildTestApp(): Hono {
   const app = new Hono();
 
   app.get("/protected", authMiddleware, (c) => {
-    const user = c.get("user") as JWTPayload;
+    const user = c.get("user" as any) as JWTPayload;
     return c.json({ ok: true, userId: user.userId, role: user.role });
   });
 
@@ -51,9 +51,7 @@ const validClaims: JWTPayload = {
   userId: "user-1",
   tenantId: "tenant-1",
   role: "teacher",
-  sessionId: "sess-1",
-  iat: Math.floor(Date.now() / 1000),
-  exp: Math.floor(Date.now() / 1000) + 900,
+  plan: "pro",
 };
 
 describe("authMiddleware", () => {

@@ -15,14 +15,14 @@ export async function errorHandler(err: Error, c: Context) {
     return c.json(err.toJSON(), err.statusCode as any);
   }
 
-  // Unknown error — log and return generic 500
   console.error("Unhandled error:", err);
+  const isProd = process.env.NODE_ENV === "production";
   return c.json({
     success: false,
     error: {
       code: "INTERNAL_SERVER_ERROR",
-      message: err.message || "Internal server error occurred",
-      stack: err.stack,
+      message: isProd ? "Internal server error occurred" : (err.message || "Internal server error occurred"),
+      ...(isProd ? {} : { stack: err.stack }),
     }
   }, 500);
 }
