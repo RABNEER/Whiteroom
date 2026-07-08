@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Alert } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -35,7 +36,23 @@ export default function RootLayout() {
         const update = await Updates.checkForUpdateAsync();
         if (update.isAvailable) {
           await Updates.fetchUpdateAsync();
-          await Updates.reloadAsync();
+          Alert.alert(
+            "Update Available 🚀",
+            "A new version of Whiteroom has been downloaded. Click Update Now to apply the latest improvements.",
+            [
+              {
+                text: "Later",
+                style: "cancel",
+              },
+              {
+                text: "Update Now",
+                onPress: async () => {
+                  await Updates.reloadAsync();
+                },
+              },
+            ],
+            { cancelable: false }
+          );
         }
       } catch (error) {
         console.log("Error fetching latest Expo update:", error);
