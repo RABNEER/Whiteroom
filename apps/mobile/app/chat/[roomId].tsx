@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, memo } from "react";
 import {
   View,
   Text,
@@ -151,7 +151,7 @@ const VoiceNotePlayer = ({ name, url, size, isMe }: { name: string; url: string;
   );
 };
 
-const MessageBubble = React.memo(({ 
+const MessageBubble = memo(({ 
   item, 
   isMe, 
   roomType, 

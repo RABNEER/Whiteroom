@@ -27,6 +27,9 @@ export default function RootLayout() {
   useEffect(() => {
     async function onFetchUpdateAsync() {
       try {
+        if (typeof Updates.checkForUpdateAsync !== "function") {
+          return;
+        }
         const update = await Updates.checkForUpdateAsync();
         if (update.isAvailable) {
           await Updates.fetchUpdateAsync();
@@ -37,7 +40,7 @@ export default function RootLayout() {
       }
     }
 
-    if (!__DEV__) {
+    if (!__DEV__ && Updates.isEnabled) {
       onFetchUpdateAsync();
     }
   }, []);
