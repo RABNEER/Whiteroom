@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -416,13 +416,6 @@ export default function ChatRoomScreen() {
 
   const messagesCountRef = useRef(0);
 
-  useEffect(() => {
-    if (!isCloseToBottomRef.current && messages.length > messagesCountRef.current && messagesCountRef.current > 0) {
-      setUnreadCount((prev) => prev + (messages.length - messagesCountRef.current));
-    }
-    messagesCountRef.current = messages.length;
-  }, [messages.length]);
-
   const handleScrollToBottom = () => {
     flatListRef.current?.scrollToEnd({ animated: true });
     setUnreadCount(0);
@@ -450,6 +443,13 @@ export default function ChatRoomScreen() {
     queryFn: () => api.chatMessages(roomId, roomType),
     refetchInterval: 5000, // Poll every 5 seconds for new messages
   });
+
+  useEffect(() => {
+    if (!isCloseToBottomRef.current && messages.length > messagesCountRef.current && messagesCountRef.current > 0) {
+      setUnreadCount((prev) => prev + (messages.length - messagesCountRef.current));
+    }
+    messagesCountRef.current = messages.length;
+  }, [messages.length]);
 
   // Fetch classroom students for mentions (if classroom)
   const { data: classStudents = [] } = useQuery({
@@ -988,7 +988,6 @@ export default function ChatRoomScreen() {
             {/* WhatsApp Swipe to Reply Quoted Preview */}
             {replyToMessage && (
               <View style={styles.replyPreviewBar}>
-                <View style={styles.replyPreviewBorder} />
                 <View style={{ flex: 1, paddingLeft: 8 }}>
                   <Text style={styles.replyPreviewSender} numberOfLines={1}>
                     {replyToMessage.senderName}
@@ -1785,7 +1784,7 @@ const styles = StyleSheet.create({
   quotedBubbleCard: {
     flexDirection: "row",
     backgroundColor: "rgba(0,0,0,0.05)",
-    borderRadius: radius.xs,
+    borderRadius: radius.sm,
     overflow: "hidden",
     marginBottom: 6,
   },
