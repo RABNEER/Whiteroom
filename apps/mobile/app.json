@@ -17,9 +17,7 @@
       "url": "https://u.expo.dev/d36b65b1-6d4c-473b-baef-40fa93ef821c",
       "fallbackToCacheTimeout": 5000
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "0.0.1",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.whiteroom.mobile"
