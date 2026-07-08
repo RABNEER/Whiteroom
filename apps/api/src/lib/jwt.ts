@@ -8,10 +8,6 @@ import { Limits } from "@whiteroom/shared";
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 const refreshSecret = new TextEncoder().encode(env.JWT_REFRESH_SECRET);
 
-// Persistent EC keys or fallback in-memory key pair
-let privateKey: crypto.KeyObject | any;
-let publicKey: crypto.KeyObject | any;
-
 // Stable development fallback EC key pair to prevent logouts on local server hot-reloads
 const DEV_PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
 MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgHECBtcm6pqydg3Mu
@@ -24,10 +20,16 @@ MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE/vDRtzR5qUKDk1oz8CZMONN4C7Qf
 sDP2W1p/q1vT0OLEyzbkJDKHjVb0CaRiyw5AS0sXf0XdCxTcz2g9P7jREQ==
 -----END PUBLIC KEY-----`;
 
+let privateKey: crypto.KeyObject | any;
+let publicKey: crypto.KeyObject | any;
+
 if (env.JWT_PRIVATE_KEY && env.JWT_PUBLIC_KEY) {
   privateKey = crypto.createPrivateKey(env.JWT_PRIVATE_KEY);
   publicKey = crypto.createPublicKey(env.JWT_PUBLIC_KEY);
 } else {
+  if (env.NODE_ENV === "production") {
+    throw new Error("FATAL: JWT_PRIVATE_KEY and JWT_PUBLIC_KEY environment variables must be set in production");
+  }
   // Use stable dev fallback keys to maintain persistent sessions across development restarts
   privateKey = crypto.createPrivateKey(DEV_PRIVATE_KEY);
   publicKey = crypto.createPublicKey(DEV_PUBLIC_KEY);

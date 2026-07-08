@@ -270,10 +270,7 @@ publicRoutes.get("/s/:slug", async (c) => {
                   `
                   : ""
               }
-              <div class="info-item">
-                <span class="info-label">Owner Phone</span>
-                <span class="info-value">${tenant.phone}</span>
-              </div>
+
             </div>
 
             ${

@@ -114,8 +114,10 @@ describe("Pre-Launch B2B Sprint Features", () => {
       { id: parentId, phone: "+919999999913", role: UserRole.PARENT, tenantId },
     ]);
 
+    const parentProfileId = "test-sprint-parent-profile-id";
+
     await db.insert(parentProfiles).values({
-      id: parentId,
+      id: parentProfileId,
       userId: parentId,
       tenantId,
     });
@@ -131,7 +133,7 @@ describe("Pre-Launch B2B Sprint Features", () => {
       tenantId,
       name: "Sprint Pupil",
       rollNumber: "S42",
-      parentId,
+      parentId: parentProfileId,
     });
 
     await db.insert(classes).values({

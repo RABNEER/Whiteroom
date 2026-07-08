@@ -7,6 +7,7 @@ import {
   classes,
   classEnrollments,
   students,
+  parentProfiles,
 } from "@whiteroom/db";
 import { authMiddleware } from "../../middleware/auth.js";
 import { Errors, UserRole } from "@whiteroom/shared";
@@ -55,10 +56,12 @@ export async function verifyClassAccess(
       .select()
       .from(classEnrollments)
       .innerJoin(students, eq(classEnrollments.studentId, students.id))
+      .innerJoin(parentProfiles, eq(students.parentId, parentProfiles.id))
       .where(
         and(
           eq(classEnrollments.classId, classId),
-          eq(students.parentId, userId),
+          eq(classEnrollments.status, "active"),
+          eq(parentProfiles.userId, userId),
           eq(students.tenantId, tenantId)
         )
       )

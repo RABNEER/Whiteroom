@@ -2,10 +2,12 @@ import { Context, Next } from "hono";
 import { Errors } from "@whiteroom/shared";
 import type { JWTPayload, UserRole } from "@whiteroom/shared";
 import { verifyAccessToken } from "../lib/jwt.js";
+import { db } from "../lib/db.js";
+import { users, eq } from "@whiteroom/db";
 
 /**
  * Auth middleware — verifies JWT from Authorization header,
- * attaches decoded user claims to Hono context.
+ * checks user has not been GDPR-scrubbed, attaches decoded user claims.
  *
  * Usage: app.use("/api/v1/*", authMiddleware)
  * Access claims via: c.get("user") as JWTPayload
@@ -17,20 +19,30 @@ export async function authMiddleware(c: Context, next: Next) {
     throw Errors.unauthorized();
   }
 
-  const token = authHeader.slice(7); // Remove "Bearer " prefix
+  const token = authHeader.slice(7);
 
+  let claims: JWTPayload;
   try {
-    const claims = await verifyAccessToken(token);
-    c.set("user", claims);
-
-    await next();
+    claims = await verifyAccessToken(token);
   } catch (err: unknown) {
-    // jose throws JWTExpired for expired tokens
     if (err instanceof Error && err.message.includes("expired")) {
       throw Errors.unauthorized("Token expired");
     }
     throw Errors.unauthorized("Invalid token");
   }
+
+  const [user] = await db
+    .select({ deletedAt: users.deletedAt })
+    .from(users)
+    .where(eq(users.id, claims.userId))
+    .limit(1);
+
+  if (!user || user.deletedAt) {
+    throw Errors.unauthorized("Account has been deactivated");
+  }
+
+  c.set("user", claims);
+  await next();
 }
 
 /**

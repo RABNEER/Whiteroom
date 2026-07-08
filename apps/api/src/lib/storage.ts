@@ -148,7 +148,6 @@ export function validateMimeType(mimeType: string): void {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "application/octet-stream",
     "text/plain",
     "application/zip",
     "application/x-zip-compressed",

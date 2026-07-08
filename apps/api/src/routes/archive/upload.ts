@@ -28,6 +28,11 @@ uploadRoutes.post("/", async (c) => {
     throw Errors.validation("Class ID is required");
   }
 
+  // Only teachers and admins can upload files
+  if (user.role !== UserRole.TEACHER && user.role !== UserRole.SCHOOL_ADMIN) {
+    throw Errors.forbidden("Only teachers and school admins can upload materials");
+  }
+
   // Verify class access (enforces that teachers/admins belong to tenant, and parents have enrolled students)
   await verifyClassAccess(user.userId, user.tenantId, user.role, classId);
 

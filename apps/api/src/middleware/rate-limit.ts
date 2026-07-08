@@ -45,7 +45,7 @@ export function rateLimitMiddleware(options: RateLimitOptions) {
           target: rateLimits.key,
           set: {
             count: sql`CASE WHEN NOW() > rate_limits.reset_at THEN 1 ELSE rate_limits.count + 1 END`,
-            resetAt: sql`CASE WHEN NOW() > rate_limits.reset_at THEN ${resetAt}::timestamp with time zone ELSE rate_limits.reset_at END`,
+            resetAt: sql`CASE WHEN NOW() > rate_limits.reset_at THEN ${resetAt.toISOString()}::timestamp with time zone ELSE rate_limits.reset_at END`,
           },
         })
         .returning({
@@ -68,8 +68,15 @@ export function rateLimitMiddleware(options: RateLimitOptions) {
       await next();
     } catch (err) {
       console.error("Rate limiting check failed:", err);
-      // Fallback: fail open under database degradation to preserve service availability
-      await next();
+      return c.json(
+        {
+          error: {
+            code: "RATE_LIMIT_UNAVAILABLE",
+            message: "Rate limit check unavailable. Try again later.",
+          },
+        },
+        503
+      );
     }
   };
 }

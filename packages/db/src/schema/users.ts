@@ -15,4 +15,5 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });

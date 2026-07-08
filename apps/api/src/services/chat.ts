@@ -590,7 +590,7 @@ export async function markRoomRead(tenantId: string, roomId: string, userId: str
     // Check enrollment for non-teacher/admin users
     if (role !== UserRole.TEACHER && role !== UserRole.SCHOOL_ADMIN && role !== UserRole.SUPER_ADMIN) {
       const [enrollment] = await db
-        .select({ id: classEnrollments.id })
+        .select({ classId: classEnrollments.classId })
         .from(classEnrollments)
         .innerJoin(students, eq(classEnrollments.studentId, students.id))
         .innerJoin(parentProfiles, eq(students.parentId, parentProfiles.id))
@@ -642,6 +642,10 @@ export async function markRoomRead(tenantId: string, roomId: string, userId: str
 }
 
 export async function getMessageReceipts(tenantId: string, messageId: string, userId?: string, role?: string) {
+  if (!userId) {
+    throw Errors.unauthorized();
+  }
+
   const [msg] = await db
     .select()
     .from(messages)
@@ -674,7 +678,7 @@ export async function getMessageReceipts(tenantId: string, messageId: string, us
   } else if (msg.roomType === "classroom") {
     if (role !== UserRole.TEACHER && role !== UserRole.SCHOOL_ADMIN && role !== UserRole.SUPER_ADMIN) {
       const [enrollment] = await db
-        .select({ id: classEnrollments.id })
+        .select({ classId: classEnrollments.classId })
         .from(classEnrollments)
         .innerJoin(students, eq(classEnrollments.studentId, students.id))
         .innerJoin(parentProfiles, eq(students.parentId, parentProfiles.id))

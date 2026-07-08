@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../../middleware/auth.js";
+import { rateLimitMiddleware } from "../../middleware/rate-limit.js";
 import { Errors, UserRole } from "@whiteroom/shared";
 import type { JWTPayload, ApiResponse } from "@whiteroom/shared";
 import { db } from "../../lib/db.js";
@@ -21,8 +22,10 @@ const userRoutes = new Hono<{ Variables: { user: JWTPayload } }>();
 
 userRoutes.use("*", authMiddleware);
 
+const gdprExportLimit = rateLimitMiddleware({ windowMs: 10 * 60 * 1000, max: 5, errorCode: "GDPR_EXPORT_LIMITED" });
+
 // 1. GET /api/v1/users/me/export - GDPR Article 20 ZIP Export
-userRoutes.get("/me/export", async (c) => {
+userRoutes.get("/me/export", gdprExportLimit, async (c) => {
   const user = c.get("user") as JWTPayload;
   const userId = user.userId;
 
@@ -50,7 +53,7 @@ userRoutes.get("/me/export", async (c) => {
     const [row] = await db
       .select()
       .from(parentProfiles)
-      .where(eq(parentProfiles.id, userId))
+      .where(eq(parentProfiles.userId, userId))
       .limit(1);
     profile = row;
   }
@@ -67,12 +70,6 @@ userRoutes.get("/me/export", async (c) => {
     .from(consentLogs)
     .where(eq(consentLogs.userId, userId));
 
-  // Fetch device tokens
-  const tokens = await db
-    .select()
-    .from(deviceTokens)
-    .where(eq(deviceTokens.userId, userId));
-
   // Fetch parent student metadata and attendance if applicable
   let studentsList: any[] = [];
   let attendanceList: any[] = [];
@@ -81,7 +78,7 @@ userRoutes.get("/me/export", async (c) => {
     studentsList = await db
       .select()
       .from(students)
-      .where(eq(students.parentId, userId));
+      .where(eq(students.parentId, profile?.id));
 
     const studentIds = studentsList.map((s) => s.id);
     if (studentIds.length > 0) {
@@ -97,7 +94,6 @@ userRoutes.get("/me/export", async (c) => {
   zip.file("profile.json", JSON.stringify({ user: userRow, profile }, null, 2));
   zip.file("messages.json", JSON.stringify(userMessages, null, 2));
   zip.file("consent.json", JSON.stringify(logs, null, 2));
-  zip.file("device_tokens.json", JSON.stringify(tokens, null, 2));
 
   if (user.role === UserRole.PARENT) {
     zip.file("students.json", JSON.stringify(studentsList, null, 2));
@@ -124,6 +120,7 @@ userRoutes.delete("/me", async (c) => {
         phone: `[SCRUBBED_${userId}]`,
         name: "[Deleted User]",
         refreshToken: null,
+        deletedAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId));
@@ -132,28 +129,37 @@ userRoutes.delete("/me", async (c) => {
     if (user.role === UserRole.TEACHER) {
       await tx.delete(teacherProfiles).where(eq(teacherProfiles.id, userId));
     } else if (user.role === UserRole.PARENT) {
-      // Scrub and soft delete students registered under this parent first
-      const parentStudents = await tx
-        .select({ id: students.id })
-        .from(students)
-        .where(eq(students.parentId, userId));
+      // Resolve parent profile ID before querying students
+      const [parentProfile] = await tx
+        .select({ id: parentProfiles.id })
+        .from(parentProfiles)
+        .where(eq(parentProfiles.userId, userId))
+        .limit(1);
 
-      const studentIds = parentStudents.map((s) => s.id);
-      if (studentIds.length > 0) {
-        await tx
-          .update(students)
-          .set({
-            parentId: null, // satisfied constraint
-            name: "Scrubbed Student",
-            rollNumber: null,
-            phone: null,
-            deletedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(inArray(students.id, studentIds));
+      if (parentProfile) {
+        // Scrub and soft delete students registered under this parent first
+        const parentStudents = await tx
+          .select({ id: students.id })
+          .from(students)
+          .where(eq(students.parentId, parentProfile.id));
+
+        const studentIds = parentStudents.map((s) => s.id);
+        if (studentIds.length > 0) {
+          await tx
+            .update(students)
+            .set({
+              parentId: null,
+              name: "Scrubbed Student",
+              rollNumber: null,
+              phone: null,
+              deletedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(inArray(students.id, studentIds));
+        }
+
+        await tx.delete(parentProfiles).where(eq(parentProfiles.id, parentProfile.id));
       }
-
-      await tx.delete(parentProfiles).where(eq(parentProfiles.id, userId));
     }
 
     // 3. Scrub Messages Content
