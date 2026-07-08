@@ -438,11 +438,12 @@ export default function ChatRoomScreen() {
   // ─── Queries ───
   
   // Fetch messages in this room
-  const { data: messages = [], isLoading, refetch } = useQuery({
+  const { data: rawMessages, isLoading, refetch } = useQuery({
     queryKey: ["chatMessages", roomId],
     queryFn: () => api.chatMessages(roomId, roomType),
     refetchInterval: 5000, // Poll every 5 seconds for new messages
   });
+  const messages = Array.isArray(rawMessages) ? rawMessages : [];
 
   useEffect(() => {
     if (!isCloseToBottomRef.current && messages.length > messagesCountRef.current && messagesCountRef.current > 0) {
@@ -452,7 +453,7 @@ export default function ChatRoomScreen() {
   }, [messages.length]);
 
   // Fetch classroom students for mentions (if classroom)
-  const { data: classStudents = [] } = useQuery({
+  const { data: rawClassStudents } = useQuery({
     queryKey: ["classStudents", roomId],
     queryFn: async () => {
       if (roomType !== "classroom") return [];
@@ -461,23 +462,28 @@ export default function ChatRoomScreen() {
     },
     enabled: roomType === "classroom",
   });
+  const classStudents = Array.isArray(rawClassStudents) ? rawClassStudents : [];
 
   // Fetch chat rooms to resolve a fallback classroom ID for DM attachment uploads
-  const { data: rooms = [] } = useQuery({
+  const { data: rawRooms } = useQuery({
     queryKey: ["chatRooms"],
     queryFn: api.chatRooms,
     enabled: roomType !== "classroom",
   });
+  const rooms = Array.isArray(rawRooms) ? rawRooms : [];
 
   const uploadClassId = useMemo(() => {
     if (roomType === "classroom") return roomId;
-    const classroom = rooms.find((r) => r.type === "classroom");
+    const safeRooms = Array.isArray(rooms) ? rooms : [];
+    const classroom = safeRooms.find((r) => r?.type === "classroom");
     return classroom ? classroom.id : null;
   }, [roomId, roomType, rooms]);
 
   const processedMessages = useMemo(() => {
+    const safeMessages = Array.isArray(messages) ? messages : [];
     const reactions: Record<string, string[]> = {};
-    const filtered = messages.filter((msg: any) => {
+    const filtered = safeMessages.filter((msg: any) => {
+      if (!msg || typeof msg.content !== "string") return true;
       if (msg.content.startsWith("reaction:")) {
         const parts = msg.content.split(":");
         const targetId = parts[1];
@@ -492,12 +498,12 @@ export default function ChatRoomScreen() {
     });
 
     return filtered.map((msg: any) => {
-      let content = msg.content;
+      let content = typeof msg?.content === "string" ? msg.content : "";
       let replyTo = null;
-      if (msg.content.startsWith('{"replyTo":')) {
+      if (content.startsWith('{"replyTo":')) {
         try {
-          const parsed = JSON.parse(msg.content);
-          content = parsed.text;
+          const parsed = JSON.parse(content);
+          content = parsed.text || "";
           replyTo = parsed.replyTo;
         } catch (e) {}
       }
@@ -505,7 +511,7 @@ export default function ChatRoomScreen() {
         ...msg,
         content,
         replyTo,
-        reactions: reactions[msg.id] || [],
+        reactions: reactions[msg?.id] || [],
       };
     });
   }, [messages]);

@@ -15,6 +15,8 @@ import {
 } from "@expo-google-fonts/inter";
 import * as Updates from "expo-updates";
 
+export { ErrorBoundary } from "expo-router";
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Inter_400Regular,

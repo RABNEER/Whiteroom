@@ -52,12 +52,13 @@ export default function ChatInboxScreen() {
   };
 
   const filteredRooms = useMemo(() => {
-    if (!search.trim()) return rooms;
+    const safeRooms = Array.isArray(rooms) ? rooms : [];
+    if (!search.trim()) return safeRooms;
     const query = search.toLowerCase();
-    return rooms.filter(
+    return safeRooms.filter(
       (room) =>
-        room.name.toLowerCase().includes(query) ||
-        room.subtitle.toLowerCase().includes(query)
+        (room?.name || "").toLowerCase().includes(query) ||
+        (room?.subtitle || "").toLowerCase().includes(query)
     );
   }, [rooms, search]);
 
