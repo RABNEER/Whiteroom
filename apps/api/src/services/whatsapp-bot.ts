@@ -1,7 +1,8 @@
 import pkg from "@whiskeysockets/baileys";
 import qrcode from "qrcode-terminal";
 import path from "node:path";
-import fs from "node:fs";
+import fs from "node:fs/promises";
+import { watch as fsWatch } from "node:fs";
 import { config } from "dotenv";
 import { normalizePhone, hashSHA256 } from "../lib/otp.js";
 import { db } from "../lib/db.js";
@@ -102,12 +103,10 @@ async function syncAuthFilesFromDb(folder: string) {
 
     if (rows && rows.length > 0) {
       console.log(`📥 [WHATSAPP BOT] Restoring ${rows.length} auth files from PostgreSQL...`);
-      if (!fs.existsSync(folder)) {
-        fs.mkdirSync(folder, { recursive: true });
-      }
+      await fs.mkdir(folder, { recursive: true });
       for (const row of rows) {
         const filePath = path.join(folder, row.key as string);
-        fs.writeFileSync(filePath, row.value as string, "utf8");
+        await fs.writeFile(filePath, row.value as string, "utf8");
       }
       console.log("✅ [WHATSAPP BOT] Auth state restored successfully from database.");
     } else {
@@ -115,20 +114,24 @@ async function syncAuthFilesFromDb(folder: string) {
     }
   } catch (err) {
     console.error("❌ [WHATSAPP BOT] Failed to restore auth state from database:", err);
+    throw err;
   }
 }
 
 async function syncAuthFilesToDb(folder: string) {
   try {
-    if (!fs.existsSync(folder)) return;
-    const files = fs.readdirSync(folder);
-    console.log(`📤 [WHATSAPP BOT] Syncing ${files.length} auth files to PostgreSQL...`);
-    
+    let files: string[];
+    try {
+      files = await fs.readdir(folder);
+    } catch {
+      return;
+    }
+
     for (const file of files) {
       const filePath = path.join(folder, file);
-      const stat = fs.statSync(filePath);
+      const stat = await fs.stat(filePath);
       if (stat.isFile()) {
-        const content = fs.readFileSync(filePath, "utf8");
+        const content = await fs.readFile(filePath, "utf8");
         await db.execute(sql`
           INSERT INTO whatsapp_bot_state (key, value, updated_at)
           VALUES (${file}, ${content}, NOW())
@@ -138,7 +141,6 @@ async function syncAuthFilesToDb(folder: string) {
       }
     }
     
-    // Clean up deleted files from the database
     const dbKeys = await db.execute(sql`SELECT key FROM whatsapp_bot_state;`);
     for (const row of dbKeys) {
       const key = row.key as string;
@@ -154,16 +156,17 @@ async function syncAuthFilesToDb(folder: string) {
 
 let isWatcherActive = false;
 let syncTimeout: NodeJS.Timeout | null = null;
+let isReconnecting = false;
 
-function setupFolderWatcher(folder: string) {
+async function setupFolderWatcher(folder: string) {
   if (isWatcherActive) return;
-  if (!fs.existsSync(folder)) {
-    fs.mkdirSync(folder, { recursive: true });
-  }
+  try {
+    await fs.mkdir(folder, { recursive: true });
+  } catch { /* folder exists */ }
   isWatcherActive = true;
   console.log("👀 [WHATSAPP BOT] Watching auth state folder for real-time PostgreSQL backup...");
   
-  fs.watch(folder, (eventType, filename) => {
+  fsWatch(folder, (eventType, filename) => {
     if (syncTimeout) clearTimeout(syncTimeout);
     syncTimeout = setTimeout(() => {
       syncAuthFilesToDb(folder);
@@ -193,10 +196,12 @@ export async function logoutBot() {
   }
   
   try {
-    if (fs.existsSync(authFolder)) {
-      fs.rmSync(authFolder, { recursive: true, force: true });
-      console.log("✅ [WHATSAPP BOT] Cleared local auth folder.");
+    try {
+      await fs.rm(authFolder, { recursive: true, force: true });
+    } catch {
+      // folder may not exist
     }
+    console.log("✅ [WHATSAPP BOT] Cleared local auth folder.");
   } catch (err) {
     console.error("❌ [WHATSAPP BOT] Failed to delete local folder:", err);
   }
@@ -204,12 +209,17 @@ export async function logoutBot() {
   (globalThis as any).whatsappBotConnected = false;
   (globalThis as any).whatsappLatestQr = null;
   (globalThis as any).whatsappBotStarted = false;
+  isReconnecting = false;
 
   // Start fresh
   startBot(true).catch(err => console.error("Failed to restart bot:", err));
 }
 
 export async function startBot(isReconnect = false) {
+  if (isReconnecting) {
+    console.log("ℹ️ [WHATSAPP BOT] Already reconnecting, skipping duplicate start.");
+    return;
+  }
   if (!isReconnect && (globalThis as any).whatsappBotStarted) {
     console.log("ℹ️ [WHATSAPP BOT] Bot daemon already running, skipping duplicate start.");
     return;
@@ -217,6 +227,7 @@ export async function startBot(isReconnect = false) {
   if (!isReconnect) {
     (globalThis as any).whatsappBotStarted = true;
   }
+  isReconnecting = true;
 
   // Load Baileys module dynamically to bypass ESM/CJS named exports interop issues
   const baileys = await import("@whiskeysockets/baileys");
@@ -238,6 +249,7 @@ export async function startBot(isReconnect = false) {
     state = authState.state;
     saveCreds = authState.saveCreds;
   } catch (err: any) {
+    isReconnecting = false;
     const errMsg = err?.message || "";
     if (errMsg.includes("Bad MAC") || errMsg.includes("decryption")) {
       console.error("⚠️ [WHATSAPP BOT] Bad session keys during initialization. Purging session to self-heal...", err);
@@ -275,7 +287,7 @@ export async function startBot(isReconnect = false) {
   sock.ev.on("creds.update", saveCreds);
 
   // Monitor connection updates
-  sock.ev.on("connection.update", (update) => {
+  sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
@@ -297,17 +309,18 @@ export async function startBot(isReconnect = false) {
 
       if (isBadMac) {
         console.log("⚠️ [WHATSAPP BOT] Detected Bad MAC / decryption error. Clearing session to self-heal...");
-        logoutBot();
+        await logoutBot();
       } else if (shouldReconnect) {
-        startBot(true);
+        await startBot(true);
       } else {
         console.log("⚠️ [WHATSAPP BOT] Logged out. Clearing session state to restart cleanly...");
-        logoutBot();
+        await logoutBot();
       }
     } else if (connection === "open") {
       console.log("\n✅ [WHATSAPP BOT] Connected successfully to WhatsApp network!");
       (globalThis as any).whatsappLatestQr = null;
       (globalThis as any).whatsappBotConnected = true;
+      isReconnecting = false;
     }
   });
 
@@ -328,7 +341,7 @@ export async function startBot(isReconnect = false) {
         msg.message.extendedTextMessage?.text ||
         "";
 
-      console.log(`✉️ [WHATSAPP BOT] Received message from ${from}: "${text}" (Raw: ${JSON.stringify(msg.message)})`);
+      console.log(`✉️ [WHATSAPP BOT] Received message from ${from}: "${text}"`);
 
       // Ignore messages containing our bot's own response template to prevent infinite loops
       if (text.includes("Whiteroom Verification")) continue;
@@ -444,6 +457,8 @@ export async function startBot(isReconnect = false) {
       }
     }
   });
+
+  isReconnecting = false;
 }
 
 // Start the daemon bot
