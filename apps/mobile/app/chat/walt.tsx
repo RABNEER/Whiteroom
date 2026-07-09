@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#E2E8F0",
     paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === "ios" ? 8 : 4,
+    minHeight: 48,
   },
   inputWrapperFocused: {
     borderColor: "#4F46E5",
@@ -521,9 +521,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: colors.navy,
+    minHeight: 40,
     maxHeight: 120,
-    paddingTop: Platform.OS === "ios" ? 4 : 0,
-    paddingBottom: Platform.OS === "ios" ? 4 : 0,
+    paddingVertical: 8,
+    textAlignVertical: "center",
   },
   sendButton: {
     backgroundColor: "#4F46E5",
