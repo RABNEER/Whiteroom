@@ -1,0 +1,1 @@
+ALTER TABLE "class_enrollments" ADD COLUMN "is_monitor" boolean DEFAULT false NOT NULL;

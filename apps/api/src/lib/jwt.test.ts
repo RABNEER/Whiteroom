@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeAll } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { SignJWT } from "jose";
 import crypto from "node:crypto";
 import type { JWTPayload, UserRole } from "@whiteroom/shared";

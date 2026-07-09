@@ -150,6 +150,8 @@ export interface StudentResponse {
   rollNumber: string | null;
   parentId: string | null;
   phone: string | null;
+  isMonitor?: boolean;
+  enrolledAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }

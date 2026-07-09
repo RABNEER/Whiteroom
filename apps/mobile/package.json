@@ -21,6 +21,7 @@
     "@whiteroom/shared": "workspace:*",
     "expo": "~52.0.47",
     "expo-asset": "~11.0.5",
+    "expo-clipboard": "^57.0.0",
     "expo-constants": "~17.0.8",
     "expo-document-picker": "^13.0.3",
     "expo-font": "~13.0.4",

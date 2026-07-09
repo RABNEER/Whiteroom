@@ -208,6 +208,7 @@ export async function listClassStudents(
       createdAt: students.createdAt,
       updatedAt: students.updatedAt,
       enrolledAt: classEnrollments.enrolledAt,
+      isMonitor: classEnrollments.isMonitor,
     })
     .from(classEnrollments)
     .innerJoin(students, eq(classEnrollments.studentId, students.id))
@@ -268,4 +269,42 @@ export async function removeStudentFromClass(
     );
 
   return { removed: true };
+}
+
+export async function setMonitor(
+  tenantId: string,
+  classId: string,
+  studentId: string,
+  isMonitor: boolean
+) {
+  await getActiveClass(tenantId, classId);
+
+  const [student] = await db
+    .select({ id: students.id })
+    .from(students)
+    .where(
+      and(
+        eq(students.id, studentId),
+        eq(students.tenantId, tenantId),
+        isNull(students.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!student) {
+    throw Errors.notFound("Student");
+  }
+
+  const [updated] = await db
+    .update(classEnrollments)
+    .set({ isMonitor })
+    .where(
+      and(
+        eq(classEnrollments.classId, classId),
+        eq(classEnrollments.studentId, studentId)
+      )
+    )
+    .returning({ isMonitor: classEnrollments.isMonitor });
+
+  return { isMonitor: updated?.isMonitor ?? false };
 }

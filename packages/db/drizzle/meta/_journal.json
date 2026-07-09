@@ -120,6 +120,20 @@
       "when": 1783513224148,
       "tag": "0016_orange_the_executioner",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1783614183156,
+      "tag": "0017_futuristic_rockslide",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783624356915,
+      "tag": "0018_lame_rattler",
+      "breakpoints": true
     }
   ]
 }

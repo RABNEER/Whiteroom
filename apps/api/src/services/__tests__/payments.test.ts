@@ -13,7 +13,7 @@ vi.hoisted(() => {
 
 const mockOrderCreate = vi.fn();
 const mockRazorpayClient = { orders: { create: mockOrderCreate } };
-const mockVerifySignature = vi.fn((_body: string, _sig?: string) => true);
+const mockVerifySignature = vi.fn(() => true);
 
 vi.mock("../../lib/razorpay.js", () => ({
   getRazorpayClient: () => mockRazorpayClient,

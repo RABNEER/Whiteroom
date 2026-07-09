@@ -9,6 +9,7 @@ import { deleteClassHandler } from "./delete.js";
 import { addStudentsToClassHandler } from "./students/add.js";
 import { listClassStudentsHandler } from "./students/list.js";
 import { removeStudentFromClassHandler } from "./students/remove.js";
+import { toggleMonitorHandler } from "./students/toggle-monitor.js";
 
 const classRoutes = new Hono();
 
@@ -22,6 +23,7 @@ classRoutes.patch("/:id", updateClassHandler);
 classRoutes.delete("/:id", deleteClassHandler);
 classRoutes.post("/:id/students", addStudentsToClassHandler);
 classRoutes.get("/:id/students", listClassStudentsHandler);
+classRoutes.patch("/:id/students/:sid", toggleMonitorHandler);
 classRoutes.delete("/:id/students/:sid", removeStudentFromClassHandler);
 
 export { classRoutes };

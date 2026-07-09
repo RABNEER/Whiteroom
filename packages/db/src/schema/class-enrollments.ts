@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, primaryKey, boolean } from "drizzle-orm/pg-core";
 import { classes } from "./classes.js";
 import { students } from "./students.js";
 
@@ -14,7 +14,8 @@ export const classEnrollments = pgTable(
     enrolledAt: timestamp("enrolled_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
-    status: text("status").default("active").notNull(), // 'active' | 'promoted' | 'graduated'
+    isMonitor: boolean("is_monitor").default(false).notNull(),
+    status: text("status").default("active").notNull(),
     promotedAt: timestamp("promoted_at", { withTimezone: true }),
   },
   (table) => [

@@ -14,6 +14,7 @@ import {
   Modal,
   Share,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 
 // Cross-platform alert — Alert.alert silently fails on web/PWA
 function showAlert(title: string, message: string) {
@@ -45,6 +46,7 @@ import {
   Users,
   Lock,
   Search,
+  Copy as CopyIcon,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -898,47 +900,108 @@ function StudentsView({ classId }: { classId: string }) {
 
 function InviteView() {
   const [link, setLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState<'parent' | 'teacher' | null>(null);
 
   const generateInvite = useMutation({
     mutationFn: api.inviteGenerate,
     onSuccess: (data) => setLink(data.inviteCode),
   });
 
-  const deepLink = link ? `https://whiteroom.co.in/invite/${link}` : null;
+  const parentLink = link ? `https://app.whiteroom.co.in/invite/${link}` : null;
+  const teacherLink = link ? `https://app.whiteroom.co.in/invite/${link}?role=teacher` : null;
 
-  const handleShare = async () => {
-    if (!deepLink) return;
+  const handleShare = async (lnk: string) => {
     try {
-      await Share.share({
-        message: `Join my classroom on Whiteroom!\n\n${deepLink}`,
-      });
+      await Share.share({ message: `Join my classroom on Whiteroom!\n\n${lnk}` });
+    } catch {}
+  };
+
+  const handleCopy = async (lnk: string, type: 'parent' | 'teacher') => {
+    try {
+      await Clipboard.setStringAsync(lnk);
+      setCopied(type);
+      setTimeout(() => setCopied(null), 2000);
     } catch {}
   };
 
   return (
     <View style={s.card}>
-      <Text style={s.subViewTitle}>Invite Parents</Text>
+      <Text style={s.subViewTitle}>Invite Links</Text>
       <Text style={s.subViewSub}>
-        Generate an invite link. Share it with parents to let them join this classroom.
+        Generate invite links for parents and teachers to join your institution.
       </Text>
       {link ? (
-        <View>
-          <View style={s.codeBox}>
-            <Text style={s.codeText} selectable>{deepLink}</Text>
+        <View style={{ gap: 20 }}>
+          {/* ── Parent Invite ── */}
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <Users size={14} color={colors.teal} />
+              <Text style={{ color: colors.navy, fontSize: 14, fontWeight: '700' }}>Parent Invite</Text>
+            </View>
+            <Text style={{ color: colors.teal, fontSize: 12, marginBottom: 8, lineHeight: 16 }}>
+              Parents use this link to sign up and join their child's class.
+            </Text>
+            <View style={[s.codeBox, { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }]}>
+              <Text style={[s.codeText, { flex: 1 }]} numberOfLines={1} selectable>{parentLink}</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => handleCopy(parentLink!, 'parent')}
+                style={{ paddingLeft: 8 }}
+              >
+                {copied === 'parent' ? (
+                  <Check size={18} color="#15803D" />
+                ) : (
+                  <CopyIcon size={18} color={colors.teal} />
+                )}
+              </Pressable>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              style={[s.outlineBtn, { marginTop: 8 }]}
+              onPress={() => handleShare(parentLink!)}
+            >
+              <Text style={s.outlineBtnText}>Share Link</Text>
+            </Pressable>
           </View>
+
+          {/* ── Teacher Invite ── */}
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <Shield size={14} color={colors.teal} />
+              <Text style={{ color: colors.navy, fontSize: 14, fontWeight: '700' }}>Teacher Invite</Text>
+            </View>
+            <Text style={{ color: colors.teal, fontSize: 12, marginBottom: 8, lineHeight: 16 }}>
+              Teachers use this link to sign up — they'll be added as staff automatically.
+            </Text>
+            <View style={[s.codeBox, { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }]}>
+              <Text style={[s.codeText, { flex: 1 }]} numberOfLines={1} selectable>{teacherLink}</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => handleCopy(teacherLink!, 'teacher')}
+                style={{ paddingLeft: 8 }}
+              >
+                {copied === 'teacher' ? (
+                  <Check size={18} color="#15803D" />
+                ) : (
+                  <CopyIcon size={18} color={colors.teal} />
+                )}
+              </Pressable>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              style={[s.outlineBtn, { marginTop: 8 }]}
+              onPress={() => handleShare(teacherLink!)}
+            >
+              <Text style={s.outlineBtnText}>Share Link</Text>
+            </Pressable>
+          </View>
+
           <Pressable
             accessibilityRole="button"
-            style={[s.startBtn, { marginTop: 12 }]}
-            onPress={handleShare}
-          >
-            <Text style={s.startBtnText}>SHARE INVITE LINK</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            style={[s.outlineBtn, { marginTop: 8 }]}
+            style={[s.dangerBtn]}
             onPress={() => setLink(null)}
           >
-            <Text style={s.outlineBtnText}>Generate New Link</Text>
+            <Text style={s.dangerBtnText}>Generate New Links</Text>
           </Pressable>
         </View>
       ) : (
@@ -950,7 +1013,7 @@ function InviteView() {
         >
           {generateInvite.isPending
             ? <ActivityIndicator color={colors.white} />
-            : <Text style={s.startBtnText}>GENERATE INVITE LINK</Text>}
+            : <Text style={s.startBtnText}>GENERATE INVITE LINKS</Text>}
         </Pressable>
       )}
     </View>
@@ -2151,6 +2214,12 @@ const s = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   outlineBtnText: { color: colors.navy, fontSize: 13, fontWeight: '600' },
+  dangerBtn: {
+    borderWidth: 1.5, borderColor: colors.danger, borderRadius: 10,
+    paddingHorizontal: 20, paddingVertical: 10,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  dangerBtnText: { color: colors.danger, fontSize: 13, fontWeight: '600' },
 
   // Students
   studentList: { marginTop: 8 },

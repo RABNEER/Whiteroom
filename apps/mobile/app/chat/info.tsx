@@ -22,6 +22,9 @@ import {
   UserX,
   Shield,
   BookOpen,
+  UserPlus,
+  Trash2,
+  Star,
 } from "lucide-react-native";
 import { api, ApiError } from "@/api/client";
 import { useSession } from "@/auth/session-store";
@@ -112,6 +115,30 @@ export default function ChatInfoScreen() {
     },
     onError: (err: any) => {
       Alert.alert("Error", err instanceof ApiError ? err.message : "Failed to unblock user");
+    },
+  });
+
+  // Remove Student Mutation
+  const removeStudentMutation = useMutation({
+    mutationFn: (studentId: string) => api.classRemoveStudent(roomId, studentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["classMembers", roomId] });
+      Alert.alert("Removed", "Student has been removed from this class.");
+    },
+    onError: (err: any) => {
+      Alert.alert("Error", err instanceof ApiError ? err.message : "Failed to remove student");
+    },
+  });
+
+  // Toggle Monitor Mutation
+  const toggleMonitorMutation = useMutation({
+    mutationFn: ({ studentId, isMonitor }: { studentId: string; isMonitor: boolean }) =>
+      api.classToggleMonitor(roomId, studentId, isMonitor),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["classMembers", roomId] });
+    },
+    onError: (err: any) => {
+      Alert.alert("Error", err instanceof ApiError ? err.message : "Failed to update student role");
     },
   });
 
@@ -300,13 +327,26 @@ export default function ChatInfoScreen() {
         {/* Roster / Members list for classroom */}
         {roomType === "classroom" && (
           <View style={styles.section}>
-            <View style={styles.membersHeaderRow}>
-              <Text style={styles.sectionHeader}>Classroom Members</Text>
-              <View style={styles.countBadge}>
-                <Users size={12} color={colors.teal} style={{ marginRight: 4 }} />
-                <Text style={styles.countBadgeText}>{members.length} Members</Text>
+              <View style={styles.membersHeaderRow}>
+                <Text style={styles.sectionHeader}>Classroom Members</Text>
+                <View style={styles.membersHeaderRight}>
+                  {isTeacherOrAdmin && (
+                    <Pressable
+                      onPress={() => {
+                        router.push(`/chat/add-students?roomId=${roomId}&roomName=${encodeURIComponent(name)}` as any);
+                      }}
+                      style={styles.addPeopleButton}
+                    >
+                      <UserPlus size={14} color={colors.paper} />
+                      <Text style={styles.addPeopleText}>Add</Text>
+                    </Pressable>
+                  )}
+                  <View style={styles.countBadge}>
+                    <Users size={12} color={colors.teal} style={{ marginRight: 4 }} />
+                    <Text style={styles.countBadgeText}>{members.length}</Text>
+                  </View>
+                </View>
               </View>
-            </View>
 
             {isLoadingMembers ? (
               <ActivityIndicator size="small" color={colors.navy} style={{ margin: 20 }} />
@@ -315,8 +355,50 @@ export default function ChatInfoScreen() {
             ) : (
               <Card style={[styles.card, { paddingVertical: 0 }]}>
                 {members.map((member: any, idx: number) => (
-                  <View
+                  <Pressable
                     key={member.id}
+                    onPress={() => {
+                      if (!isTeacherOrAdmin) return;
+                      Alert.alert(
+                        member.name,
+                        member.isMonitor ? "This student is a class monitor." : "Manage this student.",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          ...(member.isMonitor
+                            ? [
+                                {
+                                  text: "Remove Monitor",
+                                  onPress: () =>
+                                    toggleMonitorMutation.mutate({ studentId: member.id, isMonitor: false }),
+                                },
+                              ]
+                            : [
+                                {
+                                  text: "Make Monitor",
+                                  onPress: () =>
+                                    toggleMonitorMutation.mutate({ studentId: member.id, isMonitor: true }),
+                                },
+                              ]),
+                          {
+                            text: "Remove from Class",
+                            style: "destructive",
+                            onPress: () =>
+                              Alert.alert(
+                                "Remove Student",
+                                `Remove ${member.name} from this class?`,
+                                [
+                                  { text: "Cancel", style: "cancel" },
+                                  {
+                                    text: "Remove",
+                                    style: "destructive",
+                                    onPress: () => removeStudentMutation.mutate(member.id),
+                                  },
+                                ]
+                              ),
+                          },
+                        ]
+                      );
+                    }}
                     style={[
                       styles.memberRow,
                       idx < members.length - 1 && styles.memberRowBorder,
@@ -333,10 +415,17 @@ export default function ChatInfoScreen() {
                     </View>
                     {isTeacherOrAdmin && (
                       <View style={styles.studentRoleBadge}>
-                        <Text style={styles.studentRoleBadgeText}>Student</Text>
+                        <Star
+                          size={10}
+                          color={member.isMonitor ? "#F59E0B" : colors.teal}
+                          style={{ marginRight: 3 }}
+                        />
+                        <Text style={styles.studentRoleBadgeText}>
+                          {member.isMonitor ? "Monitor" : "Student"}
+                        </Text>
                       </View>
                     )}
-                  </View>
+                  </Pressable>
                 ))}
               </Card>
             )}
@@ -439,6 +528,25 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: spacing.xs,
+  },
+  membersHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  addPeopleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.teal,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  addPeopleText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.paper,
   },
   countBadge: {
     flexDirection: "row",

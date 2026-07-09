@@ -233,6 +233,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ studentIds }),
     }),
+  classRemoveStudent: (classId: string, studentId: string) =>
+    request<{ removed: boolean }>(`/classes/${classId}/students/${studentId}`, {
+      method: "DELETE",
+    }),
+  classToggleMonitor: (classId: string, studentId: string, isMonitor: boolean) =>
+    request<{ isMonitor: boolean }>(`/classes/${classId}/students/${studentId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ isMonitor }),
+    }),
   students: (page?: number, limit?: number) => {
     const params = new URLSearchParams();
     if (page) params.set("page", String(page));

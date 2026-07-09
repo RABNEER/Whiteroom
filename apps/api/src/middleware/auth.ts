@@ -1,5 +1,5 @@
 import { Context, Next } from "hono";
-import { Errors, PlanTier } from "@whiteroom/shared";
+import { Errors } from "@whiteroom/shared";
 import type { JWTPayload, UserRole } from "@whiteroom/shared";
 import { verifyAccessToken } from "../lib/jwt.js";
 import { db } from "../lib/db.js";

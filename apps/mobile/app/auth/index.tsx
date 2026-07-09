@@ -160,12 +160,18 @@ export default function AuthScreen() {
     return () => clearInterval(interval);
   }, [step, whatsappTimer]);
 
-  // Handle incoming deep links to auto-fill invite code
+  // Handle incoming deep links to auto-fill invite code & role
   useEffect(() => {
     function handleDeepLink(url: string | null) {
       if (!url) return;
+      // Parse role from query params (e.g. ?role=teacher)
+      const roleMatch = url.match(/[?&]role=(teacher|parent|school_admin)/);
+      if (roleMatch) {
+        setSelectedRole(roleMatch[1] as Role);
+      }
       const match =
-        // Universal Link: https://whiteroom.co.in/invite/CODE
+        // Universal Link: https://app.whiteroom.co.in/invite/CODE or https://whiteroom.co.in/invite/CODE
+        url.match(/app\.whiteroom\.co\.in\/invite\/([A-Za-z0-9]{6})/) ||
         url.match(/whiteroom\.co\.in\/invite\/([A-Za-z0-9]{6})/) ||
         // Custom scheme fallback: whiteroom://auth?inviteCode=CODE
         url.match(/[?&]inviteCode=([A-Za-z0-9]{6})/);
