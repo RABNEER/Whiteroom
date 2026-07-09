@@ -111,7 +111,7 @@ export async function generateCompletion(
           Authorization: `Bearer ${groqApiKey}`,
         },
         body: JSON.stringify({
-          model: env.GROQ_MODEL || "llama-3.3-70b-specdec",
+          model: env.GROQ_MODEL || "llama-3.3-70b-versatile",
           messages: [{ role: "user", content: prompt }],
           response_format: jsonMode ? { type: "json_object" } : undefined,
         }),
