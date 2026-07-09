@@ -121,7 +121,8 @@ export async function generateCompletion(
         const json = (await res.json()) as any;
         return json.choices[0].message.content;
       }
-      console.warn(`Groq Completion API returned status ${res.status}. Falling back to Gemini.`);
+      const errBody = await res.text().catch(() => "");
+      console.warn(`Groq Completion API returned status ${res.status}. Body: ${errBody}. Falling back to Gemini.`);
     } catch (err) {
       console.error("Groq completion failed, falling back to Gemini:", err);
     }
@@ -145,18 +146,19 @@ export async function generateCompletion(
       );
 
       if (!res.ok) {
-        throw new Error(`Gemini Completion API returned ${res.status}`);
+        const errBody = await res.text().catch(() => "");
+        throw new Error(`Gemini Completion API returned ${res.status}. Body: ${errBody}`);
       }
 
       const json = (await res.json()) as any;
       return json.candidates[0].content.parts[0].text;
-    } catch (err) {
+    } catch (err: any) {
       console.error("Gemini completion failed:", err);
-      throw Errors.internal("Failed to obtain response from LLM provider");
+      throw Errors.internal(`Failed to obtain response from LLM provider: ${err?.message || err}`);
     }
   }
 
-  throw Errors.internal("No active LLM model provider available");
+  throw Errors.internal("No active LLM model provider available. Please set GROQ_API_KEY or GEMINI_API_KEY in .env");
 }
 
 // ─── Doubt Solver (RAG Grounded) ───
