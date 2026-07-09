@@ -68,8 +68,10 @@ export async function generateCompletion(
   prompt: string,
   jsonMode = false
 ): Promise<string> {
-  const apiKey = env.GEMINI_API_KEY;
-  if (!apiKey) {
+  const groqApiKey = env.GROQ_API_KEY;
+  const geminiApiKey = env.GEMINI_API_KEY;
+
+  if (env.NODE_ENV === "test" || (!groqApiKey && !geminiApiKey)) {
     // Mock completions for offline tests
     if (jsonMode) {
       if (prompt.includes("quiz")) {
@@ -99,31 +101,62 @@ export async function generateCompletion(
     return "This is a mock Walt AI doubt response grounded in classroom files.";
   }
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
+  // 1. Try Groq if key is present
+  if (groqApiKey) {
+    try {
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${groqApiKey}`,
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: jsonMode
-            ? { responseMimeType: "application/json" }
-            : undefined,
+          model: env.GROQ_MODEL || "llama-3.3-70b-specdec",
+          messages: [{ role: "user", content: prompt }],
+          response_format: jsonMode ? { type: "json_object" } : undefined,
         }),
+      });
+
+      if (res.ok) {
+        const json = (await res.json()) as any;
+        return json.choices[0].message.content;
       }
-    );
-
-    if (!res.ok) {
-      throw new Error(`Gemini Completion API returned ${res.status}`);
+      console.warn(`Groq Completion API returned status ${res.status}. Falling back to Gemini.`);
+    } catch (err) {
+      console.error("Groq completion failed, falling back to Gemini:", err);
     }
-
-    const json = (await res.json()) as any;
-    return json.candidates[0].content.parts[0].text;
-  } catch (err) {
-    console.error("Gemini completion failed:", err);
-    throw Errors.internal("Failed to obtain response from LLM provider");
   }
+
+  // 2. Fallback to Gemini
+  if (geminiApiKey) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: jsonMode
+              ? { responseMimeType: "application/json" }
+              : undefined,
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error(`Gemini Completion API returned ${res.status}`);
+      }
+
+      const json = (await res.json()) as any;
+      return json.candidates[0].content.parts[0].text;
+    } catch (err) {
+      console.error("Gemini completion failed:", err);
+      throw Errors.internal("Failed to obtain response from LLM provider");
+    }
+  }
+
+  throw Errors.internal("No active LLM model provider available");
 }
 
 // ─── Doubt Solver (RAG Grounded) ───

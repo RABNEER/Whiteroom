@@ -47,6 +47,8 @@ const envSchema = z.object({
   MOBILE_WEB_URL: z.string().url().optional(),
   ADMIN_URL: z.string().url().optional(),
   GEMINI_API_KEY: z.string().optional(),
+  GROQ_API_KEY: z.string().optional(),
+  GROQ_MODEL: z.string().default("llama-3.3-70b-specdec"),
   WHATSAPP_WEBHOOK_SECRET: z.string().min(1).optional(),
   WHATSAPP_WEBHOOK_URL: z.string().url().optional(),
 }).superRefine((value, ctx) => {
