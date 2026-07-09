@@ -161,6 +161,36 @@ export async function generateCompletion(
   throw Errors.internal("No active LLM model provider available. Please set GROQ_API_KEY or GEMINI_API_KEY in .env");
 }
 
+export function isGreetingOrGeneralPoliteness(text: string): boolean {
+  const normalized = text.toLowerCase().trim().replace(/[?.!,]/g, "");
+  const basicGreetings = [
+    "hi", "hello", "hey", "hola", "greetings", "good morning", "good afternoon", "good evening",
+    "thank you", "thanks", "thankyou", "bye", "goodbye", "see ya", "ok", "okay",
+    "who are you", "what is your name", "who is walt", "what can you do", "help me",
+    "how are you", "how are you doing", "whats up", "what's up", "yo"
+  ];
+  return basicGreetings.some(g => normalized === g || normalized.startsWith(g + " ") || normalized.endsWith(" " + g));
+}
+
+export async function classifyQuestion(question: string): Promise<"basic" | "academic"> {
+  if (isGreetingOrGeneralPoliteness(question)) {
+    return "basic";
+  }
+
+  try {
+    const prompt = `You are an AI assistant analyzing a student message. Classify if the message is a basic greeting, pleasantry, politeness, or a general conversational question about who you are or how to use the app, OR if it is an academic, subject-matter, factual, or homework question.
+    
+Student message: "${question}"
+
+Respond with ONLY the word "basic" if it is a greeting/pleasantry/about your identity, or "academic" if it is a subject-matter/factual/homework question. Do not include any punctuation or extra words.`;
+    const classification = await generateCompletion(prompt);
+    const clean = classification.trim().toLowerCase();
+    return clean.includes("basic") ? "basic" : "academic";
+  } catch {
+    return "academic"; // Safe fallback
+  }
+}
+
 // ─── Doubt Solver (RAG Grounded) ───
 export async function solveDoubt(
   tenantId: string,
@@ -195,6 +225,17 @@ export async function solveDoubt(
   const validChunks = rows.filter((r) => Number(r.similarity) >= threshold);
 
   if (validChunks.length === 0 && !isTeacher) {
+    // Check if it's a basic conversational question (greeting, politeness, help query)
+    const isBasic = isGreetingOrGeneralPoliteness(cleanQuestion) || 
+      (await classifyQuestion(cleanQuestion)) === "basic";
+
+    if (isBasic) {
+      const basicPrompt = `You are Walt, an AI study assistant. A student is greeting you or asking a basic conversational question. Reply in a friendly, helpful, and concise manner.
+Question: ${cleanQuestion}`;
+      const answer = await generateCompletion(basicPrompt);
+      return { answer, citations: [] };
+    }
+
     return {
       answer: "I'm sorry, but that question is outside the scope of the materials uploaded for this classroom.",
       citations: [],

@@ -11,6 +11,7 @@ import {
   validateMimeType,
 } from "../../lib/storage.js";
 import { verifyClassAccess } from "./index.js";
+import { ingestClassroomFile } from "../../services/ingestion.js";
 
 const uploadRoutes = new Hono<{ Variables: { user: JWTPayload } }>();
 
@@ -89,6 +90,11 @@ uploadRoutes.post("/", async (c) => {
       category,
     })
     .returning();
+
+  // Asynchronously ingest the file into vector chunks for Walt RAG
+  ingestClassroomFile(newFile, buffer).catch((err) => {
+    console.error(`[INGESTION ERROR] Failed to ingest uploaded file ${newFile.name}:`, err);
+  });
 
   c.header("Cache-Control", "no-transform");
 

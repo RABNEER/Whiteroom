@@ -15,9 +15,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowLeft, Send, Sparkles, AlertCircle, FileText } from "lucide-react-native";
+import { ArrowLeft, Send, Sparkles, AlertCircle, FileText, Upload, RefreshCw } from "lucide-react-native";
+import * as DocumentPicker from "expo-document-picker";
 import { api } from "@/api/client";
 import { colors, spacing, font, radius } from "@/theme/tokens";
+import { sessionStore } from "@/auth/session-store";
 
 interface Message {
   id: string;
@@ -38,7 +40,110 @@ export default function WaltChatScreen() {
   const router = useRouter();
   const flatListRef = useRef<FlatList>(null);
 
+  const { user } = sessionStore();
+  const isTeacher = user?.role === "teacher" || user?.role === "school_admin";
+  
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const [input, setInput] = useState("");
+
+  const handleUpload = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      setIsUploading(true);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `sys_upload_start_${Date.now()}`,
+          sender: "walt",
+          text: `⏳ Uploading and analyzing "${asset.name}" to ground my knowledge base...`,
+        },
+      ]);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+
+      const uploadedFile = await api.uploadArchiveFile(
+        roomId,
+        {
+          uri: asset.uri,
+          name: asset.name,
+          type: asset.mimeType || "application/octet-stream",
+        },
+        "Walt Grounding"
+      );
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `sys_upload_success_${Date.now()}`,
+          sender: "walt",
+          text: `📚 Added and vectorized "${uploadedFile.name}" successfully! I am now fully grounded in this document's content.`,
+        },
+      ]);
+
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch (err: any) {
+      console.error("[WALT_UPLOAD_ERROR]", err);
+      Alert.alert("Upload Failed", err.message || "Failed to upload selected file.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSyncChat = async () => {
+    try {
+      setIsSyncing(true);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `sys_sync_start_${Date.now()}`,
+          sender: "walt",
+          text: "⏳ Scanning classroom chat history for study materials, guides, and images to ground my knowledge base...",
+        },
+      ]);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+
+      const res = await api.syncChatAttachments(roomId);
+
+      if (res.syncedCount === 0) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `sys_sync_done_${Date.now()}`,
+            sender: "walt",
+            text: "ℹ️ No new chat attachments found to import. Make sure documents or images have been posted in the class chat!",
+          },
+        ]);
+      } else {
+        const fileNames = res.files.map((f: any) => `"${f.name}"`).join(", ");
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `sys_sync_done_${Date.now()}`,
+            sender: "walt",
+            text: `🔄 Vectorized and imported ${res.syncedCount} study materials from the chat history: ${fileNames}. I am now fully grounded in their contents!`,
+          },
+        ]);
+      }
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch (err: any) {
+      console.error("[WALT_SYNC_ERROR]", err);
+      Alert.alert("Sync Failed", err.message || "Failed to sync attachments from chat.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
@@ -122,6 +227,40 @@ export default function WaltChatScreen() {
           Walt is fully grounded in materials uploaded for this class. Responses are PII-filtered for safety.
         </Text>
       </View>
+
+      {/* Teacher Actions Bar */}
+      {isTeacher && (
+        <View style={styles.teacherBar}>
+          <Text style={styles.teacherBarTitle}>Teacher Study Materials Helper</Text>
+          <View style={styles.teacherButtonsRow}>
+            <TouchableOpacity
+              onPress={handleUpload}
+              disabled={isUploading || isSyncing}
+              style={[styles.teacherButton, isUploading && styles.teacherButtonActive]}
+            >
+              {isUploading ? (
+                <ActivityIndicator size="small" color="#4F46E5" style={{ marginRight: 6 }} />
+              ) : (
+                <Upload size={14} color="#4F46E5" style={{ marginRight: 6 }} />
+              )}
+              <Text style={styles.teacherButtonText}>Upload Study Doc</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleSyncChat}
+              disabled={isUploading || isSyncing}
+              style={[styles.teacherButton, styles.teacherButtonSync, isSyncing && styles.teacherButtonActive]}
+            >
+              {isSyncing ? (
+                <ActivityIndicator size="small" color="#0D9488" style={{ marginRight: 6 }} />
+              ) : (
+                <RefreshCw size={14} color="#0D9488" style={{ marginRight: 6 }} />
+              )}
+              <Text style={[styles.teacherButtonText, { color: "#0D9488" }]}>Sync Chat Files</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -360,5 +499,46 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: colors.sky,
+  },
+  teacherBar: {
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  teacherBarTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.teal,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  teacherButtonsRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  teacherButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(99, 102, 241, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(99, 102, 241, 0.15)",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: radius.md,
+  },
+  teacherButtonSync: {
+    backgroundColor: "rgba(13, 148, 136, 0.08)",
+    borderColor: "rgba(13, 148, 136, 0.15)",
+  },
+  teacherButtonActive: {
+    opacity: 0.6,
+  },
+  teacherButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#4F46E5",
   },
 });

@@ -2,6 +2,7 @@ import { db } from "../lib/db.js";
 import { fileUploadSessions, fileUploadChunks, classroomFiles, eq, asc } from "@whiteroom/db";
 import { getBoss } from "../lib/pgboss.js";
 import { assembleChunks } from "../lib/cdn.js";
+import { ingestClassroomFile } from "../services/ingestion.js";
 
 export async function registerAssembleUploadWorker() {
   const boss = getBoss();
@@ -65,8 +66,8 @@ export async function registerAssembleUploadWorker() {
       else if (session.mimeType === "application/pdf") fileType = "pdf";
 
       // 5. Insert final classroom file record
-      await db.transaction(async (tx) => {
-        await tx.insert(classroomFiles).values({
+      const [newFile] = await db.transaction(async (tx) => {
+        const [insertedFile] = await tx.insert(classroomFiles).values({
           tenantId: session.tenantId,
           classId: session.classId,
           uploaderId: session.uploaderId,
@@ -77,7 +78,7 @@ export async function registerAssembleUploadWorker() {
           checksum: session.checksum,
           originalSize: session.fileSize,
           category: session.category,
-        });
+        }).returning();
 
         // Update session status to completed
         await tx
@@ -89,7 +90,16 @@ export async function registerAssembleUploadWorker() {
         await tx
           .delete(fileUploadChunks)
           .where(eq(fileUploadChunks.sessionId, sessionId));
+
+        return [insertedFile];
       });
+
+      // Asynchronously ingest the file into vector chunks for Walt RAG
+      if (newFile) {
+        ingestClassroomFile(newFile).catch((err) => {
+          console.error(`[INGESTION ERROR] Failed to ingest assembled file ${newFile.name}:`, err);
+        });
+      }
 
       console.log(`📦 [Assemble-Upload] Successfully assembled and uploaded ${session.fileName} (${size} bytes)`);
     } catch (err) {

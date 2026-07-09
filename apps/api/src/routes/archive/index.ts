@@ -8,11 +8,13 @@ import {
   classEnrollments,
   students,
   parentProfiles,
+  messages,
 } from "@whiteroom/db";
 import { authMiddleware } from "../../middleware/auth.js";
 import { Errors, UserRole } from "@whiteroom/shared";
 import type { JWTPayload, ApiResponse } from "@whiteroom/shared";
 import { uploadRoutes } from "./upload.js";
+import { ingestClassroomFile } from "../../services/ingestion.js";
 
 // Explicitly define Hono variables to avoid 'never' generic type conflicts
 const archiveRoutes = new Hono<{ Variables: { user: JWTPayload } }>();
@@ -186,6 +188,102 @@ archiveRoutes.delete("/:fileId", async (c) => {
   const response: ApiResponse = {
     success: true,
     data: { id: fileId },
+  };
+  return c.json(response, 200);
+});
+
+// 4. POST /api/v1/classes/:classId/archive/sync-chat - Sync chat media to study materials
+archiveRoutes.post("/sync-chat", async (c) => {
+  const user = c.get("user") as JWTPayload;
+  const classId = c.req.param("classId");
+
+  if (!classId) {
+    throw Errors.validation("Class ID is required");
+  }
+
+  // Only teachers and admins can sync chat files to archive
+  if (user.role !== UserRole.TEACHER && user.role !== UserRole.SCHOOL_ADMIN) {
+    throw Errors.forbidden("Only teachers and school admins can sync chat materials");
+  }
+
+  await verifyClassAccess(user.userId, user.tenantId, user.role, classId);
+
+  // Find all messages in the classroom room that have attachments
+  const chatMessages = await db
+    .select({
+      id: messages.id,
+      senderId: messages.senderId,
+      attachments: messages.attachments,
+    })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.roomId, classId),
+        eq(messages.roomType, "classroom"),
+        eq(messages.tenantId, user.tenantId)
+      )
+    );
+
+  const importedFiles: any[] = [];
+
+  for (const msg of chatMessages) {
+    if (!msg.attachments || !Array.isArray(msg.attachments)) continue;
+
+    for (const attachment of msg.attachments) {
+      if (!attachment.url || !attachment.name) continue;
+
+      // 1. Check if it already exists in classroomFiles
+      const [existing] = await db
+        .select()
+        .from(classroomFiles)
+        .where(
+          and(
+            eq(classroomFiles.classId, classId),
+            eq(classroomFiles.tenantId, user.tenantId),
+            eq(classroomFiles.url, attachment.url)
+          )
+        )
+        .limit(1);
+
+      if (existing) continue;
+
+      // 2. Map type
+      let fileType = "other";
+      if (attachment.type === "image") fileType = "image";
+      else if (attachment.type === "video") fileType = "video";
+      else if (attachment.type === "document" || attachment.name.endsWith(".pdf")) fileType = "pdf";
+
+      // 3. Insert record
+      const [newFile] = await db
+        .insert(classroomFiles)
+        .values({
+          tenantId: user.tenantId,
+          classId,
+          uploaderId: msg.senderId,
+          name: attachment.name,
+          url: attachment.url,
+          type: fileType,
+          size: attachment.size || 0,
+          category: "Chat Sync",
+        })
+        .returning();
+
+      if (newFile) {
+        importedFiles.push(newFile);
+        // Trigger ingestion
+        ingestClassroomFile(newFile).catch((err) => {
+          console.error(`[SYNC-CHAT ERROR] Failed to ingest synced file ${newFile.name}:`, err);
+        });
+      }
+    }
+  }
+
+  const response: ApiResponse = {
+    success: true,
+    data: {
+      syncedCount: importedFiles.length,
+      files: importedFiles,
+    },
   };
   return c.json(response, 200);
 });

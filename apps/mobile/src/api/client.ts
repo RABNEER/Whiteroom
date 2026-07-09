@@ -439,6 +439,10 @@ export const api = {
   // ─── Classroom Archive Endpoints ───
   getClassArchive: (classId: string): Promise<any[]> =>
     request<any[]>(`/classes/${classId}/archive`),
+  syncChatAttachments: (classId: string): Promise<{ syncedCount: number; files: any[] }> =>
+    request<{ syncedCount: number; files: any[] }>(`/classes/${classId}/archive/sync-chat`, {
+      method: "POST",
+    }),
   uploadArchiveFile: (
     classId: string,
     file: { uri: string; name: string; type: string },
