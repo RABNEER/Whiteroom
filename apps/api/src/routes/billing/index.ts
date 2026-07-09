@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import { authMiddleware, requireRole } from "../../middleware/auth.js";
 import { UserRole } from "@whiteroom/shared";
 import { Errors } from "@whiteroom/shared";
@@ -8,58 +9,20 @@ import { tenants, subscriptions, eq } from "@whiteroom/db";
 import {
   calculateSubscriptionFee,
   createBillingOrder,
-  completeSubscriptionPayment,
 } from "../../services/billing.js";
-import { verifyRazorpaySignature } from "../../lib/razorpay.js";
-import { env } from "../../lib/env.js";
 
 const billingRoutes = new Hono<{ Variables: { user: JWTPayload } }>();
 
-// 1. Webhook endpoint (unauthenticated, Razorpay calls this)
-billingRoutes.post("/webhook", async (c) => {
-  const bodyText = await c.req.text();
-  const signature = c.req.header("x-razorpay-signature");
-
-  let isValid = false;
-  if (env.NODE_ENV === "test" || !env.RAZORPAY_WEBHOOK_SECRET) {
-    isValid = true; // Bypass signature verification in test environment
-  } else {
-    try {
-      isValid = verifyRazorpaySignature(bodyText, signature);
-    } catch {
-      isValid = false;
-    }
-  }
-
-  if (!isValid) {
-    throw Errors.unauthorized("Invalid Razorpay Webhook Signature");
-  }
-
-  const payload = JSON.parse(bodyText || "{}");
-  
-  if (payload.event === "payment.captured") {
-    const payment = payload.payload?.payment?.entity;
-    const orderId = payment?.order_id;
-    const paymentId = payment?.id;
-
-    if (orderId) {
-      await completeSubscriptionPayment(orderId, paymentId || "mock_pay", signature || "mock_sig");
-    }
-  } else if (payload.event === "payment_link.paid") {
-    const paymentLink = payload.payload?.payment_link?.entity;
-    const payment = payload.payload?.payment?.entity;
-    const linkId = paymentLink?.id;
-    const paymentId = payment?.id;
-
-    if (linkId) {
-      await completeSubscriptionPayment(linkId, paymentId || "mock_pay", signature || "mock_sig");
-    }
-  }
-
-  return c.json({ success: true, status: "ok" }, 200);
+const subscribeSchema = z.object({
+  planType: z.enum(["tuition", "school"], {
+    message: "planType must be 'tuition' or 'school'",
+  }),
+  waltAiEnabled: z.boolean().optional().default(false),
 });
 
-// 2. GET /api/v1/billing/dashboard
+// Webhook consolidated into /api/v1/payments/webhook — removed duplicate here
+
+// GET /api/v1/billing/dashboard
 billingRoutes.get("/dashboard", authMiddleware, requireRole(UserRole.SCHOOL_ADMIN), async (c) => {
   const user = c.get("user") as JWTPayload;
 
@@ -113,17 +76,15 @@ billingRoutes.get("/dashboard", authMiddleware, requireRole(UserRole.SCHOOL_ADMI
 // 3. POST /api/v1/billing/subscribe
 billingRoutes.post("/subscribe", authMiddleware, requireRole(UserRole.SCHOOL_ADMIN), async (c) => {
   const user = c.get("user") as JWTPayload;
-  const body = await c.req.json().catch(() => ({}));
-  const { planType, waltAiEnabled } = body;
-
-  if (!planType || !["tuition", "school"].includes(planType)) {
-    throw Errors.validation("Invalid planType. Must be 'tuition' or 'school'.");
+  const parsed = subscribeSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) {
+    throw Errors.validation("Invalid request", parsed.error.flatten().fieldErrors);
   }
 
   const order = await createBillingOrder(
     user.tenantId,
-    planType,
-    waltAiEnabled || false
+    parsed.data.planType,
+    parsed.data.waltAiEnabled
   );
 
   const response: ApiResponse = {

@@ -27,6 +27,7 @@ export { messageReceipts } from "./schema/message-receipts.js";
 export { userBlocks } from "./schema/user-blocks.js";
 export { roomMutes } from "./schema/room-mutes.js";
 export { messageAuditLogs } from "./schema/message-audit-logs.js";
+export { auditLogs } from "./schema/audit-logs.js";
 export { classroomFiles } from "./schema/classroom-files.js";
 export { classroomFileChunks } from "./schema/classroom-file-chunks.js";
 export { waltQuizzes } from "./schema/walt-quizzes.js";

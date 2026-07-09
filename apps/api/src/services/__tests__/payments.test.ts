@@ -27,8 +27,11 @@ const mockFrom = vi.fn(() => ({ where: mockWhereSelect }));
 const mockSelect = vi.fn(() => ({ from: mockFrom }));
 
 const mockReturningInsert = vi.fn();
+const mockReturningDoNothing = vi.fn().mockResolvedValue([{ id: "idempotent-1" }]);
 const mockOnConflictDoUpdate = vi.fn(() => ({ returning: mockReturningInsert }));
-const mockOnConflictDoNothing = vi.fn(() => Promise.resolve());
+const mockOnConflictDoNothing = vi.fn(() => ({
+  returning: mockReturningDoNothing,
+}));
 const mockValues = vi.fn(() => ({
   onConflictDoNothing: mockOnConflictDoNothing,
   onConflictDoUpdate: mockOnConflictDoUpdate,
@@ -107,9 +110,11 @@ describe("handleRazorpayWebhook", () => {
     vi.clearAllMocks();
     mockLimit.mockReset();
     mockReturningInsert.mockReset();
+    mockReturningDoNothing.mockReset();
     mockReturningUpdate.mockReset();
     mockVerifySignature.mockReturnValue(true);
     mockLimit.mockResolvedValue([]);
+    mockReturningDoNothing.mockResolvedValue([{ id: "iev-1" }]);
     mockReturningInsert.mockResolvedValue([
       {
         id: "sub-1",
@@ -158,7 +163,7 @@ describe("handleRazorpayWebhook", () => {
   });
 
   it("detects duplicate webhook event via idempotency key", async () => {
-    mockLimit.mockResolvedValueOnce([{ id: "existing", tenantId: "tenant-1", key: "evt_test_001" }]);
+    mockReturningDoNothing.mockResolvedValueOnce([]);
 
     const result = await handleRazorpayWebhook(JSON.stringify(webhookEvent), "sig");
 
@@ -167,9 +172,7 @@ describe("handleRazorpayWebhook", () => {
   });
 
   it("detects duplicate via existing subscription order/payment ID", async () => {
-    mockLimit
-      .mockResolvedValueOnce([])  // idempotency check → no duplicate
-      .mockResolvedValueOnce([{ id: "existing-sub", tenantId: "tenant-1" }]); // subscription check → found
+    mockLimit.mockResolvedValueOnce([{ id: "existing-sub", tenantId: "tenant-1" }]);
 
     const result = await handleRazorpayWebhook(JSON.stringify(webhookEvent), "sig");
 

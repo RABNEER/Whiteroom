@@ -1,5 +1,5 @@
 import { Context, Next } from "hono";
-import { Errors } from "@whiteroom/shared";
+import { Errors, PlanTier } from "@whiteroom/shared";
 import type { JWTPayload, UserRole } from "@whiteroom/shared";
 import { verifyAccessToken } from "../lib/jwt.js";
 import { db } from "../lib/db.js";
@@ -61,6 +61,29 @@ export function requireRole(...roles: UserRole[]) {
     if (!roles.includes(user.role as UserRole)) {
       throw Errors.forbidden(
         `This action requires one of these roles: ${roles.join(", ")}`
+      );
+    }
+
+    await next();
+  };
+}
+
+/**
+ * Plan guard factory — returns middleware that checks the tenant's plan tier.
+ *
+ * Usage: app.post("/students", requirePlan("pro"), handler)
+ */
+export function requirePlan(...tiers: string[]) {
+  return async (c: Context, next: Next) => {
+    const user = c.get("user") as JWTPayload;
+
+    if (!user) {
+      throw Errors.unauthorized();
+    }
+
+    if (!tiers.includes(user.plan)) {
+      throw Errors.forbidden(
+        `This action requires one of these plans: ${tiers.join(", ")}`
       );
     }
 

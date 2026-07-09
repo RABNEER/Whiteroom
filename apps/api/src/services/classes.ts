@@ -1,13 +1,26 @@
 import { db } from "../lib/db.js";
 import { classEnrollments, classes, students } from "@whiteroom/db";
-import { Errors } from "@whiteroom/shared";
+import { Errors, Limits, PlanTier } from "@whiteroom/shared";
 import { and, count, eq, inArray, isNull } from "@whiteroom/db";
 
 export async function createClass(
   tenantId: string,
   teacherId: string,
+  plan: string,
   input: { name: string; subject?: string; teacherName?: string }
 ) {
+  if (plan === PlanTier.FREE) {
+    const [result] = await db
+      .select({ value: count() })
+      .from(classes)
+      .where(and(eq(classes.tenantId, tenantId), isNull(classes.deletedAt)));
+    if ((result?.value ?? 0) >= Limits.FREE_MAX_CLASSES) {
+      throw Errors.limitExceeded(
+        `Free plan limited to ${Limits.FREE_MAX_CLASSES} classes`
+      );
+    }
+  }
+
   const [created] = await db
     .insert(classes)
     .values({

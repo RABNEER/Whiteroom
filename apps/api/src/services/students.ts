@@ -1,12 +1,25 @@
 import { db } from "../lib/db.js";
 import { classEnrollments, classes, parentProfiles, students } from "@whiteroom/db";
-import { Errors } from "@whiteroom/shared";
+import { Errors, Limits, PlanTier } from "@whiteroom/shared";
 import { and, eq, isNull, count } from "@whiteroom/db";
 
 export async function createStudent(
   tenantId: string,
+  plan: string,
   input: { name: string; rollNumber?: string; phone?: string }
 ) {
+  if (plan === PlanTier.FREE) {
+    const [result] = await db
+      .select({ value: count() })
+      .from(students)
+      .where(and(eq(students.tenantId, tenantId), isNull(students.deletedAt)));
+    if ((result?.value ?? 0) >= Limits.FREE_MAX_STUDENTS) {
+      throw Errors.limitExceeded(
+        `Free plan limited to ${Limits.FREE_MAX_STUDENTS} students`
+      );
+    }
+  }
+
   const [created] = await db
     .insert(students)
     .values({

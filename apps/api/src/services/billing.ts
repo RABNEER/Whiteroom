@@ -11,6 +11,7 @@ import {
 } from "@whiteroom/db";
 import { getRazorpayClient } from "../lib/razorpay.js";
 import { Errors } from "@whiteroom/shared";
+import { logAuditEvent } from "./audit.js";
 
 function paymentContact(phone?: string | null): string {
   return phone && phone.startsWith("+91") ? phone : "+919999999999";
@@ -112,7 +113,7 @@ export async function createBillingOrder(
       .insert(subscriptions)
       .values({
         tenantId,
-        plan: "pro",
+        plan: "free",
         planType,
         waltAiEnabled,
         calculatedMonthlyAmount: totalAmount,
@@ -130,6 +131,14 @@ export async function createBillingOrder(
         },
       });
 
+    await logAuditEvent({
+      tenantId,
+      action: "subscription.order.created",
+      resource: "subscription",
+      resourceId: paymentLink.id,
+      details: { planType, waltAiEnabled, totalAmount },
+    });
+
     return {
       id: paymentLink.id,
       amount: totalAmount,
@@ -145,7 +154,7 @@ export async function createBillingOrder(
       .insert(subscriptions)
       .values({
         tenantId,
-        plan: "pro",
+        plan: "free",
         planType,
         waltAiEnabled,
         calculatedMonthlyAmount: totalAmount,
@@ -162,6 +171,14 @@ export async function createBillingOrder(
           updatedAt: new Date(),
         },
       });
+
+    await logAuditEvent({
+      tenantId,
+      action: "subscription.order.mock",
+      resource: "subscription",
+      resourceId: mockOrderId,
+      details: { planType, waltAiEnabled, totalAmount },
+    });
 
     return {
       id: mockOrderId,
@@ -208,6 +225,14 @@ export async function completeSubscriptionPayment(
     })
     .where(eq(subscriptions.id, sub.id))
     .returning();
+
+  await logAuditEvent({
+    tenantId: sub.tenantId,
+    action: "subscription.activated",
+    resource: "subscription",
+    resourceId: sub.id,
+    details: { planType: sub.planType, waltAiEnabled: sub.waltAiEnabled, paymentId },
+  });
 
   return updatedSub;
 }

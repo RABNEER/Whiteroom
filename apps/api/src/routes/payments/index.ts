@@ -10,7 +10,7 @@ paymentRoutes.post("/webhook", paymentWebhookHandler);
 paymentRoutes.post(
   "/orders",
   authMiddleware,
-  requireRole(UserRole.TEACHER),
+  requireRole(UserRole.SCHOOL_ADMIN),
   createPaymentOrderHandler
 );
 

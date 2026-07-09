@@ -1,22 +1,23 @@
 import { Context } from "hono";
-import { Errors } from "@whiteroom/shared";
 import { sendPushToUser } from "../../lib/fcm.js";
 
 export async function testPushHandler(c: Context) {
-  const user = c.get("user");
-  const tenantId = c.get("tenantId");
+  const body = await c.req.json<{
+    userId: string;
+    tenantId: string;
+    title?: string;
+    body?: string;
+  }>();
 
-  if (!user?.id || !tenantId) {
-    throw Errors.unauthorized();
+  if (!body.userId || !body.tenantId) {
+    return c.json({ error: "Provide userId and tenantId" }, 400);
   }
 
-  const body = await c.req.json<{ title?: string; body?: string }>();
-
-  await sendPushToUser(tenantId, user.id, {
+  await sendPushToUser(body.tenantId, body.userId, {
     title: body.title ?? "Test Notification",
     body: body.body ?? "This is a test push from the API 👋",
     type: "announcement",
   });
 
-  return c.json({ message: "Push notification sent (fire-and-forget)" }, 200);
+  return c.json({ message: "Push sent" }, 200);
 }

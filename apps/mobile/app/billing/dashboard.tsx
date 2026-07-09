@@ -9,6 +9,7 @@ import {
   Switch,
   Alert,
   Linking,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -23,6 +24,7 @@ export default function BillingDashboardScreen() {
 
   const [selectedPlanType, setSelectedPlanType] = useState<"tuition" | "school">("school");
   const [waltEnabled, setWaltEnabled] = useState(false);
+  const [calcStudents, setCalcStudents] = useState<string>("");
 
   // Fetch Billing Dashboard details
   const { data: billing, isLoading, refetch } = useQuery({
@@ -147,8 +149,8 @@ export default function BillingDashboardScreen() {
                 {isSubscribed
                   ? `Renews on ${new Date(billing.endDate).toLocaleDateString()}`
                   : trialActive
-                  ? `Trial ends on ${new Date(billing.trialEndsAt).toLocaleDateString()}`
-                  : "Upgrade to restore full capabilities"}
+                    ? `Trial ends on ${new Date(billing.trialEndsAt).toLocaleDateString()}`
+                    : "Upgrade to restore full capabilities"}
               </Text>
             </View>
           </View>
@@ -205,18 +207,29 @@ export default function BillingDashboardScreen() {
           </View>
         </View>
 
+        <View style={styles.calcCard}>
+          <Text style={styles.calcTitle}>Pricing Calculator</Text>
+          <View style={styles.calcRow}>
+            <Text style={styles.calcLabel}>Number of Students:</Text>
+            <TextInput
+              style={styles.calcInput}
+              value={calcStudents === "" ? String(billing?.breakdown?.studentsCount || 0) : calcStudents}
+              onChangeText={(text) => setCalcStudents(text.replace(/[^0-9]/g, ""))}
+              keyboardType="numeric"
+              placeholder="e.g. 100"
+              placeholderTextColor="#94A3B8"
+            />
+          </View>
+        </View>
+
         {/* Dynamic Pricing Breakdown */}
         <Text style={styles.sectionTitle}>Calculated Rate Breakdown</Text>
         <View style={styles.breakdownCard}>
           {/* Dynamic Pricing Breakdown */}
           <View style={styles.breakdownRow}>
-            <Text style={styles.breakdownLabel}>Classes Base Fee (Minimums Removed)</Text>
-            <Text style={styles.breakdownVal}>₹0</Text>
-          </View>
-          <View style={styles.breakdownRow}>
-            <Text style={styles.breakdownLabel}>Student Subscription (+₹5 / enrolled student)</Text>
+            <Text style={styles.breakdownLabel}>Student fee (₹5/student)</Text>
             <Text style={styles.breakdownVal}>
-              {billing?.breakdown?.studentsCount || 0} x ₹5
+              {(calcStudents === "" ? (billing?.breakdown?.studentsCount || 0) : (parseInt(calcStudents) || 0))} x ₹5
             </Text>
           </View>
           {waltEnabled && (
@@ -229,7 +242,7 @@ export default function BillingDashboardScreen() {
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Estimated Monthly Charge:</Text>
             <Text style={styles.totalVal}>
-              ₹{((billing?.breakdown?.studentsCount || 0) * 5 + (waltEnabled ? 400 : 0))}
+              ₹{((calcStudents === "" ? (billing?.breakdown?.studentsCount || 0) : (parseInt(calcStudents) || 0)) * 5 + (waltEnabled ? 400 : 0))}
             </Text>
           </View>
         </View>
@@ -469,5 +482,41 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 16,
     fontWeight: "700",
+  },
+  calcCard: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    marginTop: spacing.md,
+  },
+  calcTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.navy,
+    marginBottom: spacing.sm,
+  },
+  calcRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  calcLabel: {
+    fontSize: 14,
+    color: colors.teal,
+  },
+  calcInput: {
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    width: 100,
+    textAlign: "right",
+    fontSize: 14,
+    color: colors.navy,
+    fontWeight: "600",
   },
 });

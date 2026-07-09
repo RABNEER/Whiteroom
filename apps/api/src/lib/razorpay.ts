@@ -19,17 +19,33 @@ export function getRazorpayClient() {
 }
 
 export function verifyRazorpaySignature(body: string, signature?: string) {
-  if (!env.RAZORPAY_WEBHOOK_SECRET) {
-    throw Errors.internal("Razorpay webhook secret is not configured");
-  }
-
-  if (!signature) {
+  if (!env.RAZORPAY_WEBHOOK_SECRET || !signature) {
     return false;
   }
 
   const expected = crypto
     .createHmac("sha256", env.RAZORPAY_WEBHOOK_SECRET)
     .update(body)
+    .digest("hex");
+
+  const expectedBuffer = Buffer.from(expected, "hex");
+  const signatureBuffer = Buffer.from(signature, "hex");
+
+  if (signatureBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expectedBuffer, signatureBuffer);
+}
+
+export function verifyOrderSignature(orderId: string, paymentId: string, signature: string) {
+  if (!env.RAZORPAY_KEY_SECRET) {
+    return false;
+  }
+
+  const expected = crypto
+    .createHmac("sha256", env.RAZORPAY_KEY_SECRET)
+    .update(`${orderId}|${paymentId}`)
     .digest("hex");
 
   const expectedBuffer = Buffer.from(expected, "hex");

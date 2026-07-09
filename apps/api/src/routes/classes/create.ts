@@ -19,7 +19,7 @@ export async function createClassHandler(c: Context) {
   }
 
   const user = c.get("user") as JWTPayload;
-  const created = await createClass(user.tenantId, user.userId, parsed.data);
+  const created = await createClass(user.tenantId, user.userId, user.plan, parsed.data);
 
   const response: ApiResponse<ClassResponse> = {
     success: true,
