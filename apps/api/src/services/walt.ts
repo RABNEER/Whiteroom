@@ -163,10 +163,13 @@ export async function generateCompletion(
 export async function solveDoubt(
   tenantId: string,
   classId: string,
-  rawQuestion: string
+  rawQuestion: string,
+  userRole?: string
 ): Promise<{ answer: string; citations: any[] }> {
   // 1. Scrub PII
   const cleanQuestion = scrubPII(rawQuestion);
+
+  const isTeacher = userRole === "teacher" || userRole === "school_admin";
 
   // 2. Fetch question embedding
   const embedding = await getEmbedding(cleanQuestion);
@@ -189,7 +192,7 @@ export async function solveDoubt(
   const threshold = 0.5;
   const validChunks = rows.filter((r) => Number(r.similarity) >= threshold);
 
-  if (validChunks.length === 0) {
+  if (validChunks.length === 0 && !isTeacher) {
     return {
       answer: "I'm sorry, but that question is outside the scope of the materials uploaded for this classroom.",
       citations: [],
@@ -201,7 +204,15 @@ export async function solveDoubt(
     .map((c, i) => `[Source ${i + 1}]: "${c.fileName}", Page ${c.pageNumber}\nContent: ${c.content}`)
     .join("\n\n");
 
-  const prompt = `You are Walt, an AI teaching assistant. Answer the student's question using ONLY the provided classroom materials. Do not use external or general knowledge. If the provided materials do not contain the answer, reply that you don't know based on the uploaded files.
+  let prompt = "";
+  if (isTeacher) {
+    prompt = `You are Walt, an AI teaching assistant. A teacher is asking you a question.
+${context ? `Here are some potentially relevant classroom materials:\n${context}\n\n` : ""}
+Question: ${cleanQuestion}
+
+Please write a clear, helpful response. ${context ? 'Cite the source files (e.g. "[Source 1]") if you refer to them. ' : ""}You may answer using your general knowledge since the user is a teacher.`;
+  } else {
+    prompt = `You are Walt, an AI teaching assistant. Answer the student's question using ONLY the provided classroom materials. Do not use external or general knowledge. If the provided materials do not contain the answer, reply that you don't know based on the uploaded files.
 
 Classroom Materials:
 ${context}
@@ -209,6 +220,7 @@ ${context}
 Student Question: ${cleanQuestion}
 
 Please write a clear, helpful response. Cite the source files (e.g. "[Source 1]") when referring to information.`;
+  }
 
   const answer = await generateCompletion(prompt);
 

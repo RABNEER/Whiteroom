@@ -27,7 +27,7 @@ export async function waltDoubtHandler(c: Context) {
   // Verify class access
   await verifyClassAccess(user.userId, user.tenantId, user.role, roomId);
 
-  const result = await solveDoubt(user.tenantId, roomId, question);
+  const result = await solveDoubt(user.tenantId, roomId, question, user.role);
 
   const response: ApiResponse = {
     success: true,
