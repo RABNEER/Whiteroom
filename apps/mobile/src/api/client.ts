@@ -60,12 +60,40 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return payload.data as T;
 }
 
+let refreshPromise: Promise<boolean> | null = null;
+
+async function doRefresh(): Promise<boolean> {
+  const { refreshToken, setTokens, clear } = sessionStore.getState();
+  if (!refreshToken) {
+    await clear();
+    return false;
+  }
+  try {
+    const refreshed = await request<RefreshResponse>(
+      "/auth/refresh",
+      {
+        method: "POST",
+        body: JSON.stringify({ refreshToken }),
+      },
+      false
+    );
+    await setTokens(refreshed.accessToken, refreshed.refreshToken || refreshToken);
+    return true;
+  } catch {
+    await clear();
+    if (typeof window !== "undefined" && window.location) {
+      window.location.href = "/auth";
+    }
+    return false;
+  }
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
   retry = true
 ): Promise<T> {
-  const { accessToken, refreshToken, setTokens, clear } = sessionStore.getState();
+  const { accessToken } = sessionStore.getState();
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
 
@@ -97,26 +125,13 @@ async function request<T>(
   }
   clearTimeout(timeoutId);
 
-  if (response.status === 401 && retry && refreshToken) {
-    try {
-      const refreshed = await request<RefreshResponse>(
-        "/auth/refresh",
-        {
-          method: "POST",
-          body: JSON.stringify({ refreshToken }),
-        },
-        false
-      );
-      await setTokens(refreshed.accessToken, refreshed.refreshToken || refreshToken);
-      return request<T>(path, options, false);
-    } catch {
-      await clear();
-      // Redirect to auth on web — prevents dead dashboard with invisible errors
-      if (typeof window !== "undefined" && window.location) {
-        window.location.href = "/auth";
-      }
+  if (response.status === 401 && retry) {
+    refreshPromise = refreshPromise || doRefresh().finally(() => { refreshPromise = null; });
+    const ok = await refreshPromise;
+    if (!ok) {
       throw new ApiError("AUTH_EXPIRED", "Session expired. Please log in again.", 401);
     }
+    return request<T>(path, options, false);
   }
 
   return parseResponse<T>(response);
