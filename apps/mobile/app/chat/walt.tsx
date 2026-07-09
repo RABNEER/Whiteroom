@@ -45,6 +45,7 @@ export default function WaltChatScreen() {
   
   const [isUploading, setIsUploading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
 
   const [input, setInput] = useState("");
 
@@ -316,18 +317,24 @@ export default function WaltChatScreen() {
         />
 
         {/* Input Bar */}
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Ask Walt a doubt..."
-            placeholderTextColor={colors.teal}
-            value={input}
-            onChangeText={setInput}
-            multiline
-          />
+        <View style={[styles.inputContainer, isFocused && styles.inputContainerFocused]}>
+          <View style={[styles.inputWrapper, isFocused && styles.inputWrapperFocused]}>
+            <Sparkles size={16} color={isFocused ? "#4F46E5" : colors.teal} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Ask Walt a doubt..."
+              placeholderTextColor="#94A3B8"
+              value={input}
+              onChangeText={setInput}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              multiline
+            />
+          </View>
           <TouchableOpacity
             onPress={handleSend}
             disabled={waltMutation.isPending || !input.trim()}
+            activeOpacity={0.8}
             style={[
               styles.sendButton,
               (!input.trim() || waltMutation.isPending) && styles.sendButtonDisabled,
@@ -336,7 +343,7 @@ export default function WaltChatScreen() {
             {waltMutation.isPending ? (
               <ActivityIndicator color={colors.white} size="small" />
             ) : (
-              <Send color={colors.white} size={18} />
+              <Send color={colors.white} size={16} style={styles.sendIcon} />
             )}
           </TouchableOpacity>
         </View>
@@ -473,32 +480,72 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    padding: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
     backgroundColor: colors.white,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(226, 232, 240, 0.6)",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  inputContainerFocused: {
+    borderTopColor: "rgba(99, 102, 241, 0.15)",
+  },
+  inputWrapper: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: spacing.md,
+    paddingVertical: Platform.OS === "ios" ? 8 : 4,
+  },
+  inputWrapperFocused: {
+    borderColor: "#4F46E5",
+    backgroundColor: colors.white,
+    shadowColor: "#4F46E5",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  inputIcon: {
+    marginRight: 8,
   },
   input: {
     flex: 1,
-    backgroundColor: "#F1F5F9",
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    maxHeight: 100,
     fontSize: 15,
     color: colors.navy,
+    maxHeight: 120,
+    paddingTop: Platform.OS === "ios" ? 4 : 0,
+    paddingBottom: Platform.OS === "ios" ? 4 : 0,
   },
   sendButton: {
-    backgroundColor: colors.navy,
+    backgroundColor: "#4F46E5",
     width: 44,
     height: 44,
     borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: spacing.sm,
+    shadowColor: "#4F46E5",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   sendButtonDisabled: {
-    backgroundColor: colors.sky,
+    backgroundColor: "#CBD5E1",
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  sendIcon: {
+    marginLeft: 2,
   },
   teacherBar: {
     backgroundColor: colors.white,
