@@ -160,6 +160,25 @@ export default function AuthScreen() {
     return () => clearInterval(interval);
   }, [step, whatsappTimer]);
 
+  // Handle incoming deep links to auto-fill invite code
+  useEffect(() => {
+    function handleDeepLink(url: string | null) {
+      if (!url) return;
+      const match =
+        // Universal Link: https://whiteroom.co.in/invite/CODE
+        url.match(/whiteroom\.co\.in\/invite\/([A-Za-z0-9]{6})/) ||
+        // Custom scheme fallback: whiteroom://auth?inviteCode=CODE
+        url.match(/[?&]inviteCode=([A-Za-z0-9]{6})/);
+      if (match) {
+        setInviteCode(match[1].toUpperCase());
+      }
+    }
+    Linking.getInitialURL().then(handleDeepLink);
+    const sub = Linking.addEventListener('url', (e) => handleDeepLink(e.url));
+    return () => sub.remove();
+  }, []);
+
+
   const handleVerifyWhatsApp = useCallback(async () => {
     if (!whatsappSessionId || !whatsappToken) return;
     if (verifyingRef.current) return;

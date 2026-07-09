@@ -12,6 +12,7 @@ import {
   TextInput,
   RefreshControl,
   Modal,
+  Share,
 } from 'react-native';
 
 // Cross-platform alert — Alert.alert silently fails on web/PWA
@@ -903,20 +904,38 @@ function InviteView() {
     onSuccess: (data) => setLink(data.inviteCode),
   });
 
+  const deepLink = link ? `https://whiteroom.co.in/invite/${link}` : null;
+
+  const handleShare = async () => {
+    if (!deepLink) return;
+    try {
+      await Share.share({
+        message: `Join my classroom on Whiteroom!\n\n${deepLink}`,
+      });
+    } catch {}
+  };
+
   return (
     <View style={s.card}>
       <Text style={s.subViewTitle}>Invite Parents</Text>
       <Text style={s.subViewSub}>
-        Generate an invite code. Share it with parents to let them join this classroom.
+        Generate an invite link. Share it with parents to let them join this classroom.
       </Text>
       {link ? (
         <View>
           <View style={s.codeBox}>
-            <Text style={s.codeText} selectable>{link}</Text>
+            <Text style={s.codeText} selectable>{deepLink}</Text>
           </View>
           <Pressable
             accessibilityRole="button"
-            style={[s.outlineBtn, { marginTop: 12 }]}
+            style={[s.startBtn, { marginTop: 12 }]}
+            onPress={handleShare}
+          >
+            <Text style={s.startBtnText}>SHARE INVITE LINK</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            style={[s.outlineBtn, { marginTop: 8 }]}
             onPress={() => setLink(null)}
           >
             <Text style={s.outlineBtnText}>Generate New Link</Text>
