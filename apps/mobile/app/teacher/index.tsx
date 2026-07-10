@@ -939,22 +939,20 @@ function InviteView() {
           <Text style={{ color: colors.teal, fontSize: 12, marginBottom: 8, lineHeight: 16 }}>
             Parents use this link to sign up and join their child's class.
           </Text>
-          <View style={[s.codeBox, { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }]}>
-            <Text style={[s.codeText, { flex: 1 }]} numberOfLines={1} selectable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => parentLink && handleCopy(parentLink, 'parent')}
+            style={[s.codeBox, { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }]}
+          >
+            <Text style={[s.codeText, { flex: 1 }]} numberOfLines={1}>
               {parentLink ?? '—'}
             </Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => parentLink && handleCopy(parentLink, 'parent')}
-              style={{ paddingLeft: 8 }}
-            >
-              {copied === 'parent' ? (
-                <Check size={18} color="#15803D" />
-              ) : (
-                <CopyIcon size={18} color={colors.teal} />
-              )}
-            </Pressable>
-          </View>
+            {copied === 'parent' ? (
+              <Check size={18} color="#15803D" />
+            ) : (
+              <CopyIcon size={18} color={colors.teal} />
+            )}
+          </Pressable>
         </View>
 
         {/* ── Teacher Invite ── */}
@@ -966,22 +964,20 @@ function InviteView() {
           <Text style={{ color: colors.teal, fontSize: 12, marginBottom: 8, lineHeight: 16 }}>
             Teachers use this link to sign up — they'll be added as staff automatically.
           </Text>
-          <View style={[s.codeBox, { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }]}>
-            <Text style={[s.codeText, { flex: 1 }]} numberOfLines={1} selectable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => teacherLink && handleCopy(teacherLink, 'teacher')}
+            style={[s.codeBox, { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }]}
+          >
+            <Text style={[s.codeText, { flex: 1 }]} numberOfLines={1}>
               {teacherLink ?? '—'}
             </Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => teacherLink && handleCopy(teacherLink, 'teacher')}
-              style={{ paddingLeft: 8 }}
-            >
-              {copied === 'teacher' ? (
-                <Check size={18} color="#15803D" />
-              ) : (
-                <CopyIcon size={18} color={colors.teal} />
-              )}
-            </Pressable>
-          </View>
+            {copied === 'teacher' ? (
+              <Check size={18} color="#15803D" />
+            ) : (
+              <CopyIcon size={18} color={colors.teal} />
+            )}
+          </Pressable>
         </View>
       </View>
     </View>
