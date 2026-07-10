@@ -160,6 +160,7 @@ export const api = {
   register: (input: {
     registrationToken: string;
     role: "school_admin" | "teacher" | "parent";
+    name?: string;
     consentAccepted: boolean;
     inviteCode?: string;
     schoolName?: string;

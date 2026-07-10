@@ -50,6 +50,7 @@ export default function AuthScreen() {
   const [designation, setDesignation] = useState('');
   const [studentName, setStudentName] = useState('');
   const [rollNumber, setRollNumber] = useState('');
+  const [name, setName] = useState('');
   const [currentSlide, setCurrentSlide] = useState(0);
   const [loading, setLoading] = useState(false);
   const [registrationToken, setRegistrationToken] = useState<string | null>(null);
@@ -255,13 +256,15 @@ export default function AuthScreen() {
     };
   }, [step, whatsappSessionId, checkActiveSession]);
 
-  // WhatsApp verification polling
+  // WhatsApp verification polling — skip when app is backgrounded (Bug 4 fix)
   useEffect(() => {
     if (step !== 'WHATSAPP_POLL' || !whatsappSessionId || !whatsappToken) return;
 
     let active = true;
     const pollInterval = setInterval(async () => {
       if (!active) return;
+      // Don't poll while the app is in the background — the AppState listener handles foreground checks
+      if (AppState.currentState !== 'active') return;
       const finished = await checkActiveSession();
       if (finished) {
         clearInterval(pollInterval);
@@ -273,6 +276,13 @@ export default function AuthScreen() {
       clearInterval(pollInterval);
     };
   }, [step, whatsappSessionId, whatsappToken, checkActiveSession]);
+
+  // Bug 2+3 fix: reset invite/tenant state when role changes so stale codes can't bleed between roles
+  useEffect(() => {
+    setInviteCode('');
+    setResolvedTenant(null);
+    resolveInviteMutation.reset();
+  }, [selectedRole]);
 
   // Mutations
   const registerMutation = useMutation({
@@ -423,6 +433,7 @@ export default function AuthScreen() {
     registerMutation.mutate({
       registrationToken,
       role: selectedRole,
+      name: name.trim() || undefined,
       consentAccepted: agreed,
       inviteCode: selectedRole !== 'school_admin' ? inviteCode : undefined,
       schoolName: selectedRole === 'school_admin' ? schoolName : undefined,
@@ -842,6 +853,17 @@ export default function AuthScreen() {
                   </View>
 
                   <Text style={[styles.fieldLabel, { marginBottom: spacing.sm }]}>
+                    YOUR FULL NAME
+                  </Text>
+                  <TextInput
+                    style={styles.plainInput}
+                    placeholder="e.g. Ramesh Sharma"
+                    placeholderTextColor={colors.teal}
+                    value={name}
+                    onChangeText={setName}
+                  />
+
+                  <Text style={[styles.fieldLabel, { marginTop: spacing.md, marginBottom: spacing.sm }]}>
                     SCHOOL / INSTITUTION NAME
                   </Text>
                   <TextInput
@@ -874,6 +896,17 @@ export default function AuthScreen() {
                   </View>
 
                   <Text style={[styles.fieldLabel, { marginBottom: spacing.sm }]}>
+                    YOUR FULL NAME
+                  </Text>
+                  <TextInput
+                    style={styles.plainInput}
+                    placeholder="e.g. Priya Nair"
+                    placeholderTextColor={colors.teal}
+                    value={name}
+                    onChangeText={setName}
+                  />
+
+                  <Text style={[styles.fieldLabel, { marginTop: spacing.md, marginBottom: spacing.sm }]}>
                     SCHOOL INVITE CODE
                   </Text>
                   <TextInput
@@ -972,6 +1005,7 @@ export default function AuthScreen() {
                   { marginTop: spacing.md },
                   (selectedRole !== 'school_admin' && !resolvedTenant) ||
                     (selectedRole === 'school_admin' && schoolName.trim().length < 2) ||
+                    (['school_admin', 'teacher'].includes(selectedRole) && name.trim().length < 2) ||
                     registerMutation.isPending
                     ? { opacity: 0.5 }
                     : {},
@@ -979,6 +1013,7 @@ export default function AuthScreen() {
                 disabled={
                   (selectedRole !== 'school_admin' && !resolvedTenant) ||
                   (selectedRole === 'school_admin' && schoolName.trim().length < 2) ||
+                  (['school_admin', 'teacher'].includes(selectedRole) && name.trim().length < 2) ||
                   registerMutation.isPending
                 }
                 onPress={handleFinalSubmit}
