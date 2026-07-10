@@ -14,7 +14,9 @@ import { Errors } from "@whiteroom/shared";
 import { logAuditEvent } from "./audit.js";
 
 function paymentContact(phone?: string | null): string {
-  return phone && phone.startsWith("+91") ? phone : "+919999999999";
+  return phone && phone.startsWith("+91") && !/^\+91(\d)\1{9}$/.test(phone)
+    ? phone
+    : "+919876543210";
 }
 
 /**
@@ -68,7 +70,7 @@ export async function calculateSubscriptionFee(
 }
 
 /**
- * Generate a Razorpay order or mock payment order if local/offline.
+ * Generate a Razorpay recurring subscription (autopay) or mock on dev.
  */
 export async function createBillingOrder(
   tenantId: string,
@@ -77,7 +79,6 @@ export async function createBillingOrder(
 ) {
   const { totalAmount } = await calculateSubscriptionFee(tenantId, planType, waltAiEnabled);
 
-  // If amount is 0 (e.g. trial is active), return a custom object
   const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
   if (tenant?.trialEndsAt && tenant.trialEndsAt > new Date()) {
     return {
@@ -90,25 +91,29 @@ export async function createBillingOrder(
 
   try {
     const razorpay = getRazorpayClient();
-    const paymentLink = await razorpay.paymentLink.create({
-      amount: totalAmount,
-      currency: "INR",
-      accept_partial: false,
-      description: `Whiteroom Subscription - ${planType === "school" ? "School Plan" : "Tuition Plan"}${waltAiEnabled ? " + Walt AI" : ""}`,
-      customer: {
-        name: tenant?.name || "Whiteroom School Admin",
-        contact: paymentContact(tenant?.phone),
+
+    const plan = await razorpay.plans.create({
+      period: "monthly",
+      interval: 1,
+      item: {
+        name: `Whiteroom ${planType === "school" ? "School" : "Tuition"}${waltAiEnabled ? " + AI" : ""}`,
+        amount: totalAmount,
+        currency: "INR",
       },
-      notify: {
-        sms: false,
-        email: false,
-      },
-      reminder_enable: false,
-      callback_url: "https://whiteroom.co.in/billing/success",
-      callback_method: "get",
     });
 
-    // Save payment link ID to subscription table
+    const subscription = await razorpay.subscriptions.create({
+      plan_id: plan.id,
+      total_count: 12,
+      customer_notify: true,
+      notes: {
+        tenantId,
+        planType,
+        waltAiEnabled: String(waltAiEnabled),
+        calculatedMonthlyAmount: String(totalAmount),
+      },
+    });
+
     await db
       .insert(subscriptions)
       .values({
@@ -117,7 +122,7 @@ export async function createBillingOrder(
         planType,
         waltAiEnabled,
         calculatedMonthlyAmount: totalAmount,
-        razorpayOrderId: paymentLink.id,
+        razorpaySubscriptionId: subscription.id,
         billingCycleStartDate: new Date(),
       })
       .onConflictDoUpdate({
@@ -126,30 +131,29 @@ export async function createBillingOrder(
           planType,
           waltAiEnabled,
           calculatedMonthlyAmount: totalAmount,
-          razorpayOrderId: paymentLink.id,
+          razorpaySubscriptionId: subscription.id,
           updatedAt: new Date(),
         },
       });
 
     await logAuditEvent({
       tenantId,
-      action: "subscription.order.created",
+      action: "subscription.subscription.created",
       resource: "subscription",
-      resourceId: paymentLink.id,
+      resourceId: subscription.id,
       details: { planType, waltAiEnabled, totalAmount },
     });
 
     return {
-      id: paymentLink.id,
+      id: subscription.id,
       amount: totalAmount,
       currency: "INR",
-      paymentUrl: paymentLink.short_url,
+      paymentUrl: subscription.short_url,
     };
   } catch (err) {
-    console.error("Razorpay payment link creation failed, falling back to mock:", err);
-    // Offline/Testing Mock order fallback
-    const mockOrderId = `order_mock_${Math.random().toString(36).substring(7)}`;
-    
+    console.error("Razorpay subscription creation failed, falling back to mock:", err);
+    const mockSubId = `sub_mock_${Math.random().toString(36).substring(7)}`;
+
     await db
       .insert(subscriptions)
       .values({
@@ -158,7 +162,7 @@ export async function createBillingOrder(
         planType,
         waltAiEnabled,
         calculatedMonthlyAmount: totalAmount,
-        razorpayOrderId: mockOrderId,
+        razorpaySubscriptionId: mockSubId,
         billingCycleStartDate: new Date(),
       })
       .onConflictDoUpdate({
@@ -167,7 +171,7 @@ export async function createBillingOrder(
           planType,
           waltAiEnabled,
           calculatedMonthlyAmount: totalAmount,
-          razorpayOrderId: mockOrderId,
+          razorpaySubscriptionId: mockSubId,
           updatedAt: new Date(),
         },
       });
@@ -176,15 +180,15 @@ export async function createBillingOrder(
       tenantId,
       action: "subscription.order.mock",
       resource: "subscription",
-      resourceId: mockOrderId,
+      resourceId: mockSubId,
       details: { planType, waltAiEnabled, totalAmount },
     });
 
     return {
-      id: mockOrderId,
+      id: mockSubId,
       amount: totalAmount,
       currency: "INR",
-      paymentUrl: `https://example.com/mock-pay?orderId=${mockOrderId}`,
+      paymentUrl: `https://example.com/mock-pay?subscriptionId=${mockSubId}`,
     };
   }
 }

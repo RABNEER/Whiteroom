@@ -65,15 +65,14 @@ export default function BillingDashboardScreen() {
             text: "Simulate Success (Dev)",
             onPress: async () => {
               try {
-                // Call webhook directly or mock capture
                 await api.simulatePaymentWebhook({
-                  event: "payment_link.paid",
+                  event: "subscription.authenticated",
                   payload: {
-                    payment_link: {
+                    subscription: {
                       entity: {
                         id: order.id,
-                        status: "paid"
-                      }
+                        status: "authenticated",
+                      },
                     },
                     payment: {
                       entity: {

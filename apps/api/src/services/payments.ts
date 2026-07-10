@@ -98,6 +98,13 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
           id?: string;
         };
       };
+      subscription?: {
+        entity?: {
+          id?: string;
+          status?: string;
+          notes?: Record<string, string>;
+        };
+      };
     };
   };
 
@@ -105,15 +112,100 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
   const payment = event.payload?.payment?.entity;
   const order = event.payload?.order?.entity;
   const paymentLink = event.payload?.payment_link?.entity;
-  const tenantId = payment?.notes?.tenantId ?? order?.notes?.tenantId;
+  const subEntity = event.payload?.subscription?.entity;
+  const tenantId = payment?.notes?.tenantId ?? order?.notes?.tenantId ?? subEntity?.notes?.tenantId;
   const planKey = payment?.notes?.plan ?? order?.notes?.plan;
 
-  if (!["payment.captured", "order.paid", "payment_link.paid"].includes(event.event ?? "")) {
+  const supportedEvents = [
+    "payment.captured",
+    "order.paid",
+    "payment_link.paid",
+    "subscription.authenticated",
+    "subscription.activated",
+    "subscription.charged",
+  ] as const;
+
+  if (!supportedEvents.includes(event.event as any)) {
     return { processed: false };
   }
 
+  // ── Subscription events (autopay) ──────────────────────────────
+  if (event.event === "subscription.authenticated" || event.event === "subscription.activated") {
+    if (!subEntity?.id || !tenantId) return { processed: false };
+
+    const existingSub = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.razorpaySubscriptionId, subEntity.id))
+      .limit(1);
+
+    if (existingSub.length === 0) return { processed: false };
+
+    const startDate = new Date();
+    const endDate = new Date(startDate);
+    endDate.setMonth(endDate.getMonth() + 1);
+
+    await db
+      .update(subscriptions)
+      .set({
+        plan: PlanTier.PRO,
+        razorpayPaymentId: payment?.id ?? existingSub[0].razorpayPaymentId,
+        startDate,
+        endDate,
+        updatedAt: new Date(),
+      })
+      .where(eq(subscriptions.id, existingSub[0].id));
+
+    await logAuditEvent({
+      tenantId,
+      action: "subscription.activated.webhook",
+      resource: "subscription",
+      resourceId: existingSub[0].id,
+      details: { event: event.event, subscriptionId: subEntity.id },
+    });
+
+    return { processed: true, subscription: existingSub[0] };
+  }
+
+  if (event.event === "subscription.charged") {
+    if (!subEntity?.id || !tenantId) return { processed: false };
+
+    const existingSub = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.razorpaySubscriptionId, subEntity.id))
+      .limit(1);
+
+    if (existingSub.length === 0) return { processed: false };
+
+    const startDate = new Date();
+    const endDate = new Date(startDate);
+    endDate.setMonth(endDate.getMonth() + 1);
+
+    await db
+      .update(subscriptions)
+      .set({
+        plan: PlanTier.PRO,
+        razorpayPaymentId: payment?.id ?? existingSub[0].razorpayPaymentId,
+        startDate,
+        endDate,
+        updatedAt: new Date(),
+      })
+      .where(eq(subscriptions.id, existingSub[0].id));
+
+    await logAuditEvent({
+      tenantId,
+      action: "subscription.charged.webhook",
+      resource: "subscription",
+      resourceId: existingSub[0].id,
+      details: { event: event.event, subscriptionId: subEntity.id, paymentId: payment?.id },
+    });
+
+    return { processed: true, subscription: existingSub[0] };
+  }
+
+  // ── Legacy payment_link.paid ───────────────────────────────────
   if (event.event === "payment_link.paid") {
-    // payment_link.paid: find subscription by payment link ID, then update with actual order
     if (paymentLink?.id) {
       const existingSub = await db
         .select()
@@ -152,6 +244,7 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
     return { processed: false };
   }
 
+  // ── Legacy order-based payment events ──────────────────────────
   if (!tenantId || planKey !== SubscriptionPlanKey.PRO_YEARLY) {
     return { processed: false };
   }
@@ -159,7 +252,6 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
   const paymentId = payment?.id ?? null;
   const orderId = payment?.order_id ?? order?.id ?? null;
 
-  // 1. Webhook Event ID replay check — single atomic INSERT with ON CONFLICT
   if (eventId) {
     const inserted = await db
       .insert(idempotencyKeys)
@@ -179,7 +271,6 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
     }
   }
 
-  // 2. Razorpay Order/Payment ID duplicate check
   if (paymentId || orderId) {
     const conditions: any[] = [];
     if (paymentId) conditions.push(eq(subscriptions.razorpayPaymentId, paymentId));
