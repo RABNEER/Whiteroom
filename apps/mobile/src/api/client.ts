@@ -96,6 +96,8 @@ async function request<T>(
   const { accessToken } = sessionStore.getState();
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
+  // Identify native mobile clients so the backend can skip browser-only checks (e.g. Turnstile CAPTCHA)
+  headers.set("X-Client-Platform", "mobile");
 
   if (!(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
