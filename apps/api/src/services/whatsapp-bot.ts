@@ -154,6 +154,36 @@ async function syncAuthFilesToDb(folder: string) {
 let isWatcherActive = false;
 let syncTimeout: NodeJS.Timeout | null = null;
 let isReconnecting = false;
+let reconnectAttempts = 0;
+let reconnectTimer: NodeJS.Timeout | null = null;
+
+/** Exponential backoff with jitter (capped at 5 minutes). */
+function getBackoffMs(attempt: number, isConflict = false): number {
+  // For 440 conflicts, start with a longer base — 30s, 60s, 120s, 240s, 300s
+  const base = isConflict ? 30_000 : 3_000;
+  const cap = 5 * 60 * 1000; // 5 minutes max
+  const exponential = Math.min(base * Math.pow(2, attempt), cap);
+  const jitter = Math.random() * 0.3 * exponential; // ±30% jitter
+  return Math.floor(exponential + jitter);
+}
+
+function scheduleReconnect(isConflict: boolean) {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  const delay = getBackoffMs(reconnectAttempts, isConflict);
+  reconnectAttempts++;
+  console.log(
+    `🔄 [WHATSAPP BOT] Scheduling reconnect attempt #${reconnectAttempts} in ${Math.round(delay / 1000)}s...`
+  );
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    startBot(true).catch((err) =>
+      console.error("💥 [WHATSAPP BOT] Reconnect failed:", err)
+    );
+  }, delay);
+}
 
 async function setupFolderWatcher(folder: string) {
   if (isWatcherActive) return;
@@ -173,6 +203,15 @@ async function setupFolderWatcher(folder: string) {
 
 export async function logoutBot() {
   console.log("🗑️ [WHATSAPP BOT] Resetting session credentials...");
+
+  // Cancel any pending backoff reconnect before we restart fresh
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  reconnectAttempts = 0;
+  isReconnecting = false;
+
   const authFolder = path.resolve(process.cwd(), "auth_info_baileys");
   
   const sock = (globalThis as any).whatsappSocket;
@@ -297,27 +336,39 @@ export async function startBot(isReconnect = false) {
       const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
       const errorMessage = lastDisconnect?.error?.message || "";
       const isBadMac = errorMessage.includes("Bad MAC") || errorMessage.includes("decryption");
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut && !isBadMac;
-      
+      const isConflict = statusCode === 440; // Stream Errored (conflict) — another WA Web session opened
+      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+      const shouldReconnect = !isLoggedOut && !isBadMac;
+
       console.log(
         `❌ [WHATSAPP BOT] Connection closed. Reason Status: ${statusCode}. Error: ${errorMessage}. Reconnecting: ${shouldReconnect}`
       );
       (globalThis as any).whatsappBotConnected = false;
+      isReconnecting = false; // Allow scheduleReconnect to set its own guard
 
       if (isBadMac) {
         console.log("⚠️ [WHATSAPP BOT] Detected Bad MAC / decryption error. Clearing session to self-heal...");
         await logoutBot();
-      } else if (shouldReconnect) {
-        await startBot(true);
-      } else {
+      } else if (isLoggedOut) {
         console.log("⚠️ [WHATSAPP BOT] Logged out. Clearing session state to restart cleanly...");
         await logoutBot();
+      } else if (isConflict) {
+        // Status 440: another WhatsApp Web session took over. Reconnecting immediately
+        // would kick that session and start an infinite conflict loop. Wait with backoff.
+        console.log(
+          `⚠️ [WHATSAPP BOT] Conflict (440) — another WhatsApp Web session opened. ` +
+          `Backing off before retry to avoid conflict death-spiral.`
+        );
+        scheduleReconnect(true /* isConflict */);
+      } else if (shouldReconnect) {
+        scheduleReconnect(false);
       }
     } else if (connection === "open") {
       console.log("\n✅ [WHATSAPP BOT] Connected successfully to WhatsApp network!");
       (globalThis as any).whatsappLatestQr = null;
       (globalThis as any).whatsappBotConnected = true;
       isReconnecting = false;
+      reconnectAttempts = 0; // reset backoff counter on successful open
     }
   });
 
