@@ -531,7 +531,7 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   simulatePaymentWebhook: (payload: any): Promise<any> =>
-    request<any>("/billing/webhook", {
+    request<any>("/payments/webhook", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

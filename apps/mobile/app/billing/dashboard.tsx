@@ -111,6 +111,23 @@ export default function BillingDashboardScreen() {
     return `₹${(paise / 100).toFixed(0)}`;
   };
 
+  const formatDate = (date: Date | string | null | undefined) => {
+    if (!date) return "N/A";
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return "N/A";
+    return d.toLocaleDateString();
+  };
+
+  const getNextBillingDate = () => {
+    if (billing?.endDate) {
+      const end = new Date(billing.endDate);
+      if (!isNaN(end.getTime())) {
+        return end.toLocaleDateString();
+      }
+    }
+    return "N/A";
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -147,9 +164,9 @@ export default function BillingDashboardScreen() {
               </Text>
               <Text style={styles.statusSubtitle}>
                 {isSubscribed
-                  ? `Renews on ${new Date(billing.endDate).toLocaleDateString()}`
+                  ? `Next billing: ${getNextBillingDate()}`
                   : trialActive
-                    ? `Trial ends on ${new Date(billing.trialEndsAt).toLocaleDateString()}`
+                    ? `Trial ends on ${formatDate(billing?.trialEndsAt)}`
                     : "Upgrade to restore full capabilities"}
               </Text>
             </View>
@@ -213,10 +230,10 @@ export default function BillingDashboardScreen() {
             <Text style={styles.calcLabel}>Number of Students:</Text>
             <TextInput
               style={styles.calcInput}
-              value={calcStudents === "" ? String(billing?.breakdown?.studentsCount || 0) : calcStudents}
+              value={calcStudents}
               onChangeText={(text) => setCalcStudents(text.replace(/[^0-9]/g, ""))}
               keyboardType="numeric"
-              placeholder="e.g. 100"
+              placeholder="0"
               placeholderTextColor="#94A3B8"
             />
           </View>
