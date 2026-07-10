@@ -21,8 +21,8 @@ function paymentContact(phone?: string | null): string {
 
 /**
  * Calculate the dynamic monthly subscription fee for a tenant.
- * Tuition: standard (â‚¹200) or premium with Walt AI (â‚¹400).
- * School: Min 10 classes, â‚¹20/class + â‚¹2/student + â‚¹400 Walt AI.
+ * Tuition: standard (₹200) or premium with Walt AI (₹400).
+ * School: Min 10 classes, ₹20/class + ₹2/student + ₹400 Walt AI.
  * Returns amount in paise (Rupees * 100).
  */
 export async function calculateSubscriptionFee(
@@ -52,8 +52,8 @@ export async function calculateSubscriptionFee(
   const totalStudents = studentCountResult?.value ?? 0;
 
   const classesCharge = 0; // Class base fee removed in new pricing model
-  const studentsCharge = totalStudents * 5 * 100; // â‚¹5/student in paise
-  const waltCharge = waltAiEnabled ? 40000 : 0; // â‚¹400 in paise
+  const studentsCharge = totalStudents * 5 * 100; // ₹5/student in paise
+  const waltCharge = waltAiEnabled ? 40000 : 0; // ₹400 in paise
 
   const totalAmount = studentsCharge + waltCharge;
 
@@ -86,6 +86,7 @@ export async function createBillingOrder(
       amount: 0,
       currency: "INR",
       receipt: `trial_${tenantId}`,
+      paymentUrl: null,
     };
   }
 
@@ -184,11 +185,13 @@ export async function createBillingOrder(
       details: { planType, waltAiEnabled, totalAmount },
     });
 
+    // paymentUrl is null when Razorpay is not configured
+    // The mobile app detects this and shows "Payment Gateway Not Configured" instead of opening a broken link
     return {
       id: mockSubId,
       amount: totalAmount,
       currency: "INR",
-      paymentUrl: `https://example.com/mock-pay?subscriptionId=${mockSubId}`,
+      paymentUrl: null,
     };
   }
 }

@@ -43,50 +43,39 @@ export default function BillingDashboardScreen() {
         return;
       }
 
-      // Fallback for native devices
+      // Mock/no-Razorpay fallback — Razorpay not configured yet
+      const isMockOrder = !order.paymentUrl || order.paymentUrl.includes("example.com") || order.id?.startsWith("sub_mock") || order.id?.startsWith("trial_");
+
+      if (isMockOrder) {
+        if (order.id?.startsWith("trial_")) {
+          Alert.alert(
+            "Free Trial Active",
+            "You are currently on a free trial. No payment is needed until your trial expires.",
+            [{ text: "OK" }]
+          );
+        } else {
+          Alert.alert(
+            "Payment Gateway Not Configured",
+            "Razorpay is not set up yet. Please contact the Whiteroom team or configure RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET in your environment.",
+            [{ text: "OK" }]
+          );
+        }
+        return;
+      }
+
+      // Real Razorpay subscription link
       Alert.alert(
-        "Payment Order Created",
-        `Order ID: ${order.id}\nAmount: ₹${(order.amount / 100).toFixed(2)}`,
+        "Complete Your Payment",
+        `Plan activated! Tap below to complete your payment securely via Razorpay.\n\nOrder ID: ${order.id}`,
         [
           { text: "Cancel", style: "cancel" },
           {
-            text: "Pay Online",
-            onPress: async () => {
-              if (order.paymentUrl) {
-                try {
-                  await Linking.openURL(order.paymentUrl);
-                } catch (err) {
-                  Alert.alert("Error", "Could not open payment link");
-                }
-              }
-            }
-          },
-          {
-            text: "Simulate Success (Dev)",
+            text: "Pay Now",
             onPress: async () => {
               try {
-                await api.simulatePaymentWebhook({
-                  event: "subscription.authenticated",
-                  payload: {
-                    subscription: {
-                      entity: {
-                        id: order.id,
-                        status: "authenticated",
-                      },
-                    },
-                    payment: {
-                      entity: {
-                        id: `pay_${Math.random().toString(36).substring(7)}`,
-                        amount: order.amount,
-                      },
-                    },
-                  },
-                });
-                queryClient.invalidateQueries({ queryKey: ["billingDashboard"] });
-                Alert.alert("Success", "Subscription payment simulated successfully!");
+                await Linking.openURL(order.paymentUrl);
               } catch (err) {
-                console.error(err);
-                Alert.alert("Error", "Failed to finalize subscription");
+                Alert.alert("Error", "Could not open payment link. Please try again.");
               }
             },
           },
@@ -95,7 +84,7 @@ export default function BillingDashboardScreen() {
     },
     onError: (err) => {
       console.error(err);
-      Alert.alert("Error", "Failed to initialize payment gateway order");
+      Alert.alert("Error", "Failed to initialize payment. Please try again.");
     },
   });
 
@@ -159,18 +148,19 @@ export default function BillingDashboardScreen() {
             <CreditCard color={isSubscribed ? "#059669" : "#D97706"} size={32} />
             <View style={styles.statusDetails}>
               <Text style={styles.statusTitle}>
-                {isSubscribed ? "Subscription Active" : trialActive ? "Free Trial Month" : "Subscription Required"}
+                {isSubscribed ? "Subscription Active" : trialActive ? "Free Trial Month" : "No Active Subscription"}
               </Text>
               <Text style={styles.statusSubtitle}>
                 {isSubscribed
                   ? `Next billing: ${getNextBillingDate()}`
                   : trialActive
                     ? `Trial ends on ${formatDate(billing?.trialEndsAt)}`
-                    : "Upgrade to restore full capabilities"}
+                    : "Upgrade below to unlock all features"}
               </Text>
             </View>
           </View>
-          {isSubscribed && (
+          {/* Only show price tag when user actually has an active subscription */}
+          {isSubscribed && billing?.totalMonthlyPaise != null && (
             <View style={styles.priceTag}>
               <Text style={styles.priceText}>{formatPrice(billing.totalMonthlyPaise)}/mo</Text>
             </View>
