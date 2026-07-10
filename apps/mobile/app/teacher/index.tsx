@@ -14,7 +14,7 @@ import {
   Modal,
   Share,
 } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
+import Clipboard from '@react-native-clipboard/clipboard';
 
 // Cross-platform alert — Alert.alert silently fails on web/PWA
 function showAlert(title: string, message: string) {
@@ -908,7 +908,7 @@ function InviteView() {
 
   const handleCopy = async (lnk: string, type: 'parent' | 'teacher') => {
     try {
-      await Clipboard.setStringAsync(lnk);
+      await Clipboard.setString(lnk);
       setCopied(type);
       setTimeout(() => setCopied(null), 2000);
     } catch {}
