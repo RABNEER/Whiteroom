@@ -7,7 +7,7 @@ let errorListenerAttached = false;
 export function getBoss() {
   boss ??= new PgBoss({
     connectionString: env.DATABASE_URL,
-    ssl: "require",
+    ssl: { rejectUnauthorized: false },
   });
 
   if (!errorListenerAttached) {
