@@ -51,16 +51,6 @@ export default function AdminDashboardScreen() {
             <DisplayTitle size="md">{tenant.data?.name || "Institution Admin"}</DisplayTitle>
           </View>
         </View>
-        <Pressable
-          onPress={() => logout.mutate()}
-          style={({ pressed }) => [styles.logoutButton, pressed && { opacity: 0.7 }]}
-        >
-          {logout.isPending ? (
-            <ActivityIndicator size="small" color={colors.navy} />
-          ) : (
-            <LogOut color={colors.navy} size={20} />
-          )}
-        </Pressable>
       </View>
 
       <Muted style={styles.subTitle}>

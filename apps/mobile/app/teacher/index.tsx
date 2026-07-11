@@ -167,21 +167,12 @@ export default function TeacherScreen() {
         eyebrow="TEACHER"
         avatarName={tenantName}
         trailing={
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            {user?.role === 'school_admin' && (
-              <View style={{ marginRight: 8 }}>
-                <IconButton
-                  icon={Shield}
-                  onPress={() => router.push("/admin" as any)}
-                />
-              </View>
-            )}
+          user?.role === 'school_admin' ? (
             <IconButton
-              icon={LogOut}
-              onPress={() => logout.mutate()}
-              active={logout.isPending}
+              icon={Shield}
+              onPress={() => router.push("/admin" as any)}
             />
-          </View>
+          ) : undefined
         }
       />
 

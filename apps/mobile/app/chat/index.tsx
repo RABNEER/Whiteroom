@@ -193,14 +193,7 @@ export default function ChatInboxScreen() {
           </Text>
         </View>
 
-        {user?.role === "school_admin" && (
-          <Pressable
-            onPress={handleLogout}
-            style={({ pressed }) => [styles.logoutButton, pressed && { opacity: 0.7 }]}
-          >
-            <LogOut color={colors.danger} size={20} />
-          </Pressable>
-        )}
+
       </View>
 
       {/* Search Bar */}
