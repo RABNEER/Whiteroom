@@ -23,6 +23,15 @@ interface RateLimitOptions {
   errorCode?: string; // custom error code to return on 429
 }
 
+function queryWithTimeout<T>(ms: number, query: Promise<T>): Promise<T> {
+  return Promise.race([
+    query,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Rate limit query timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 export function rateLimitMiddleware(options: RateLimitOptions) {
   const { windowMs, max, keyFn, errorCode = "RATE_LIMITED" } = options;
 
@@ -32,8 +41,7 @@ export function rateLimitMiddleware(options: RateLimitOptions) {
     const resetAt = new Date(now.getTime() + windowMs);
 
     try {
-      // Single-statement atomic rate limiter query
-      const [result] = await db
+      const [result] = await queryWithTimeout(5000, db
         .insert(rateLimits)
         .values({
           key,
@@ -50,7 +58,7 @@ export function rateLimitMiddleware(options: RateLimitOptions) {
         .returning({
           count: rateLimits.count,
           resetAt: rateLimits.resetAt,
-        });
+        }));
 
       if (result && result.count > max) {
         return c.json(
