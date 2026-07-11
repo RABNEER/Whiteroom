@@ -894,8 +894,8 @@ function InviteView() {
   const tenant = useQuery({ queryKey: ['tenant'], queryFn: api.tenantMe });
 
   const code = tenant.data?.inviteCode;
-  const parentLink = code ? `https://app.whiteroom.co.in/invite/${code}` : null;
-  const teacherLink = code ? `https://app.whiteroom.co.in/invite/${code}?role=teacher` : null;
+  const parentLink = code ? `https://apps.whiteroom.co.in/invite/${code}` : null;
+  const teacherLink = code ? `https://apps.whiteroom.co.in/invite/${code}?role=teacher` : null;
 
   const handleCopy = async (lnk: string, type: 'parent' | 'teacher') => {
     try {

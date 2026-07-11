@@ -171,8 +171,8 @@ export default function AuthScreen() {
         setSelectedRole(roleMatch[1] as Role);
       }
       const match =
-        // Universal Link: https://app.whiteroom.co.in/invite/CODE or https://whiteroom.co.in/invite/CODE
-        url.match(/app\.whiteroom\.co\.in\/invite\/([A-Za-z0-9]{6})/) ||
+        // Universal Link: https://apps.whiteroom.co.in/invite/CODE or https://whiteroom.co.in/invite/CODE
+        url.match(/apps\.whiteroom\.co\.in\/invite\/([A-Za-z0-9]{6})/) ||
         url.match(/whiteroom\.co\.in\/invite\/([A-Za-z0-9]{6})/) ||
         // Custom scheme fallback: whiteroom://auth?inviteCode=CODE
         url.match(/[?&]inviteCode=([A-Za-z0-9]{6})/);

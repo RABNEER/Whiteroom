@@ -50,7 +50,7 @@ export default function App() {
 
   // API base URL configuration (Production Cloud or Local Dev)
   const [apiBaseUrl, setApiBaseUrl] = useState<string>(
-    localStorage.getItem("admin_api_url") || "https://whiteroomapi-production.up.railway.app/api/v1"
+    localStorage.getItem("admin_api_url") || "https://whiteroomapi-production-7011.up.railway.app/api/v1"
   );
 
   const handleApiChange = (url: string) => {
@@ -320,7 +320,7 @@ export default function App() {
             <div style={{ display: 'flex', gap: 6, background: "rgba(0,0,0,0.2)", padding: 4, borderRadius: 8, border: "1px solid var(--border-color)" }}>
               <button 
                 type="button"
-                onClick={() => handleApiChange("https://whiteroomapi-production.up.railway.app/api/v1")}
+                onClick={() => handleApiChange("https://whiteroomapi-production-7011.up.railway.app/api/v1")}
                 style={{
                   flex: 1,
                   padding: "8px",
@@ -411,7 +411,7 @@ export default function App() {
             <label className="input-label" style={{ fontSize: 10, marginBottom: 8, display: 'block', letterSpacing: '0.05em' }}>GATEWAY ENVIRONMENT</label>
             <div style={{ display: 'flex', gap: 4, background: "rgba(0,0,0,0.25)", padding: 4, borderRadius: 8, border: "1px solid var(--border-color)" }}>
               <button 
-                onClick={() => handleApiChange("https://whiteroomapi-production.up.railway.app/api/v1")}
+                onClick={() => handleApiChange("https://whiteroomapi-production-7011.up.railway.app/api/v1")}
                 style={{
                   flex: 1,
                   padding: "6px 4px",
