@@ -110,9 +110,9 @@ async function request<T>(
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
-  // 15s timeout to prevent hanging on cold starts
+  // 30s timeout to prevent hanging on cold starts (Railway free tier can take 10-20s)
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15_000);
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
   let response: Response;
   try {
