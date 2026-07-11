@@ -349,7 +349,11 @@ export default function AuthScreen() {
       ]).catch(err => console.error("Failed to save pending WhatsApp session:", err));
 
       // Redirect to WhatsApp bot
-      const botNumber = process.env.EXPO_PUBLIC_WHATSAPP_BOT_NUMBER || '+917667217247';
+      const botNumber = process.env.EXPO_PUBLIC_WHATSAPP_BOT_NUMBER;
+      if (!botNumber) {
+        Alert.alert("Configuration Error", "WhatsApp bot number is not configured");
+        return;
+      }
       const cleanBotNumber = botNumber.replace(/\D/g, '');
       const verificationMessage = `Verify ${session.id}`;
       const whatsappUrl = `whatsapp://send?phone=${cleanBotNumber}&text=${encodeURIComponent(verificationMessage)}`;

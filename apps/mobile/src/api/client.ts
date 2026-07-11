@@ -29,8 +29,11 @@ import { sessionStore } from "@/auth/session-store";
 
 const configuredBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ||
-  Constants.expoConfig?.extra?.apiBaseUrl ||
-  "http://localhost:3000/api/v1";
+  Constants.expoConfig?.extra?.apiBaseUrl;
+
+if (!configuredBaseUrl) {
+  throw new Error("EXPO_PUBLIC_API_BASE_URL environment variable is required");
+}
 
 export const API_BASE_URL = String(configuredBaseUrl).replace(/\/$/, "");
 
