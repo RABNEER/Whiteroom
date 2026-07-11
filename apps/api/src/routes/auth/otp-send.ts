@@ -76,7 +76,7 @@ export async function otpSendHandler(c: Context) {
   // ——— Send SMS (Bug 7) ———
   let smsSent = true;
   if (!env.TERMUX_SMS_GATEWAY_URL && !env.SMSGATEWAY24_TOKEN && !env.MSG91_API_KEY) {
-    console.log(`[AUTH] SMS Send bypassed. OTP for ${maskPhone(phone)} is: ${otp}`);
+    console.log(`[AUTH] SMS Send bypassed. OTP for ${maskPhone(phone)}`);
   } else {
     try {
       await sendOTP(phone, otp);

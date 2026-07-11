@@ -12,7 +12,7 @@ import { generateInviteCode, slugify, hashSHA256 } from "./lib/otp.js";
 import { env } from "./lib/env.js";
 import { and, eq } from "@whiteroom/db";
 
-const client = postgres(env.DATABASE_URL, { max: 1 });
+const client = postgres(env.DATABASE_URL, { max: 1, ssl: "require" });
 const db = drizzle(client, { schema });
 
 async function seed() {

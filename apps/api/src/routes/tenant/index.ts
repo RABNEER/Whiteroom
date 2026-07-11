@@ -13,6 +13,6 @@ tenantRoutes.use("*", authMiddleware);
 tenantRoutes.get("/me", getTenantMeHandler);
 
 // Only teachers can update the tenant
-tenantRoutes.patch("/me", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN), updateTenantMeHandler);
+tenantRoutes.patch("/me", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), updateTenantMeHandler);
 
 export { tenantRoutes };

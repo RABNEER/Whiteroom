@@ -5,8 +5,8 @@ import { testPushHandler } from "./test-push.js";
 
 const deviceRoutes = new Hono();
 
-deviceRoutes.post("/test-push", testPushHandler);
 deviceRoutes.use("*", authMiddleware);
+deviceRoutes.post("/test-push", testPushHandler);
 deviceRoutes.post("/fcm", registerFcmHandler);
 
 export { deviceRoutes };

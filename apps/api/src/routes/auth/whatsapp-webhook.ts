@@ -58,7 +58,7 @@ export async function whatsappWebhookHandler(c: Context) {
     ];
 
     if (isLid) {
-      console.log(`[WHATSAPP WEBHOOK] Verifying session ${code} for LID sender ${from} (bypassing phone hash check).`);
+      console.log(`[WHATSAPP WEBHOOK] Verifying session ${code} for LID sender (bypassing phone hash check).`);
     } else {
       const phone = normalizePhone(from);
       if (!isValidIndianPhone(phone)) {
@@ -69,7 +69,6 @@ export async function whatsappWebhookHandler(c: Context) {
       }
 
       const phoneHash = hashSHA256(phone);
-      console.log(`[WHATSAPP WEBHOOK] Verifying session ${code} for phone hash: ${phoneHash.substring(0, 10)}...`);
       queryConditions.push(eq(whatsappSessions.phone, phoneHash));
     }
 

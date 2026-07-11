@@ -107,6 +107,19 @@ archiveRoutes.get("/", async (c) => {
   return c.json(response, 200);
 });
 
+function validateArchiveUrl(url: string): void {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      throw Errors.validation("URL must use http or https scheme");
+    }
+  } catch {
+    throw Errors.validation("Invalid URL provided for study material");
+  }
+}
+
+const ALLOWED_FILE_TYPES = ["pdf", "image", "video", "audio", "document", "spreadsheet", "presentation", "other"] as const;
+
 // 2. POST /api/v1/classes/:classId/archive - Upload study file
 archiveRoutes.post("/", async (c) => {
   const user = c.get("user") as JWTPayload;
@@ -128,6 +141,12 @@ archiveRoutes.post("/", async (c) => {
 
   if (!name || !url || !type || typeof size !== "number") {
     throw Errors.validation("Missing name, url, type or valid size in payload");
+  }
+
+  validateArchiveUrl(url);
+
+  if (!ALLOWED_FILE_TYPES.includes(type)) {
+    throw Errors.validation(`Invalid file type. Allowed: ${ALLOWED_FILE_TYPES.join(", ")}`);
   }
 
   const valuesObj: any = {

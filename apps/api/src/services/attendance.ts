@@ -17,7 +17,6 @@ export async function createAttendanceSession(
   tenantId: string,
   input: { classId: string; date: string }
 ) {
-  // FIX: Teacher can create attendance session for another tenant's classroom
   const { classes } = await import("@whiteroom/db");
   const [classRow] = await db
     .select()
@@ -68,7 +67,6 @@ export async function listAttendanceSessions(
   tenantId: string,
   filters: { classId?: string; date?: string; page?: number; limit?: number }
 ) {
-  // FIX: Teacher can create attendance session for another tenant's classroom
   if (filters.classId) {
     const { classes } = await import("@whiteroom/db");
     const [classRow] = await db
@@ -91,7 +89,6 @@ export async function listAttendanceSessions(
     }
   }
 
-  // FIX: No pagination on list endpoints — will OOM at 1000+ students
   const page = Math.max(1, filters.page ?? 1);
   const limit = Math.min(100, Math.max(1, filters.limit ?? 20));
   const offset = (page - 1) * limit;
@@ -134,7 +131,6 @@ export async function listAttendanceSessions(
 }
 
 export async function getAttendanceSession(tenantId: string, sessionId: string) {
-  // FIX: Teacher can create attendance session for another tenant's classroom
   const [session] = await db
     .select()
     .from(attendanceSessions)
@@ -487,7 +483,6 @@ export async function getStudentAttendanceHistory(
   studentId: string,
   filters?: { classId?: string; month?: string; page?: number; limit?: number }
 ) {
-  // FIX: Teacher can create attendance session for another tenant's classroom
   const [student] = await db
     .select({ id: students.id, tenantId: students.tenantId })
     .from(students)
@@ -507,7 +502,6 @@ export async function getStudentAttendanceHistory(
     throw Errors.forbidden("You do not have access to this student");
   }
 
-  // FIX: No pagination on list endpoints — will OOM at 1000+ students
   const page = Math.max(1, filters?.page ?? 1);
   const limit = Math.min(100, Math.max(1, filters?.limit ?? 20));
   const offset = (page - 1) * limit;

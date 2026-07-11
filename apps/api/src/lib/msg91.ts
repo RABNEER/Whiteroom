@@ -39,14 +39,14 @@ export async function sendOTP(phone: string, otp: string): Promise<void> {
       const data = await response.json() as { success?: boolean; error?: string };
       if (!data.success) {
         console.error(`Termux Gateway failure: ${data.error}`);
-        throw Errors.internal(`Termux SMS Gateway failed: ${data.error}`);
+        throw Errors.internal("SMS gateway provider returned an error");
       }
 
       console.log(`âœ… [TERMUX GATEWAY] OTP sent successfully.`);
       return;
     } catch (err: any) {
       console.error("âŒ Termux SMS Gateway connection failed:", err);
-      throw Errors.internal(err.message || "Failed to reach Termux SMS Gateway");
+      throw Errors.internal("Failed to reach SMS gateway provider");
     }
   }
 
@@ -80,14 +80,14 @@ export async function sendOTP(phone: string, otp: string): Promise<void> {
       const data = (await response.json()) as { error: number; message: string };
       if (data.error !== 0) {
         console.error(`SmsGateway24 API error code ${data.error}: ${data.message}`);
-        throw Errors.internal(`Failed to send SMS via SIM: ${data.message}`);
+        throw Errors.internal("Failed to send SMS via SIM gateway");
       }
 
       console.log(`âœ… [SMSGATEWAY24] OTP queued successfully on Android device.`);
       return;
     } catch (err: any) {
       console.error("âŒ SMS Gateway 24 connection failed:", err);
-      throw Errors.internal(err.message || "Failed to reach SIM SMS Gateway");
+      throw Errors.internal("Failed to reach SIM SMS gateway");
     }
   }
 

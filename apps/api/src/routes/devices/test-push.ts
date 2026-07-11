@@ -1,21 +1,18 @@
-import { Context } from "hono";
+import type { Context } from "hono";
+import type { JWTPayload } from "@whiteroom/shared";
 import { sendPushToUser } from "../../lib/fcm.js";
 
 export async function testPushHandler(c: Context) {
+  const user = c.get("user") as JWTPayload;
+
   const body = await c.req.json<{
-    userId: string;
-    tenantId: string;
     title?: string;
     body?: string;
   }>();
 
-  if (!body.userId || !body.tenantId) {
-    return c.json({ error: "Provide userId and tenantId" }, 400);
-  }
-
-  await sendPushToUser(body.tenantId, body.userId, {
+  await sendPushToUser(user.tenantId, user.userId, {
     title: body.title ?? "Test Notification",
-    body: body.body ?? "This is a test push from the API 👋",
+    body: body.body ?? "This is a test push from the API",
     type: "announcement",
   });
 

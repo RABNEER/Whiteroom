@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { UserRole } from "@whiteroom/shared";
 import { authMiddleware, requireRole } from "../../middleware/auth.js";
+import { rateLimitMiddleware } from "../../middleware/rate-limit.js";
 import { createClassHandler } from "./create.js";
 import { listClassesHandler } from "./list.js";
 import { getClassHandler } from "./get-one.js";
@@ -14,16 +15,22 @@ import { toggleMonitorHandler } from "./students/toggle-monitor.js";
 const classRoutes = new Hono();
 
 classRoutes.use("*", authMiddleware);
-classRoutes.use("*", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN));
+classRoutes.use("*", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN));
 
-classRoutes.post("/", createClassHandler);
+const classMutationLimiter = rateLimitMiddleware({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  errorCode: "CLASS_MUTATION_LIMITED",
+});
+
+classRoutes.post("/", classMutationLimiter, createClassHandler);
 classRoutes.get("/", listClassesHandler);
 classRoutes.get("/:id", getClassHandler);
-classRoutes.patch("/:id", updateClassHandler);
-classRoutes.delete("/:id", deleteClassHandler);
-classRoutes.post("/:id/students", addStudentsToClassHandler);
+classRoutes.patch("/:id", classMutationLimiter, updateClassHandler);
+classRoutes.delete("/:id", classMutationLimiter, deleteClassHandler);
+classRoutes.post("/:id/students", classMutationLimiter, addStudentsToClassHandler);
 classRoutes.get("/:id/students", listClassStudentsHandler);
-classRoutes.patch("/:id/students/:sid", toggleMonitorHandler);
-classRoutes.delete("/:id/students/:sid", removeStudentFromClassHandler);
+classRoutes.patch("/:id/students/:sid", classMutationLimiter, toggleMonitorHandler);
+classRoutes.delete("/:id/students/:sid", classMutationLimiter, removeStudentFromClassHandler);
 
 export { classRoutes };

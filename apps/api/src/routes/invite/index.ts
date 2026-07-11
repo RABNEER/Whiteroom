@@ -13,7 +13,7 @@ const inviteResolveLimiter = rateLimitMiddleware({
 });
 
 // Protected — teacher only
-inviteRoutes.post("/", authMiddleware, requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN), generateInviteHandler);
+inviteRoutes.post("/", authMiddleware, requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), generateInviteHandler);
 
 // Public — anyone can resolve an invite
 inviteRoutes.get("/:code", inviteResolveLimiter, resolveInviteHandler);

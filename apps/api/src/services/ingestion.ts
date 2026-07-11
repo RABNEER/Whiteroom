@@ -117,7 +117,7 @@ export async function ingestClassroomFile(
 
     if (!geminiRes.ok) {
       const errBody = await geminiRes.text().catch(() => "");
-      throw new Error(`Gemini parser API returned status ${geminiRes.status}. Body: ${errBody}`);
+      throw new Error("Gemini parser API returned an error response");
     }
 
     const json = (await geminiRes.json()) as any;

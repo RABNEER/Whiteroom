@@ -51,7 +51,7 @@ uploadRoutes.post("/", async (c) => {
     validateFileSize(file.size);
     validateMimeType(file.type);
   } catch (err: any) {
-    throw Errors.validation(err.message);
+    throw Errors.validation("File validation failed");
   }
 
   // Convert file to buffer

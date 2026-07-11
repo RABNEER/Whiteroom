@@ -20,19 +20,16 @@ type WhatsappSessionCreateResponse = {
 export async function whatsappSessionCreateHandler(c: Context) {
   try {
     const body = await c.req.json();
-    console.log("[WHATSAPP SESSION CREATE] Request received:", { phone: body.phone?.substring(0, 6) + "..." });
     
     const parsed = createSessionSchema.safeParse(body);
 
     if (!parsed.success) {
-      console.error("[WHATSAPP SESSION CREATE] Validation failed:", parsed.error.flatten().fieldErrors);
       throw Errors.validation("Invalid request body", {
         issues: parsed.error.flatten().fieldErrors,
       });
     }
 
     const phone = normalizePhone(parsed.data.phone);
-    console.log("[WHATSAPP SESSION CREATE] Normalized phone:", phone.substring(0, 6) + "...");
 
     if (!isValidIndianPhone(phone)) {
       console.error("[WHATSAPP SESSION CREATE] Invalid phone format:", phone);

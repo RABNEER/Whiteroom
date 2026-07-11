@@ -10,41 +10,77 @@ import { whatsappSessionGetHandler } from "./whatsapp-session-get.js";
 import { whatsappSessionPhoneHandler } from "./whatsapp-session-phone.js";
 import { whatsappWebhookHandler } from "./whatsapp-webhook.js";
 import { whatsappVerifyHandler } from "./whatsapp-verify.js";
-import { authMiddleware } from "../../middleware/auth.js";
+import { authMiddleware, requireRole } from "../../middleware/auth.js";
 import { rateLimitMiddleware } from "../../middleware/rate-limit.js";
 import { getLatestQr, logoutBot, inMemoryLogs } from "../../services/whatsapp-bot.js";
 
 const authRoutes = new Hono();
 
 const otpSendLimiter = rateLimitMiddleware({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // max 5 requests per 15 mins
+  windowMs: 15 * 60 * 1000,
+  max: 5,
   errorCode: "OTP_RATE_LIMITED",
+});
+
+const otpVerifyLimiter = rateLimitMiddleware({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  errorCode: "VERIFY_RATE_LIMITED",
+});
+
+const registerLimiter = rateLimitMiddleware({
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  errorCode: "REGISTER_RATE_LIMITED",
+});
+
+const refreshLimiter = rateLimitMiddleware({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  errorCode: "REFRESH_RATE_LIMITED",
+});
+
+const qrRawLimiter = rateLimitMiddleware({
+  windowMs: 60 * 1000,
+  max: 60,
+  errorCode: "QR_RAW_RATE_LIMITED",
+});
+
+const qrPageLimiter = rateLimitMiddleware({
+  windowMs: 60 * 1000,
+  max: 30,
+  errorCode: "QR_PAGE_RATE_LIMITED",
+});
+
+const pairCodeLimiter = rateLimitMiddleware({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  errorCode: "PAIR_CODE_RATE_LIMITED",
 });
 
 // Public - no auth required
 authRoutes.post("/otp/send", otpSendLimiter, otpSendHandler);
-authRoutes.post("/otp/verify", otpVerifyHandler);
+authRoutes.post("/otp/verify", otpVerifyLimiter, otpVerifyHandler);
 authRoutes.post("/whatsapp/session", otpSendLimiter, whatsappSessionCreateHandler);
 authRoutes.get("/whatsapp/session/:id", whatsappSessionGetHandler);
 authRoutes.get("/whatsapp/session/:id/phone", whatsappSessionPhoneHandler);
-authRoutes.get("/whatsapp/qr/raw", async (c) => {
+authRoutes.get("/whatsapp/qr/raw", qrRawLimiter, async (c) => {
   return c.json({
     qr: getLatestQr(),
     connected: !!(globalThis as any).whatsappBotConnected,
   });
 });
 
-authRoutes.post("/whatsapp/reset", async (c) => {
+authRoutes.post("/whatsapp/reset", authMiddleware, requireRole("super_admin"), async (c) => {
   await logoutBot();
   return c.json({ success: true, message: "WhatsApp bot credentials cleared and restarted successfully." });
 });
 
-authRoutes.get("/whatsapp/logs", async (c) => {
+authRoutes.get("/whatsapp/logs", authMiddleware, requireRole("super_admin"), async (c) => {
   return c.json({ logs: inMemoryLogs });
 });
 
-authRoutes.post("/whatsapp/pair-code", async (c) => {
+authRoutes.post("/whatsapp/pair-code", authMiddleware, requireRole("school_admin", "super_admin"), pairCodeLimiter, async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const phone = body.phone;
   
@@ -67,17 +103,18 @@ authRoutes.post("/whatsapp/pair-code", async (c) => {
   }
   
   try {
-    console.log(`🤖 [WHATSAPP BOT] Requesting pairing code for phone: ${cleanPhone}`);
+    const maskedPhone = cleanPhone.slice(-4).padStart(cleanPhone.length, "*");
+    console.log(`🤖 [WHATSAPP BOT] Requesting pairing code for phone: ${maskedPhone}`);
     const code = await sock.requestPairingCode(cleanPhone);
-    console.log(`🤖 [WHATSAPP BOT] Pairing code generated successfully: ${code}`);
+    console.log(`🤖 [WHATSAPP BOT] Pairing code generated successfully (redacted)`);
     return c.json({ success: true, code });
   } catch (err: any) {
     console.error("❌ [WHATSAPP BOT] Failed to generate pairing code:", err);
-    return c.json({ success: false, error: err.message || "Failed to generate pairing code" }, 500);
+    return c.json({ success: false, error: "Failed to generate pairing code" }, 500);
   }
 });
 
-authRoutes.get("/whatsapp/qr", async (c) => {
+authRoutes.get("/whatsapp/qr", qrPageLimiter, async (c) => {
   const html = `
     <!DOCTYPE html>
     <html>
@@ -318,9 +355,9 @@ authRoutes.get("/whatsapp/qr", async (c) => {
   return c.html(html);
 });
 authRoutes.post("/whatsapp/webhook", whatsappWebhookHandler);
-authRoutes.post("/whatsapp/verify", whatsappVerifyHandler);
-authRoutes.post("/register", registerHandler);
-authRoutes.post("/refresh", refreshHandler);
+authRoutes.post("/whatsapp/verify", registerLimiter, whatsappVerifyHandler);
+authRoutes.post("/register", registerLimiter, registerHandler);
+authRoutes.post("/refresh", refreshLimiter, refreshHandler);
 
 // Protected - requires valid access token
 authRoutes.post("/logout", authMiddleware, logoutHandler);

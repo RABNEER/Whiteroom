@@ -154,7 +154,7 @@ export async function generateCompletion(
       return json.candidates[0].content.parts[0].text;
     } catch (err: any) {
       console.error("Gemini completion failed:", err);
-      throw Errors.internal(`Failed to obtain response from LLM provider: ${err?.message || err}`);
+      throw Errors.internal("Failed to obtain response from LLM provider");
     }
   }
 

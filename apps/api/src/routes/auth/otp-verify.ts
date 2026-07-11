@@ -163,7 +163,8 @@ export async function otpVerifyHandler(c: Context) {
         .where(eq(otpLockouts.phone, phoneHash));
     }
     
-    console.log(`[AUTH] Successfully verified OTP for phone: ${phone}`);
+    const maskedPhone = phone.slice(-4).padStart(phone.length, "*");
+    console.log(`[AUTH] Successfully verified OTP for phone: ${maskedPhone}`);
   }
 
   // Ensure phone is valid Indian phone format

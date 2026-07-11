@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { authMiddleware } from "../../middleware/auth.js";
 import { errorHandler } from "../../middleware/error.js";
+import { rateLimitMiddleware } from "../../middleware/rate-limit.js";
 import { listRoomsHandler } from "./rooms.js";
 import {
   getMessagesHandler,
@@ -22,24 +23,30 @@ const chatRoutes = new Hono();
 chatRoutes.onError(errorHandler);
 chatRoutes.use("*", authMiddleware);
 
+const chatMutationLimiter = rateLimitMiddleware({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  errorCode: "CHAT_MUTATION_LIMITED",
+});
+
 // Rooms
 chatRoutes.get("/rooms", listRoomsHandler);
 
 // Messages
 chatRoutes.get("/rooms/:roomId/messages", getMessagesHandler);
-chatRoutes.post("/rooms/:roomId/messages", sendMessageHandler);
-chatRoutes.post("/rooms/:roomId/walt", waltDoubtHandler);
-chatRoutes.put("/messages/:messageId/pin", pinMessageHandler);
-chatRoutes.delete("/messages/:messageId/pin", unpinMessageHandler);
-chatRoutes.delete("/messages/:messageId", deleteMessageHandler);
+chatRoutes.post("/rooms/:roomId/messages", chatMutationLimiter, sendMessageHandler);
+chatRoutes.post("/rooms/:roomId/walt", chatMutationLimiter, waltDoubtHandler);
+chatRoutes.put("/messages/:messageId/pin", chatMutationLimiter, pinMessageHandler);
+chatRoutes.delete("/messages/:messageId/pin", chatMutationLimiter, unpinMessageHandler);
+chatRoutes.delete("/messages/:messageId", chatMutationLimiter, deleteMessageHandler);
 
 // Receipts
-chatRoutes.post("/rooms/:roomId/read", markRoomReadHandler);
+chatRoutes.post("/rooms/:roomId/read", chatMutationLimiter, markRoomReadHandler);
 chatRoutes.get("/messages/:messageId/receipts", getMessageReceiptsHandler);
 
 // Blocks
-chatRoutes.post("/blocks", blockUserHandler);
-chatRoutes.delete("/blocks/:userId", unblockUserHandler);
+chatRoutes.post("/blocks", chatMutationLimiter, blockUserHandler);
+chatRoutes.delete("/blocks/:userId", chatMutationLimiter, unblockUserHandler);
 chatRoutes.get("/blocks", listBlockedUsersHandler);
 
 export { chatRoutes };

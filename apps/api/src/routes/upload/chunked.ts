@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { authMiddleware, requireRole } from "../../middleware/auth.js";
+import { rateLimitMiddleware } from "../../middleware/rate-limit.js";
 import { db } from "../../lib/db.js";
 import { fileUploadSessions, fileUploadChunks, classroomFiles, classes, eq, and } from "@whiteroom/db";
 import { Errors, UserRole } from "@whiteroom/shared";
@@ -11,13 +12,19 @@ import { validateFileSize, validateMimeType } from "../../lib/storage.js";
 const chunkedRoutes = new Hono<{ Variables: { user: JWTPayload } }>();
 
 chunkedRoutes.use("*", authMiddleware);
-chunkedRoutes.use("*", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN));
+chunkedRoutes.use("*", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN));
+
+const uploadMutationLimiter = rateLimitMiddleware({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  errorCode: "UPLOAD_MUTATION_LIMITED",
+});
 
 /**
  * POST /api/v1/upload/init
  * Initialize a chunked file upload session.
  */
-chunkedRoutes.post("/init", async (c) => {
+chunkedRoutes.post("/init", uploadMutationLimiter, async (c) => {
   const user = c.get("user") as JWTPayload;
   const body = await c.req.json();
 
@@ -81,7 +88,7 @@ chunkedRoutes.post("/init", async (c) => {
  * POST /api/v1/upload/chunk
  * Upload a specific file chunk.
  */
-chunkedRoutes.post("/chunk", async (c) => {
+chunkedRoutes.post("/chunk", uploadMutationLimiter, async (c) => {
   const user = c.get("user") as JWTPayload;
 
   const formData = await c.req.formData();
@@ -175,7 +182,7 @@ chunkedRoutes.post("/chunk", async (c) => {
  * POST /api/v1/upload/complete
  * Trigger session verification and background file assembly.
  */
-chunkedRoutes.post("/complete", async (c) => {
+chunkedRoutes.post("/complete", uploadMutationLimiter, async (c) => {
   const user = c.get("user") as JWTPayload;
   const body = await c.req.json();
   const { sessionId } = body;

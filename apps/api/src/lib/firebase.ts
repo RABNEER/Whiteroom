@@ -1,6 +1,7 @@
 import { cert, getApps, initializeApp, getApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getMessaging } from "firebase-admin/messaging";
+import { Errors } from "@whiteroom/shared";
 import { env } from "./env.js";
 
 /**
@@ -66,6 +67,6 @@ export async function verifyFirebaseIdToken(token: string): Promise<{ phone: str
     return { phone, uid: decodedToken.uid };
   } catch (error: any) {
     console.error("[FIREBASE AUTH ERROR] Verification failed:", error?.message || error);
-    throw error;
+    throw Errors.internal("Firebase token verification failed");
   }
 }
