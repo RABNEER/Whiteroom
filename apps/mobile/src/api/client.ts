@@ -277,7 +277,7 @@ export const api = {
   }) =>
     request<ScheduleResponse[]>("/schedules", {
       method: "POST",
-      body: JSON.stringify({ schedules: [input] }),
+      body: JSON.stringify(input),
     }),
   attendanceSessions: (filters?: { classId?: string; date?: string; page?: number; limit?: number }) => {
     const params = new URLSearchParams();
