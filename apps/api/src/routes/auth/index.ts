@@ -18,25 +18,25 @@ const authRoutes = new Hono();
 
 const otpSendLimiter = rateLimitMiddleware({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 100,
   errorCode: "OTP_RATE_LIMITED",
 });
 
 const otpVerifyLimiter = rateLimitMiddleware({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 100,
   errorCode: "VERIFY_RATE_LIMITED",
 });
 
 const registerLimiter = rateLimitMiddleware({
   windowMs: 15 * 60 * 1000,
-  max: 3,
+  max: 50,
   errorCode: "REGISTER_RATE_LIMITED",
 });
 
 const refreshLimiter = rateLimitMiddleware({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 200,
   errorCode: "REFRESH_RATE_LIMITED",
 });
 

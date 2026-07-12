@@ -74,16 +74,8 @@ export function rateLimitMiddleware(options: RateLimitOptions) {
 
       await next();
     } catch (err) {
-      console.error("Rate limiting check failed:", err);
-      return c.json(
-        {
-          error: {
-            code: "RATE_LIMIT_UNAVAILABLE",
-            message: "Rate limit check unavailable. Try again later.",
-          },
-        },
-        503
-      );
+      console.warn("⚠️ Rate limiting check timed out or failed, failing open so user is not blocked:", (err as Error)?.message || err);
+      return await next();
     }
   };
 }
