@@ -13,6 +13,7 @@ import {
   RefreshControl,
   Modal,
   Share,
+  Linking,
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 
@@ -47,6 +48,8 @@ import {
   Lock,
   Search,
   Copy as CopyIcon,
+  Share2,
+  MessageCircle,
   type LucideIcon,
 } from 'lucide-react-native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -905,6 +908,27 @@ function InviteView() {
     } catch {}
   };
 
+  const handleWhatsAppShare = (lnk: string, roleName: string) => {
+    const text = `Join our institution on Whiteroom as a ${roleName}!\nClick here to sign up instantly:\n${lnk}`;
+    const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(text)}`;
+    const webUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+
+    Linking.openURL(whatsappUrl).catch(() => {
+      Linking.openURL(webUrl).catch(() => {
+        showAlert('WhatsApp Not Installed', 'Please copy the link or use Share Link.');
+      });
+    });
+  };
+
+  const handleSystemShare = async (lnk: string, roleName: string) => {
+    try {
+      await Share.share({
+        message: `Join our institution on Whiteroom as a ${roleName}!\nClick here to get started:\n${lnk}`,
+        title: `Whiteroom ${roleName} Invite`,
+      });
+    } catch {}
+  };
+
   if (tenant.isLoading) {
     return (
       <View style={[s.card, { alignItems: 'center', paddingVertical: 32 }]}>
@@ -920,7 +944,7 @@ function InviteView() {
         Share these links with parents and teachers to join your institution.
       </Text>
 
-      <View style={{ gap: 20, marginTop: 8 }}>
+      <View style={{ gap: 24, marginTop: 8 }}>
         {/* ── Parent Invite ── */}
         <View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -944,6 +968,43 @@ function InviteView() {
               <CopyIcon size={18} color={colors.teal} />
             )}
           </Pressable>
+
+          {/* Share Buttons Row */}
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+            <Pressable
+              onPress={() => parentLink && handleWhatsAppShare(parentLink, 'Parent')}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                backgroundColor: '#16A34A',
+                paddingVertical: 10,
+                borderRadius: radius.md,
+              }}
+            >
+              <MessageCircle size={16} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '600' }}>Share to WhatsApp</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => parentLink && handleSystemShare(parentLink, 'Parent')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                backgroundColor: '#F1F5F9',
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderRadius: radius.md,
+              }}
+            >
+              <Share2 size={16} color={colors.navy} />
+              <Text style={{ color: colors.navy, fontSize: 13, fontWeight: '600' }}>More</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* ── Teacher Invite ── */}
@@ -969,6 +1030,43 @@ function InviteView() {
               <CopyIcon size={18} color={colors.teal} />
             )}
           </Pressable>
+
+          {/* Share Buttons Row */}
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+            <Pressable
+              onPress={() => teacherLink && handleWhatsAppShare(teacherLink, 'Teacher')}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                backgroundColor: '#16A34A',
+                paddingVertical: 10,
+                borderRadius: radius.md,
+              }}
+            >
+              <MessageCircle size={16} color="#FFFFFF" />
+              <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '600' }}>Share to WhatsApp</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => teacherLink && handleSystemShare(teacherLink, 'Teacher')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                backgroundColor: '#F1F5F9',
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderRadius: radius.md,
+              }}
+            >
+              <Share2 size={16} color={colors.navy} />
+              <Text style={{ color: colors.navy, fontSize: 13, fontWeight: '600' }}>More</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </View>
