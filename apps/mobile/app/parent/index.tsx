@@ -140,6 +140,39 @@ export default function ParentScreen() {
     },
   });
 
+  const deleteAccount = useMutation({
+    mutationFn: async () => {
+      await api.deleteAccount();
+      try {
+        const messaging = require("@react-native-firebase/messaging");
+        if (typeof messaging === "function") {
+          await messaging().deleteToken();
+        } else if (messaging && typeof messaging.default === "function") {
+          await messaging.default().deleteToken();
+        }
+      } catch {}
+      try {
+        const AsyncStorage = require("@react-native-async-storage/async-storage");
+        if (AsyncStorage && typeof AsyncStorage.clear === "function") {
+          await AsyncStorage.clear();
+        }
+      } catch {}
+      const { Platform } = require("react-native");
+      if (Platform.OS === "web") {
+        try {
+          globalThis.localStorage?.clear();
+        } catch {}
+      }
+    },
+    onSettled: async () => {
+      await clear();
+      router.replace('/auth');
+    },
+    onError: (err: unknown) => {
+      Alert.alert('Error', err instanceof ApiError ? err.message : 'Failed to delete account.');
+    },
+  });
+
   // Fall back to placeholder children while API loads (dev convenience)
   const childrenData: ChildItem[] = useMemo(() => {
     const list = children.data ?? [];
@@ -220,6 +253,16 @@ export default function ParentScreen() {
                 { text: 'Cancel', style: 'cancel' },
                 { text: 'Log Out', style: 'destructive', onPress: () => logout.mutate() },
               ]);
+            }}
+            onDeleteAccount={() => {
+              Alert.alert(
+                'Delete Account',
+                'Are you absolutely sure you want to delete your account? This action is permanent and your data cannot be recovered.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete Permanently', style: 'destructive', onPress: () => deleteAccount.mutate() },
+                ]
+              );
             }}
           />
         )}
@@ -811,11 +854,13 @@ function ProfileTab({
   selectedChild,
   onSelectChildPress,
   onLogout,
+  onDeleteAccount,
 }: {
   childrenList: ChildItem[];
   selectedChild: ChildItem | undefined;
   onSelectChildPress: () => void;
   onLogout: () => void;
+  onDeleteAccount: () => void;
 }) {
   return (
     <ScrollView style={s.tabContent} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
@@ -881,6 +926,11 @@ function ProfileTab({
       {/* Logout button */}
       <Button variant="danger" onPress={onLogout} style={{ borderRadius: 12 }}>
         Log Out
+      </Button>
+
+      {/* Delete Account button */}
+      <Button variant="ghost" onPress={onDeleteAccount} style={{ borderRadius: 12, marginTop: 12 }}>
+        <Text style={{ color: colors.danger, fontWeight: '600' }}>Delete Account</Text>
       </Button>
     </ScrollView>
   );

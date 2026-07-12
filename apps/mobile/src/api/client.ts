@@ -405,6 +405,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  deleteAccount: (): Promise<{ success: boolean; data: { message: string } }> =>
+    request<{ success: boolean; data: { message: string } }>("/users/me", {
+      method: "DELETE",
+    }),
 
   // ─── Native Chat Endpoints ───
   chatRooms: (): Promise<ChatRoomResponse[]> =>
