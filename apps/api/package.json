@@ -24,7 +24,6 @@
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.44.1",
     "firebase-admin": "^13.10.0",
-    "googleapis": "^173.0.0",
     "hono": "^4.7.6",
     "jose": "^6.2.3",
     "jszip": "^3.10.1",

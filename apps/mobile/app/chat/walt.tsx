@@ -328,7 +328,9 @@ export default function WaltChatScreen() {
               onChangeText={setInput}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
-              multiline
+              editable={true}
+              multiline={true}
+              autoCapitalize="sentences"
             />
           </View>
           <TouchableOpacity
@@ -519,12 +521,13 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    width: "100%",
     fontSize: 15,
     color: colors.navy,
     minHeight: 40,
     maxHeight: 120,
     paddingVertical: 8,
-    textAlignVertical: "center",
+    textAlignVertical: "top",
   },
   sendButton: {
     backgroundColor: "#4F46E5",

@@ -1,42 +1,10 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { createClient } from "@supabase/supabase-js";
-import { google } from "googleapis";
 import { env } from "./env.js";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
-import { Readable } from "node:stream";
 
-// Helper to convert Buffer to Readable stream (needed for googleapis body)
-function bufferToStream(buffer: Buffer): Readable {
-  const stream = new Readable();
-  stream.push(buffer);
-  stream.push(null);
-  return stream;
-}
-
-// 1. Google Drive Configuration
-const googleFolderId = env.GOOGLE_DRIVE_FOLDER_ID || "";
-const googleEmail = env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "";
-const googlePrivateKey = env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
-  ? env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, "\n")
-  : "";
-
-const isGoogleDriveConfigured = !!(googleFolderId && googleEmail && googlePrivateKey);
-let driveClient: any = null;
-
-if (isGoogleDriveConfigured) {
-  try {
-    const auth = new google.auth.JWT({
-      email: googleEmail,
-      key: googlePrivateKey,
-      scopes: ["https://www.googleapis.com/auth/drive"],
-    });
-    driveClient = google.drive({ version: "v3", auth });
-  } catch (err) {
-    console.error("❌ [CDN] Failed to initialize Google Drive client:", err);
-  }
-}
 
 // 2. Cloudflare R2 / S3 Configuration
 const r2AccessKeyId = env.R2_ACCESS_KEY_ID || "";
@@ -141,29 +109,16 @@ export async function assembleChunks(
   const finalPath = `${tenantId}/${timestamp}_${sanitizedName}`;
   let finalUrl = "";
 
-  if (driveClient) {
-    // Upload to Google Drive
-    console.log(`📤 [CDN] Uploading ${sanitizedName} (${size} bytes) to Google Drive...`);
-    const fileMetadata = {
-      name: `${timestamp}_${sanitizedName}`,
-      parents: [googleFolderId],
-    };
-    const media = {
-      mimeType: contentType,
-      body: bufferToStream(finalBuffer),
-    };
-    const driveResponse = await driveClient.files.create({
-      requestBody: fileMetadata,
-      media: media,
-      fields: "id",
-    });
-    const fileId = driveResponse.data.id;
-    if (!fileId) {
-      throw new Error("Failed to get file ID from Google Drive upload response");
-    }
-    // Formulate the direct download link
-    finalUrl = `https://drive.google.com/uc?id=${fileId}&export=download`;
-    console.log(`✅ [CDN] Uploaded to Google Drive: ${finalUrl}`);
+  const localStoragePath = env.LOCAL_STORAGE_PATH || process.env.LOCAL_STORAGE_PATH || "G:\\My Drive\\Whiteroom";
+  if (localStoragePath) {
+    console.log(`📤 [CDN] Saving ${sanitizedName} (${size} bytes) to local disk: ${localStoragePath}`);
+    const fullPath = path.join(localStoragePath, finalPath);
+    await fs.mkdir(path.dirname(fullPath), { recursive: true });
+    await fs.writeFile(fullPath, finalBuffer);
+
+    const baseUrl = env.ADMIN_URL || process.env.ADMIN_URL || "http://localhost:3000";
+    finalUrl = `${baseUrl.replace(/\/$/, "")}/api/v1/storage/files/${finalPath}`;
+    console.log(`✅ [CDN] Saved to local disk: ${finalUrl}`);
   } else if (s3Client) {
     // Upload to Cloudflare R2
     console.log(`📤 [CDN] Uploading ${sanitizedName} to Cloudflare R2...`);

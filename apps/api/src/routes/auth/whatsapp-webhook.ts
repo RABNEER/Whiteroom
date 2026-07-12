@@ -68,8 +68,7 @@ export async function whatsappWebhookHandler(c: Context) {
         }, 400);
       }
 
-      const phoneHash = hashSHA256(phone);
-      queryConditions.push(eq(whatsappSessions.phone, phoneHash));
+      queryConditions.push(eq(whatsappSessions.phone, phone));
     }
 
     // Find active, unverified session

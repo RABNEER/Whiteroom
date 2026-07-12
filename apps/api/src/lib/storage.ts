@@ -1,6 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { env } from "./env.js";
 import { createHash } from "crypto";
+import fs from "fs/promises";
+import nodePath from "path";
+
 
 /**
  * Supabase Storage client for file uploads with original quality preservation
@@ -57,12 +60,29 @@ export async function uploadToStorage(
   path: string,
   contentType: string
 ): Promise<{ url: string; checksum: string; size: number }> {
-  const client = getSupabaseClient();
-  const bucket = "classroom-media";
-
   // Calculate checksum before upload
   const checksum = calculateChecksum(buffer);
   const size = buffer.length;
+
+  const localStoragePath = env.LOCAL_STORAGE_PATH || process.env.LOCAL_STORAGE_PATH || "G:\\My Drive\\Whiteroom";
+  if (localStoragePath) {
+    console.log("[STORAGE] Saving directly to local disk:", localStoragePath, path);
+    const fullPath = nodePath.join(localStoragePath, path);
+    await fs.mkdir(nodePath.dirname(fullPath), { recursive: true });
+    await fs.writeFile(fullPath, buffer);
+
+    const baseUrl = env.ADMIN_URL || process.env.ADMIN_URL || "http://localhost:3000";
+    const publicUrl = `${baseUrl.replace(/\/$/, "")}/api/v1/storage/files/${path}`;
+
+    return {
+      url: publicUrl,
+      checksum,
+      size,
+    };
+  }
+
+  const client = getSupabaseClient();
+  const bucket = "classroom-media";
 
   // Upload with explicit no-transform headers
   const { data, error } = await client.storage

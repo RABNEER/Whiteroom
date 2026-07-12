@@ -1490,7 +1490,7 @@ function ClassMaterialsView({ classId }: { classId: string }) {
         Upload and share reference guides, files, and homework worksheets with students and parents.
       </Text>
       <Button
-        onPress={() => router.push(`/classes/${classId}/archive` as any)}
+        onPress={() => router.push({ pathname: "/classes/[classId]/archive", params: { classId } } as any)}
         style={{ alignSelf: 'stretch' }}
       >
         Open Archive

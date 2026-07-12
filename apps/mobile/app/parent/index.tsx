@@ -795,7 +795,7 @@ function ChildMaterialsView({ classId }: { classId: string }) {
         Access reference guides, files, worksheets, and study notes shared by the classroom teacher.
       </Text>
       <Button
-        onPress={() => router.push(`/classes/${classId}/archive` as any)}
+        onPress={() => router.push({ pathname: "/classes/[classId]/archive", params: { classId } } as any)}
         style={{ alignSelf: 'stretch' }}
       >
         Open Study Archive

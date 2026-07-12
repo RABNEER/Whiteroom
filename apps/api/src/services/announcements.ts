@@ -5,6 +5,7 @@ import {
 } from "@whiteroom/db";
 import { Errors } from "@whiteroom/shared";
 import { and, count, desc, eq, isNull } from "@whiteroom/db";
+import { sendPushToTenant } from "../lib/fcm.js";
 
 // ─── Create Announcement ───
 
@@ -29,6 +30,15 @@ export async function createAnnouncement(
       isPinned: input.isPinned ?? false,
     })
     .returning();
+
+  // Send push notification broadcast to all parents/teachers (non-blocking)
+  sendPushToTenant(tenantId, {
+    title: `New Notice: ${input.title}`,
+    body: input.body.length > 100 ? input.body.slice(0, 97) + "..." : input.body,
+    type: "announcement",
+  }).catch((err) => {
+    console.error("❌ [Announcements] Failed to send push notification:", err);
+  });
 
   return created!;
 }

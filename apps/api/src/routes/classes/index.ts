@@ -19,7 +19,8 @@ classRoutes.use("*", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRo
 
 const classMutationLimiter = rateLimitMiddleware({
   windowMs: 15 * 60 * 1000,
-  max: 30,
+  max: 300,
+  keyFn: (c) => c.get("user")?.userId || c.req.header("x-forwarded-for") || "unknown",
   errorCode: "CLASS_MUTATION_LIMITED",
 });
 

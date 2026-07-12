@@ -116,3 +116,50 @@ export async function getParentUserIdsForStudents(
   return rows
     .filter((r): r is { studentId: string; parentId: string } => r.parentId !== null);
 }
+
+/**
+ * Send push notification broadcast to all devices registered under a tenant.
+ * Used when a new school announcement or notice is created.
+ */
+export async function sendPushToTenant(
+  tenantId: string,
+  payload: PushPayload
+): Promise<void> {
+  try {
+    console.log(`📢 [FCM] Sending broadcast push notification for tenant ${tenantId}: "${payload.title}"`);
+    const tokens = await db
+      .select({ fcmToken: deviceTokens.fcmToken })
+      .from(deviceTokens)
+      .where(eq(deviceTokens.tenantId, tenantId));
+
+    if (tokens.length === 0) {
+      console.log(`ℹ️ [FCM] No registered device tokens for tenant ${tenantId}.`);
+      return;
+    }
+
+    const messaging = getFirebaseMessaging();
+    if (!messaging) {
+      console.log(`ℹ️ [FCM] Firebase messaging not configured — push skipped.`);
+      return;
+    }
+
+    const tokenStrings = tokens.map((t) => t.fcmToken);
+    for (let i = 0; i < tokenStrings.length; i += 500) {
+      const chunk = tokenStrings.slice(i, i + 500);
+      await messaging.sendEachForMulticast({
+        tokens: chunk,
+        notification: {
+          title: payload.title,
+          body: payload.body,
+        },
+        data: {
+          type: payload.type,
+          tenantId,
+        },
+      });
+    }
+    console.log(`✅ [FCM] Broadcast notification sent to ${tokenStrings.length} devices.`);
+  } catch (err) {
+    console.error("[FCM] Broadcast push notification failed:", err);
+  }
+}

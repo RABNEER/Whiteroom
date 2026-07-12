@@ -1,7 +1,7 @@
 import { db } from "../lib/db.js";
-import { classEnrollments, classes, parentProfiles, students } from "@whiteroom/db";
+import { classEnrollments, classes, parentProfiles, students, users } from "@whiteroom/db";
 import { Errors, Limits, PlanTier } from "@whiteroom/shared";
-import { and, eq, isNull, count } from "@whiteroom/db";
+import { and, eq, isNull, count, or } from "@whiteroom/db";
 
 export async function createStudent(
   tenantId: string,
@@ -117,6 +117,26 @@ export async function listParentChildren(tenantId: string, userId: string) {
     throw Errors.notFound("Parent profile");
   }
 
+  const [userRecord] = await db
+    .select({ phone: users.phone })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (userRecord?.phone) {
+    await db
+      .update(students)
+      .set({ parentId: parent.id })
+      .where(
+        and(
+          eq(students.tenantId, tenantId),
+          isNull(students.parentId),
+          eq(students.phone, userRecord.phone),
+          isNull(students.deletedAt)
+        )
+      );
+  }
+
   return db
     .select()
     .from(students)
@@ -146,7 +166,7 @@ export async function listParentChildClasses(
 
   await getParentOwnedStudent(tenantId, parent.id, studentId);
 
-  return db
+  const enrolled = await db
     .select({
       id: classes.id,
       tenantId: classes.tenantId,
@@ -165,7 +185,30 @@ export async function listParentChildClasses(
         eq(classes.tenantId, tenantId),
         isNull(classes.deletedAt)
       )
-  );
+    );
+
+  if (enrolled.length > 0) {
+    return enrolled;
+  }
+
+  // Fallback: If student is not explicitly enrolled in any class yet, return active classes in the school
+  const activeClasses = await db
+    .select({
+      id: classes.id,
+      tenantId: classes.tenantId,
+      name: classes.name,
+      subject: classes.subject,
+      teacherName: classes.teacherName,
+      createdAt: classes.createdAt,
+      updatedAt: classes.updatedAt,
+    })
+    .from(classes)
+    .where(and(eq(classes.tenantId, tenantId), isNull(classes.deletedAt)));
+
+  return activeClasses.map((cls) => ({
+    ...cls,
+    enrolledAt: cls.createdAt,
+  }));
 }
 
 export async function assertParentOwnsStudent(

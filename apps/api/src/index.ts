@@ -20,6 +20,8 @@ import { announcementRoutes } from "./routes/announcements/index.js";
 import { paymentRoutes } from "./routes/payments/index.js";
 import { reportRoutes } from "./routes/reports/index.js";
 import { adminRoutes } from "./routes/admin/index.js";
+import { pilotDashboardHtmlHandler } from "./routes/admin/pilot-dashboard-html.js";
+import { pilotStatsHandler } from "./routes/admin/pilot-stats.js";
 import { chatRoutes } from "./routes/chat/index.js";
 import { archiveRoutes } from "./routes/archive/index.js";
 import { publicRoutes } from "./routes/public/index.js";
@@ -40,6 +42,7 @@ import { UserRole } from "@whiteroom/shared";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { db } from "./lib/db.js";
 import fs from "node:fs";
+import fsPromises from "node:fs/promises";
 import path from "node:path";
 
 const app = new Hono();
@@ -113,6 +116,10 @@ app.get("/health", (c) => {
   });
 });
 
+// ─── Pilot Live Telemetry Web Dashboard ───
+app.get("/pilot-dashboard", pilotDashboardHtmlHandler);
+app.get("/api/v1/pilot-stats", pilotStatsHandler);
+
 // ─── API v1 Routes ───
 app.route("/api/v1/auth", authRoutes);
 app.route("/api/v1/tenants", tenantRoutes);
@@ -159,6 +166,32 @@ app.post(
   requireRole(UserRole.SCHOOL_ADMIN, UserRole.TEACHER),
   waltDraftNoticeHandler
 );
+
+// ─── Local Storage Static File Serving (for G:\My Drive\Whiteroom) ───
+app.get("/api/v1/storage/files/*", async (c) => {
+  const localStoragePath = env.LOCAL_STORAGE_PATH || process.env.LOCAL_STORAGE_PATH || "G:\\My Drive\\Whiteroom";
+  const rawPath = c.req.path.replace(/^\/api\/v1\/storage\/files\//, "");
+  const relPath = decodeURIComponent(rawPath);
+  const normalizedRoot = path.normalize(localStoragePath);
+  const fullPath = path.normalize(path.join(normalizedRoot, relPath));
+
+  // Security check against path traversal (e.g., ../../Windows)
+  if (!fullPath.startsWith(normalizedRoot)) {
+    return c.json({ error: "Access denied" }, 403);
+  }
+
+  try {
+    const fileBuf = await fsPromises.readFile(fullPath);
+    return new Response(fileBuf, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/octet-stream",
+      },
+    });
+  } catch {
+    return c.json({ error: "File not found" }, 404);
+  }
+});
 
 // ─── Global Error Handler ───
 app.onError(errorHandler);

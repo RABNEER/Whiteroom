@@ -11,6 +11,9 @@ import {
   parentProfiles,
   consentLogs,
   userTenants,
+  students,
+  classes,
+  classEnrollments,
 } from "@whiteroom/db";
 import {
   generateInviteCode,
@@ -26,7 +29,7 @@ import {
   UserRole,
 } from "@whiteroom/shared";
 import type { ApiResponse, OTPVerifyResponse, JWTPayload } from "@whiteroom/shared";
-import { eq, and, gte, count } from "@whiteroom/db";
+import { eq, and, gte, count, isNull } from "@whiteroom/db";
 
 const registerSchema = z.object({
   registrationToken: z.string().uuid(),
@@ -73,6 +76,8 @@ export async function registerHandler(c: Context) {
     inviteCode,
     schoolName,
     designation,
+    studentName,
+    rollNumber,
     turnstileToken,
   } = parsed.data;
 
@@ -300,10 +305,13 @@ export async function registerHandler(c: Context) {
         activeTenant: true,
       });
 
-      await tx.insert(parentProfiles).values({
-        userId: newUser!.id,
-        tenantId: tenant.id,
-      });
+      const [newParentProfile] = await tx
+        .insert(parentProfiles)
+        .values({
+          userId: newUser!.id,
+          tenantId: tenant.id,
+        })
+        .returning();
 
       // Log consent under DPDP Act 2023 specifications
       await tx.insert(consentLogs).values({
@@ -314,7 +322,56 @@ export async function registerHandler(c: Context) {
         userAgent: c.req.header("user-agent") ?? null,
       });
 
-      // Automatic student auto-linking removed to prevent IDOR student claiming vulnerability (Finding 3)
+      if (studentName) {
+        const [existingStudent] = await tx
+          .select()
+          .from(students)
+          .where(
+            and(
+              eq(students.tenantId, tenant.id),
+              isNull(students.parentId),
+              isNull(students.deletedAt),
+              eq(students.name, studentName)
+            )
+          )
+          .limit(1);
+
+        let linkedStudentId: string;
+        if (existingStudent) {
+          await tx
+            .update(students)
+            .set({ parentId: newParentProfile!.id })
+            .where(eq(students.id, existingStudent.id));
+          linkedStudentId = existingStudent.id;
+        } else {
+          const [createdStudent] = await tx
+            .insert(students)
+            .values({
+              tenantId: tenant.id,
+              name: studentName,
+              rollNumber: rollNumber || null,
+              phone: phoneLookup,
+              parentId: newParentProfile!.id,
+            })
+            .returning();
+          linkedStudentId = createdStudent!.id;
+        }
+
+        const activeSchoolClasses = await tx
+          .select({ id: classes.id })
+          .from(classes)
+          .where(and(eq(classes.tenantId, tenant.id), isNull(classes.deletedAt)));
+
+        for (const cls of activeSchoolClasses) {
+          await tx
+            .insert(classEnrollments)
+            .values({
+              classId: cls.id,
+              studentId: linkedStudentId,
+            })
+            .onConflictDoNothing();
+        }
+      }
 
       return { user: newUser!, tenantId: tenant.id };
     }
