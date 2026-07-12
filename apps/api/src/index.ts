@@ -207,10 +207,9 @@ async function runDbMigrations() {
   }
 }
 
-// ─── Start Server ───
-runDbMigrations().then(() => {
-  serve({ fetch: app.fetch, port: env.PORT }, (info) => {
-    console.log(`
+// ─── Start Server Immediately to prevent Railway 502 Bad Gateway during cold starts ───
+serve({ fetch: app.fetch, port: env.PORT }, (info) => {
+  console.log(`
     ╦ ╦┬ ┬┬┌┬┐┌─┐┬─┐┌─┐┌─┐┌┬┐
     ║║║├─┤│ │ ├┤ ├┬┘│ ││ ││││
     ╚╩╝┴ ┴┴ ┴ └─┘┴└─└─┘└─┘┴ ┴
@@ -218,7 +217,10 @@ runDbMigrations().then(() => {
     Environment: ${env.NODE_ENV}
     Routes: /api/v1/auth, /api/v1/tenants, /api/v1/invite, /api/v1/classes, /api/v1/students, /api/v1/schedules, /api/v1/devices, /api/v1/parent, /api/v1/attendance, /api/v1/announcements, /api/v1/payments, /api/v1/reports, /api/v1/admin, /api/v1/chat
   `);
-  });
+});
+
+runDbMigrations().catch((err) => {
+  console.error("❌ [DB] Migrations failed:", err);
 });
 
 startJobs().catch((err) => {

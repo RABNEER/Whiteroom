@@ -50,6 +50,13 @@ export class ApiError extends Error {
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
+  if ([502, 503, 504].includes(response.status)) {
+    throw new ApiError(
+      "SERVER_WAKING_UP",
+      "The server is waking up — please try again in a moment.",
+      response.status
+    );
+  }
   const payload = (await response.json().catch(() => ({}))) as ApiResponse<T>;
   if (!response.ok || payload.success === false) {
     throw new ApiError(
@@ -133,6 +140,11 @@ async function request<T>(
     throw fetchErr;
   }
   clearTimeout(timeoutId);
+
+  if ([502, 503, 504].includes(response.status) && retry) {
+    await new Promise((r) => setTimeout(r, 3000));
+    return request<T>(path, options, false);
+  }
 
   if (response.status === 401 && retry) {
     refreshPromise = refreshPromise || doRefresh().finally(() => { refreshPromise = null; });
