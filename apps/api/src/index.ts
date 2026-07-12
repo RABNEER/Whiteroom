@@ -111,6 +111,7 @@ app.use("*", corsMiddleware());
 app.get("/health", (c) => {
   return c.json({
     status: "ok",
+    version: "2.0-NUCLEAR-FIX",
     timestamp: new Date().toISOString(),
     environment: env.NODE_ENV,
   });
