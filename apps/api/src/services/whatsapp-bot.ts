@@ -78,22 +78,38 @@ if (!webhookSecret) {
 
 console.log("🤖 [WHATSAPP BOT] Target Webhook URL:", webhookUrl);
 
+let dbTableEnsured = false;
+
 async function ensureDbTable() {
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS whatsapp_bot_state (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-  await db.execute(sql`
-    ALTER TABLE whatsapp_bot_state ENABLE ROW LEVEL SECURITY;
-  `);
+  if (dbTableEnsured) return;
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS whatsapp_bot_state (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await db.execute(sql`
+      ALTER TABLE whatsapp_bot_state ENABLE ROW LEVEL SECURITY;
+    `);
+    dbTableEnsured = true;
+  } catch {}
 }
 
-async function syncAuthFilesFromDb(folder: string) {
+async function syncAuthFilesFromDb(folder: string, force = false) {
   try {
     await ensureDbTable();
+    if (!force) {
+      try {
+        const existing = await fs.readdir(folder);
+        if (existing && existing.length > 5) {
+          // Local auth files already exist on disk, avoid overwriting with stale DB state during reconnects
+          return;
+        }
+      } catch {}
+    }
+
     const rows = await db.execute(sql`
       SELECT key, value FROM whatsapp_bot_state;
     `);
@@ -111,7 +127,6 @@ async function syncAuthFilesFromDb(folder: string) {
     }
   } catch (err) {
     console.error("❌ [WHATSAPP BOT] Failed to restore auth state from database:", err);
-    throw err;
   }
 }
 
@@ -278,8 +293,8 @@ export async function startBot(isReconnect = false) {
   
   let state, saveCreds;
   try {
-    // Restore files from DB before Baileys initializes
-    await syncAuthFilesFromDb(authFolder);
+    // Restore files from DB before Baileys initializes (only force overwrite on fresh start)
+    await syncAuthFilesFromDb(authFolder, !isReconnect);
     console.log("📂 [WHATSAPP BOT] Saving auth state in:", authFolder);
     const authState = await useMultiFileAuthState(authFolder);
     state = authState.state;
@@ -357,9 +372,14 @@ export async function startBot(isReconnect = false) {
         // would kick that session and start an infinite conflict loop. Wait with backoff.
         console.log(
           `⚠️ [WHATSAPP BOT] Conflict (440) — another WhatsApp Web session opened. ` +
-          `Backing off before retry to avoid conflict death-spiral.`
+          `Backing off before retry (Attempt #${reconnectAttempts}) to avoid conflict death-spiral.`
         );
-        scheduleReconnect(true /* isConflict */);
+        if (reconnectAttempts >= 4) {
+          console.warn("💥 [WHATSAPP BOT] Persistent 440 conflicts detected. Clearing stale session credentials to self-heal...");
+          await logoutBot();
+        } else {
+          scheduleReconnect(true /* isConflict */);
+        }
       } else if (shouldReconnect) {
         scheduleReconnect(false);
       }
@@ -368,7 +388,13 @@ export async function startBot(isReconnect = false) {
       (globalThis as any).whatsappLatestQr = null;
       (globalThis as any).whatsappBotConnected = true;
       isReconnecting = false;
-      reconnectAttempts = 0; // reset backoff counter on successful open
+      // Delay resetting backoff counter so if we get kicked immediately by another session (440),
+      // we correctly increment attempts instead of ping-ponging at attempt 0
+      setTimeout(() => {
+        if ((globalThis as any).whatsappBotConnected) {
+          reconnectAttempts = 0;
+        }
+      }, 30_000);
     }
   });
 
