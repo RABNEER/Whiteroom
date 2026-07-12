@@ -10,6 +10,8 @@ import {
   userTenants,
   eq,
   and,
+  count,
+  gte,
 } from "@whiteroom/db";
 import { hashSHA256 } from "./otp.js";
 import { signAccessToken, signRefreshToken } from "./jwt.js";
@@ -29,6 +31,23 @@ export async function completeVerifiedPhoneAuth(
     inviteCode?: string;
   }
 ) {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const [attemptCount] = await db
+    .select({ total: count() })
+    .from(registrationTokens)
+    .where(
+      and(
+        eq(registrationTokens.phone, input.phone),
+        gte(registrationTokens.createdAt, oneHourAgo),
+      ),
+    );
+
+  if (attemptCount && attemptCount.total > 5) {
+    throw Errors.rateLimited(
+      "Too many registration attempts. Please try again in an hour.",
+    );
+  }
+
   const [existingUser] = await db
     .select()
     .from(users)
@@ -41,7 +60,7 @@ export async function completeVerifiedPhoneAuth(
 
     await db.insert(registrationTokens).values({
       id: registrationToken,
-      phone: input.phone, // Save plaintext phone number
+      phone: input.phoneHash, // Store hashed phone number
       firebaseUid: input.firebaseUid,
       expiresAt,
     });

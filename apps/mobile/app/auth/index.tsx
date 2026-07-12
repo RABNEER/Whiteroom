@@ -12,6 +12,7 @@ import {
   Image,
   AppState,
   Linking,
+  Alert,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
@@ -289,6 +290,7 @@ export default function AuthScreen() {
     mutationFn: (params: {
       registrationToken: string;
       role: Role;
+      name?: string;
       consentAccepted: boolean;
       inviteCode?: string;
       schoolName?: string;

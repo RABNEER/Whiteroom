@@ -110,9 +110,9 @@ async function request<T>(
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
-  // 60s timeout to prevent hanging on cold starts (Railway free tier can take 30-50s)
+  // 90s timeout to prevent hanging on cold starts (Railway free tier can take 30-60s to boot & run migrations)
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60_000);
+  const timeoutId = setTimeout(() => controller.abort(), 90_000);
 
   let response: Response;
   try {
@@ -123,6 +123,10 @@ async function request<T>(
     });
   } catch (fetchErr: any) {
     clearTimeout(timeoutId);
+    if (retry && (fetchErr?.name === 'AbortError' || fetchErr?.message?.includes('Network request failed'))) {
+      await new Promise((r) => setTimeout(r, 2000));
+      return request<T>(path, options, false);
+    }
     if (fetchErr?.name === 'AbortError') {
       throw new ApiError('TIMEOUT', 'Request timed out. The server may be waking up — please try again.', 0);
     }

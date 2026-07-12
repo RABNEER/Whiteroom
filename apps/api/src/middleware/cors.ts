@@ -18,6 +18,10 @@ export function corsMiddleware() {
         "http://192.168.1.*:8081",
         "http://192.168.0.*:8081",
         "https://*.netlify.app",
+        "https://*.up.railway.app",
+        "https://*.railway.app",
+        "https://apps.whiteroom.co.in",
+        "https://whiteroom.co.in",
         env.MOBILE_WEB_URL,
         env.ADMIN_URL,
       ].filter(Boolean) as string[];
