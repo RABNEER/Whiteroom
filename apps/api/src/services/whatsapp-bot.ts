@@ -130,6 +130,8 @@ async function syncAuthFilesFromDb(folder: string, force = false) {
   }
 }
 
+const fileHashCache = new Map<string, string>();
+
 async function syncAuthFilesToDb(folder: string) {
   try {
     let files: string[];
@@ -139,17 +141,23 @@ async function syncAuthFilesToDb(folder: string) {
       return;
     }
 
+    let updatedCount = 0;
     for (const file of files) {
       const filePath = path.join(folder, file);
       const stat = await fs.stat(filePath);
       if (stat.isFile()) {
         const content = await fs.readFile(filePath, "utf8");
+        if (fileHashCache.get(file) === content) {
+          continue;
+        }
         await db.execute(sql`
           INSERT INTO whatsapp_bot_state (key, value, updated_at)
           VALUES (${file}, ${content}, NOW())
           ON CONFLICT (key) DO UPDATE
           SET value = EXCLUDED.value, updated_at = NOW();
         `);
+        fileHashCache.set(file, content);
+        updatedCount++;
       }
     }
     
@@ -158,9 +166,12 @@ async function syncAuthFilesToDb(folder: string) {
       const key = row.key as string;
       if (!files.includes(key)) {
         await db.execute(sql`DELETE FROM whatsapp_bot_state WHERE key = ${key};`);
+        fileHashCache.delete(key);
       }
     }
-    console.log("✅ [WHATSAPP BOT] Auth state successfully backed up in database.");
+    if (updatedCount > 0) {
+      console.log(`✅ [WHATSAPP BOT] Auth state successfully backed up (${updatedCount} changed files).`);
+    }
   } catch (err) {
     console.error("❌ [WHATSAPP BOT] Failed to sync auth state to database:", err);
   }
@@ -212,12 +223,14 @@ async function setupFolderWatcher(folder: string) {
     if (syncTimeout) clearTimeout(syncTimeout);
     syncTimeout = setTimeout(() => {
       syncAuthFilesToDb(folder);
-    }, 1500); // 1.5 seconds debounce
+    }, 3000); // 3.0 seconds debounce
   });
 }
 
 export async function logoutBot() {
   console.log("🗑️ [WHATSAPP BOT] Resetting session credentials...");
+
+  fileHashCache.clear();
 
   // Cancel any pending backoff reconnect before we restart fresh
   if (reconnectTimer) {
@@ -330,6 +343,11 @@ export async function startBot(isReconnect = false) {
     version,
     auth: state,
     printQRInTerminal: false, // We'll print it ourselves using qrcode-terminal with customizable options
+    syncFullHistory: false, // Prevents rate limit check unavailable errors
+    connectTimeoutMs: 60_000,
+    defaultQueryTimeoutMs: 60_000,
+    keepAliveIntervalMs: 25_000,
+    retryRequestDelayMs: 500,
   });
 
   (globalThis as any).whatsappSocket = sock;
@@ -351,6 +369,7 @@ export async function startBot(isReconnect = false) {
       const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
       const errorMessage = lastDisconnect?.error?.message || "";
       const isBadMac = errorMessage.includes("Bad MAC") || errorMessage.includes("decryption");
+      const isRateLimit = statusCode === 429 || errorMessage.toLowerCase().includes("rate") || errorMessage.toLowerCase().includes("unavailable");
       const isConflict = statusCode === 440; // Stream Errored (conflict) — another WA Web session opened
       const isLoggedOut = statusCode === DisconnectReason.loggedOut;
       const shouldReconnect = !isLoggedOut && !isBadMac;
@@ -361,8 +380,8 @@ export async function startBot(isReconnect = false) {
       (globalThis as any).whatsappBotConnected = false;
       isReconnecting = false; // Allow scheduleReconnect to set its own guard
 
-      if (isBadMac) {
-        console.log("⚠️ [WHATSAPP BOT] Detected Bad MAC / decryption error. Clearing session to self-heal...");
+      if (isBadMac || isRateLimit) {
+        console.warn("⚠️ [WHATSAPP BOT] Detected Bad MAC / Rate Limit error. Wiping corrupted session state to self-heal...");
         await logoutBot();
       } else if (isLoggedOut) {
         console.log("⚠️ [WHATSAPP BOT] Logged out. Clearing session state to restart cleanly...");
