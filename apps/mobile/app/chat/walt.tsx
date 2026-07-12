@@ -263,16 +263,13 @@ export default function WaltChatScreen() {
         </View>
       )}
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-      >
+      <View style={{ flex: 1 }}>
         <FlatList
           ref={flatListRef}
           data={messages}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => {
             const isWalt = item.sender === "walt";
             const isOutOfScope =
@@ -315,8 +312,13 @@ export default function WaltChatScreen() {
             );
           }}
         />
+      </View>
 
-        {/* Input Bar */}
+      {/* Input Bar */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+      >
         <View style={[styles.inputContainer, isFocused && styles.inputContainerFocused]}>
           <View style={[styles.inputWrapper, isFocused && styles.inputWrapperFocused]}>
             <Sparkles size={16} color={isFocused ? "#4F46E5" : colors.teal} style={styles.inputIcon} />

@@ -62,6 +62,7 @@ export default function AuthScreen() {
   const [whatsappSessionId, setWhatsappSessionId] = useState<string | null>(null);
   const [whatsappToken, setWhatsappToken] = useState<string | null>(null);
   const [whatsappTimer, setWhatsappTimer] = useState(300);
+  const [whatsappExpiresAt, setWhatsappExpiresAt] = useState<number | null>(null);
   const verifyingRef = useRef(false);
 
   // Pending WhatsApp session persistence keys
@@ -93,6 +94,7 @@ export default function AuthScreen() {
   };
 
   const clearPendingSession = async () => {
+    setWhatsappExpiresAt(null);
     try {
       await Promise.all([
         secureStorage.deleteItem(PENDING_WHATSAPP_SESSION_ID_KEY),
@@ -135,6 +137,7 @@ export default function AuthScreen() {
             setWhatsappSessionId(id);
             setWhatsappToken(token);
             setWhatsappTimer(remaining);
+            setWhatsappExpiresAt(expiresAt);
             setStep('WHATSAPP_POLL');
           } else {
             await clearPendingSession();
@@ -148,19 +151,26 @@ export default function AuthScreen() {
     loadPendingSession();
   }, []);
 
-  // WhatsApp countdown timer
+  // WhatsApp countdown timer (handles background app pauses gracefully using absolute expiresAt)
   useEffect(() => {
-    if (step !== 'WHATSAPP_POLL' || whatsappTimer <= 0) {
-      if (step === 'WHATSAPP_POLL' && whatsappTimer <= 0) {
+    if (step !== 'WHATSAPP_POLL' || !whatsappExpiresAt) return;
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, Math.floor((whatsappExpiresAt - now) / 1000));
+      setWhatsappTimer(remaining);
+
+      if (remaining <= 0) {
         setError('Verification session expired. Please try again.');
         clearPendingSession();
         setStep('PHONE');
       }
-      return;
-    }
-    const interval = setInterval(() => setWhatsappTimer((t) => t - 1), 1000);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [step, whatsappTimer]);
+  }, [step, whatsappExpiresAt]);
 
   // Handle incoming deep links to auto-fill invite code & role
   useEffect(() => {
@@ -341,9 +351,10 @@ export default function AuthScreen() {
       setWhatsappSessionId(session.id);
       setWhatsappToken(session.token);
       setWhatsappTimer(session.expiresIn || 300);
+      const expiresAt = Date.now() + (session.expiresIn || 300) * 1000;
+      setWhatsappExpiresAt(expiresAt);
 
       // Persist pending session
-      const expiresAt = Date.now() + (session.expiresIn || 300) * 1000;
       await Promise.all([
         secureStorage.setItem(PENDING_WHATSAPP_SESSION_ID_KEY, session.id),
         secureStorage.setItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY, session.token),
