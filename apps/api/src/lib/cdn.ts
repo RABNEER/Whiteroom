@@ -1,8 +1,44 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { createClient } from "@supabase/supabase-js";
+import { google } from "googleapis";
 import { env } from "./env.js";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { tmpdir } from "node:os";
+import { Readable } from "node:stream";
 
-// Initialize Cloudflare R2 / S3 client if keys are present
+// Helper to convert Buffer to Readable stream (needed for googleapis body)
+function bufferToStream(buffer: Buffer): Readable {
+  const stream = new Readable();
+  stream.push(buffer);
+  stream.push(null);
+  return stream;
+}
+
+// 1. Google Drive Configuration
+const googleFolderId = env.GOOGLE_DRIVE_FOLDER_ID || "";
+const googleEmail = env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "";
+const googlePrivateKey = env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+  ? env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.replace(/\\n/g, "\n")
+  : "";
+
+const isGoogleDriveConfigured = !!(googleFolderId && googleEmail && googlePrivateKey);
+let driveClient: any = null;
+
+if (isGoogleDriveConfigured) {
+  try {
+    const auth = new google.auth.JWT({
+      email: googleEmail,
+      key: googlePrivateKey,
+      scopes: ["https://www.googleapis.com/auth/drive"],
+    });
+    driveClient = google.drive({ version: "v3", auth });
+  } catch (err) {
+    console.error("❌ [CDN] Failed to initialize Google Drive client:", err);
+  }
+}
+
+// 2. Cloudflare R2 / S3 Configuration
 const r2AccessKeyId = env.R2_ACCESS_KEY_ID || "";
 const r2SecretAccessKey = env.R2_SECRET_ACCESS_KEY || "";
 const cloudflareAccountId = env.CLOUDFLARE_ACCOUNT_ID || "";
@@ -23,8 +59,11 @@ if (isR2Configured) {
   });
 }
 
-// Fallback Supabase setup
-const supabaseUrl = env.DATABASE_URL?.match(/https?:\/\/([^.]+)\.supabase\.co/)?.[0] || "";
+// 3. Fallback Supabase Setup
+const supabaseUrl = env.SUPABASE_URL || (() => {
+  const match = env.DATABASE_URL?.match(/postgres\.([a-z0-9]+)/i);
+  return match ? `https://${match[1]}.supabase.co` : "";
+})();
 const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY || "";
 let supabaseClient: ReturnType<typeof createClient> | null = null;
 
@@ -40,65 +79,38 @@ function getSupabase() {
   return supabaseClient;
 }
 
+// 4. Local Chunk Storage Configuration
+const CHUNK_DIR = path.join(tmpdir(), "whiteroom_chunks");
+
 /**
- * Upload a raw chunk to temporary storage.
- * Returns the storage path.
+ * Upload/save a raw chunk to temporary local storage.
+ * Returns the local file path.
  */
 export async function uploadChunk(
   sessionId: string,
   chunkIndex: number,
   buffer: Buffer
 ): Promise<string> {
-  const path = `chunks/${sessionId}/${chunkIndex}`;
-
-  if (s3Client) {
-    // Upload to Cloudflare R2
-    await s3Client.send(
-      new PutObjectCommand({
-        Bucket: r2BucketName,
-        Key: path,
-        Body: buffer,
-        ContentType: "application/octet-stream",
-      })
-    );
-    return path;
-  } else {
-    // Fallback to Supabase Storage
-    const supabase = getSupabase();
-    const { error } = await supabase.storage
-      .from("classroom-media")
-      .upload(path, buffer, {
-        contentType: "application/octet-stream",
-        upsert: true,
-        duplex: "half",
-      });
-
-    if (error) {
-      throw new Error(`Fallback chunk upload failed: ${error.message}`);
-    }
-    return path;
-  }
+  const chunkPath = path.join(CHUNK_DIR, sessionId, String(chunkIndex));
+  await fs.mkdir(path.dirname(chunkPath), { recursive: true });
+  await fs.writeFile(chunkPath, buffer);
+  return chunkPath;
 }
 
 /**
- * Delete a single object from storage.
+ * Delete a single chunk from local storage.
  */
 export async function deleteChunk(storagePath: string): Promise<void> {
-  if (s3Client) {
-    await s3Client.send(
-      new DeleteObjectCommand({
-        Bucket: r2BucketName,
-        Key: storagePath,
-      })
-    );
-  } else {
-    const supabase = getSupabase();
-    await supabase.storage.from("classroom-media").remove([storagePath]);
+  try {
+    await fs.rm(storagePath, { force: true });
+  } catch (err) {
+    console.error(`❌ [CDN] Failed to delete local chunk at ${storagePath}:`, err);
   }
 }
 
 /**
- * Download all chunks, concatenate them, upload the final file, and delete chunks.
+ * Concatenate temporary local chunks, upload the final file to Google Drive, R2, or Supabase,
+ * and clean up the local chunks.
  */
 export async function assembleChunks(
   tenantId: string,
@@ -109,31 +121,13 @@ export async function assembleChunks(
 ): Promise<{ url: string; size: number }> {
   const buffers: Buffer[] = [];
 
-  // 1. Download all chunks in sequence
-  for (const path of chunkPaths) {
-    if (s3Client) {
-      const response = await s3Client.send(
-        new GetObjectCommand({
-          Bucket: r2BucketName,
-          Key: path,
-        })
-      );
-      if (!response.Body) {
-        throw new Error(`Chunk body missing in R2: ${path}`);
-      }
-      const bytes = await response.Body.transformToByteArray();
-      buffers.push(Buffer.from(bytes));
-    } else {
-      const supabase = getSupabase();
-      const { data, error } = await supabase.storage
-        .from("classroom-media")
-        .download(path);
-
-      if (error || !data) {
-        throw new Error(`Chunk download failed from Supabase: ${error?.message || "empty data"}`);
-      }
-      const arrayBuffer = await data.arrayBuffer();
-      buffers.push(Buffer.from(arrayBuffer));
+  // 1. Read all local chunks in sequence
+  for (const chunkPath of chunkPaths) {
+    try {
+      const bytes = await fs.readFile(chunkPath);
+      buffers.push(bytes);
+    } catch (err) {
+      throw new Error(`Failed to read chunk at ${chunkPath}: ${(err as Error).message}`);
     }
   }
 
@@ -147,7 +141,32 @@ export async function assembleChunks(
   const finalPath = `${tenantId}/${timestamp}_${sanitizedName}`;
   let finalUrl = "";
 
-  if (s3Client) {
+  if (driveClient) {
+    // Upload to Google Drive
+    console.log(`📤 [CDN] Uploading ${sanitizedName} (${size} bytes) to Google Drive...`);
+    const fileMetadata = {
+      name: `${timestamp}_${sanitizedName}`,
+      parents: [googleFolderId],
+    };
+    const media = {
+      mimeType: contentType,
+      body: bufferToStream(finalBuffer),
+    };
+    const driveResponse = await driveClient.files.create({
+      requestBody: fileMetadata,
+      media: media,
+      fields: "id",
+    });
+    const fileId = driveResponse.data.id;
+    if (!fileId) {
+      throw new Error("Failed to get file ID from Google Drive upload response");
+    }
+    // Formulate the direct download link
+    finalUrl = `https://drive.google.com/uc?id=${fileId}&export=download`;
+    console.log(`✅ [CDN] Uploaded to Google Drive: ${finalUrl}`);
+  } else if (s3Client) {
+    // Upload to Cloudflare R2
+    console.log(`📤 [CDN] Uploading ${sanitizedName} to Cloudflare R2...`);
     await s3Client.send(
       new PutObjectCommand({
         Bucket: r2BucketName,
@@ -162,6 +181,7 @@ export async function assembleChunks(
       : `https://${cloudflareAccountId}.r2.cloudflarestorage.com/${r2BucketName}/${finalPath}`;
   } else {
     // Fallback to Supabase Storage
+    console.log(`📤 [CDN] Uploading ${sanitizedName} to Supabase Storage...`);
     const supabase = getSupabase();
     const { error } = await supabase.storage
       .from("classroom-media")
@@ -183,11 +203,15 @@ export async function assembleChunks(
     finalUrl = urlData.publicUrl;
   }
 
-  // 4. Delete chunks asynchronously/non-blocking
-  for (const path of chunkPaths) {
-    deleteChunk(path).catch((err) => {
-      console.error(`Failed to clean up chunk ${path}:`, err);
+  // 4. Delete chunks and parent session directory
+  for (const chunkPath of chunkPaths) {
+    deleteChunk(chunkPath).catch((err) => {
+      console.error(`❌ [CDN] Failed to clean up chunk ${chunkPath}:`, err);
     });
+  }
+  if (chunkPaths.length > 0) {
+    const sessionDir = path.dirname(chunkPaths[0]);
+    fs.rm(sessionDir, { recursive: true, force: true }).catch(() => {});
   }
 
   return {
