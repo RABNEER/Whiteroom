@@ -149,7 +149,7 @@ export default function TeacherScreen() {
     },
   });
 
-  const tenantName = tenant.data?.name ?? 'My Institution';
+  const tenantName = tenant.data?.name ?? user?.tenants?.find(t => t.tenantId === user?.tenantId)?.tenantName ?? user?.tenants?.[0]?.tenantName ?? 'Whiteroom Institute';
   const classList = classes.data?.data ?? [];
 
   // ── Bottom Tab Bar ───────────────────────────────────────────────────────────

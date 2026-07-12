@@ -75,7 +75,6 @@ let refreshPromise: Promise<boolean> | null = null;
 async function doRefresh(): Promise<boolean> {
   const { refreshToken, setTokens, clear } = sessionStore.getState();
   if (!refreshToken) {
-    await clear();
     return false;
   }
   try {
@@ -89,10 +88,14 @@ async function doRefresh(): Promise<boolean> {
     );
     await setTokens(refreshed.accessToken, refreshed.refreshToken || refreshToken);
     return true;
-  } catch {
-    await clear();
-    if (typeof window !== "undefined" && window.location) {
-      window.location.href = "/auth";
+  } catch (err: any) {
+    // Only clear session if backend explicitly rejected with 401/403 (invalid refresh token)
+    // Never clear session on network errors, timeouts, or server waking up (5xx)!
+    if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+      await clear();
+      if (typeof window !== "undefined" && window.location) {
+        window.location.href = "/auth";
+      }
     }
     return false;
   }
