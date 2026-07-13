@@ -41,6 +41,7 @@ import {
   Play,
   ArrowDown,
   Sparkles,
+  Mic,
 } from "lucide-react-native";
 import { api, ApiError } from "@/api/client";
 import { useSession } from "@/auth/session-store";
@@ -381,6 +382,114 @@ const COMMON_EMOJIS = [
   "👂", "🦻", "👃", "🧠", "🫀", "🫁", "🦷", "🦴", "👀", "👁️", 
   "👅", "👄", "💋", "🩸", "❤️", "🧡", "💛", "💚", "💙", "💜"
 ];
+
+const AnimatedSendButton = ({
+  onPress,
+  disabled,
+}: {
+  onPress: () => void;
+  disabled: boolean;
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const flightAnim = useRef(new Animated.Value(0)).current;
+
+  const handlePressIn = () => {
+    if (disabled) return;
+    Animated.spring(scaleAnim, {
+      toValue: 0.88,
+      useNativeDriver: true,
+      speed: 40,
+      bounciness: 10,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    if (disabled) return;
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 30,
+      bounciness: 14,
+    }).start();
+  };
+
+  const handleSendPress = () => {
+    if (disabled) return;
+    flightAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(flightAnim, {
+        toValue: 1,
+        duration: 160,
+        useNativeDriver: true,
+      }),
+      Animated.timing(flightAnim, {
+        toValue: 0,
+        duration: 0,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    onPress();
+  };
+
+  const flightTranslateX = flightAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 14],
+  });
+  const flightTranslateY = flightAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -14],
+  });
+  const flightOpacity = flightAnim.interpolate({
+    inputRange: [0, 0.65, 1],
+    outputRange: [1, 0.3, 0],
+  });
+
+  return (
+    <Pressable
+      onPress={handleSendPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      disabled={disabled}
+      style={[
+        styles.sendBtnWrapper,
+        !disabled ? styles.sendBtnWrapperActive : styles.sendBtnWrapperDisabled,
+      ]}
+    >
+      <Animated.View
+        style={[
+          styles.sendBtnInner,
+          !disabled ? styles.sendBtnInnerActive : styles.sendBtnInnerDisabled,
+          { transform: [{ scale: scaleAnim }] },
+        ]}
+      >
+        {!disabled ? (
+          <>
+            <Animated.View
+              style={{
+                transform: [
+                  { translateX: flightTranslateX },
+                  { translateY: flightTranslateY },
+                ],
+                opacity: flightOpacity,
+              }}
+            >
+              <Send
+                color="#FFFFFF"
+                size={20}
+                style={{ marginLeft: 2, transform: [{ rotate: "-15deg" }] }}
+              />
+            </Animated.View>
+            <View style={styles.sendSparkleBadge}>
+              <Sparkles color="#FEF08A" size={10} />
+            </View>
+          </>
+        ) : (
+          <Mic color="#64748B" size={20} />
+        )}
+      </Animated.View>
+    </Pressable>
+  );
+};
 
 export default function ChatRoomScreen() {
   const { roomId, roomType, name: initialName, chatMode: initialChatMode } = useLocalSearchParams<{
@@ -1037,17 +1146,11 @@ export default function ChatRoomScreen() {
                 </Pressable>
               </View>
 
-              {/* Separate Circle Send Button */}
-              <Pressable
+              {/* Dynamic Animated Premium Send Button */}
+              <AnimatedSendButton
                 onPress={handleSend}
                 disabled={!inputText.trim()}
-                style={[
-                  styles.sendBtn,
-                  !inputText.trim() && styles.sendBtnDisabled,
-                ]}
-              >
-                <Send color={colors.white} size={18} style={{ marginLeft: 2 }} />
-              </Pressable>
+              />
             </View>
           </View>
         )}
@@ -1621,22 +1724,43 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     textAlignVertical: "center",
   },
-  sendBtn: {
-    backgroundColor: "#00A884", // WhatsApp's modern green color
-    borderRadius: 24,
+  sendBtnWrapper: {
+    marginLeft: 8,
+    borderRadius: 25,
+  },
+  sendBtnWrapperActive: {
+    shadowColor: "#0EA5E9",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  sendBtnWrapperDisabled: {
+    shadowColor: "transparent",
+    elevation: 0,
+  },
+  sendBtnInner: {
     width: 48,
     height: 48,
+    borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 6,
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    position: "relative",
   },
-  sendBtnDisabled: {
-    backgroundColor: "#A0AEC0", // Matches the grayed out send button/mic look
+  sendBtnInnerActive: {
+    backgroundColor: "#0EA5E9",
+    borderWidth: 1.5,
+    borderColor: "#38BDF8",
+  },
+  sendBtnInnerDisabled: {
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  sendSparkleBadge: {
+    position: "absolute",
+    top: 6,
+    right: 8,
   },
   mentionsContainer: {
     backgroundColor: colors.paper,
