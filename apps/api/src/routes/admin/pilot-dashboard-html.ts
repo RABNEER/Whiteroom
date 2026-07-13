@@ -6,7 +6,7 @@ export function pilotDashboardHtmlHandler(c: Context) {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Whiteroom — Pilot Live Telemetry Command Center</title>
+  <title>Whiteroom — Pilot Telemetry Center</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -22,15 +22,13 @@ export function pilotDashboardHtmlHandler(c: Context) {
           },
           colors: {
             brand: {
-              bg: '#080c14',
-              surface: 'rgba(15, 23, 42, 0.6)',
-              border: 'rgba(255, 255, 255, 0.08)',
-              accent: '#38bdf8',
-              accentLight: '#7dd3fc',
-              success: '#4ade80',
-              warning: '#fbbf24',
-              text: '#f8fafc',
-              muted: '#94a3b8'
+              primary: '#4f46e5',     /* Indigo */
+              primaryLight: '#818cf8',
+              bg: '#f8fafc',          /* Slate 50 */
+              card: '#ffffff',
+              border: '#e2e8f0',      /* Slate 200 */
+              text: '#0f172a',        /* Slate 900 */
+              muted: '#64748b'        /* Slate 500 */
             }
           }
         }
@@ -39,119 +37,105 @@ export function pilotDashboardHtmlHandler(c: Context) {
   </script>
   <style>
     body {
-      background-color: #080c14;
+      background-color: #f8fafc;
       background-image: 
-        radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.08) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(30, 41, 59, 0.8) 0px, transparent 50%);
+        radial-gradient(at 0% 0%, rgba(79, 70, 229, 0.05) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.05) 0px, transparent 50%);
     }
-    .glass-card {
-      background: rgba(15, 23, 42, 0.6);
-      backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-    }
-    .glow-hover:hover {
-      box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
-      border-color: rgba(56, 189, 248, 0.4);
-    }
-    .pulse-live {
-      box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
-      animation: pulse 1.6s infinite;
-    }
-    @keyframes pulse {
-      0% {
-        transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
-      }
-      70% {
-        transform: scale(1);
-        box-shadow: 0 0 0 10px rgba(74, 222, 128, 0);
-      }
-      100% {
-        transform: scale(0.95);
-        box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
-      }
+    .custom-shadow {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.01), 0 20px 25px -5px rgba(0, 0, 0, 0.05);
     }
   </style>
 </head>
-<body class="text-brand-text font-sans min-height-screen p-4 md:p-8">
+<body class="text-brand-text font-sans min-h-screen p-4 md:p-8">
 
   <div class="max-w-7xl mx-auto space-y-8">
     
     <!-- ─── HEADER SECTION ─── -->
-    <header class="flex flex-col md:flex-row md:justify-between md:align-items-center gap-4 border-b border-brand-border pb-6">
-      <div>
-        <div class="flex items-center gap-3">
-          <span class="iconify text-brand-accent text-3xl" data-icon="solar:shield-up-bold-duotone"></span>
-          <h1 class="font-outfit text-2xl md:text-3xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-brand-accent bg-clip-text text-transparent">
-            Whiteroom Telemetry Command Center
+    <header class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 pb-6 border-b border-brand-border">
+      <div class="space-y-1">
+        <div class="flex items-center gap-2">
+          <span class="iconify text-brand-primary text-3xl" data-icon="solar:shield-check-bold-duotone"></span>
+          <h1 class="font-outfit text-2xl md:text-3xl font-bold tracking-tight text-slate-900">
+            Whiteroom Telemetry Control
           </h1>
         </div>
-        <p class="text-brand-muted text-sm mt-1">Live Operational & Compliance Telemetry for the 100-Student Pilot Program</p>
+        <p class="text-brand-muted text-sm font-medium">Live pilot telemetry report for district administration & incubator review</p>
       </div>
       
-      <div class="flex items-center gap-4 self-start md:self-auto">
-        <div class="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-brand-success text-xs font-semibold tracking-wider">
-          <span class="w-2.5 h-2.5 rounded-full bg-brand-success pulse-live"></span>
-          LIVE TELEMETRY
+      <div class="flex items-center gap-3 self-start sm:self-auto">
+        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          Active Telemetry Connection
         </div>
-        <div id="uptime" class="text-xs text-brand-muted font-medium bg-slate-800/40 px-3 py-1.5 rounded-lg border border-brand-border">
+        <div id="uptime" class="text-xs text-brand-muted font-medium bg-white px-3 py-1.5 rounded-lg border border-brand-border shadow-sm">
           Uptime: --
         </div>
       </div>
     </header>
 
     <!-- ─── PRIMARY METRICS GRID ─── -->
-    <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
       
-      <!-- Students -->
-      <div class="glass-card glow-hover p-5 rounded-2xl transition-all duration-300">
-        <div class="flex items-center justify-between text-brand-muted mb-3">
-          <span class="text-xs font-semibold tracking-wider uppercase">Enrolled Students</span>
-          <span class="iconify text-brand-accent text-xl" data-icon="solar:users-group-two-rounded-bold-duotone"></span>
+      <!-- Students Onboarded -->
+      <div class="bg-brand-card custom-shadow p-6 rounded-2xl border border-brand-border hover:border-brand-primary/30 transition-all">
+        <div class="flex items-center justify-between text-brand-muted mb-4">
+          <span class="text-xs font-bold tracking-wider uppercase text-slate-500">Student Rollout</span>
+          <span class="p-2 rounded-lg bg-indigo-50 text-brand-primary">
+            <span class="iconify text-xl" data-icon="solar:users-group-two-rounded-bold-duotone"></span>
+          </span>
         </div>
-        <div class="font-outfit text-3xl md:text-4xl font-bold text-white mb-2" id="val-students">-</div>
-        <div class="text-xs text-brand-muted flex items-center gap-1">
-          <span class="text-brand-success font-medium">100% Target</span>
-          <span>pre-pilot ready</span>
+        <div class="font-outfit text-4xl font-bold text-slate-900 mb-2" id="val-students">-</div>
+        
+        <!-- Onboarding Progress Bar -->
+        <div class="w-full bg-slate-100 rounded-full h-2 mb-2">
+          <div id="progress-bar-students" class="bg-brand-primary h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
         </div>
-      </div>
-
-      <!-- Total Platform Accounts -->
-      <div class="glass-card glow-hover p-5 rounded-2xl transition-all duration-300">
-        <div class="flex items-center justify-between text-brand-muted mb-3">
-          <span class="text-xs font-semibold tracking-wider uppercase">Active Users</span>
-          <span class="iconify text-brand-accent text-xl" data-icon="solar:user-bold-duotone"></span>
-        </div>
-        <div class="font-outfit text-3xl md:text-4xl font-bold text-white mb-2" id="val-users">-</div>
-        <div class="text-xs text-brand-muted flex items-center gap-1">
-          <span class="text-brand-accentLight font-medium" id="val-users-roles">0 Teachers | 0 Parents</span>
+        <div class="text-xs text-brand-muted flex justify-between">
+          <span>Target: 100 students</span>
+          <span id="percent-students" class="font-semibold text-brand-primary">0%</span>
         </div>
       </div>
 
-      <!-- Communications volume -->
-      <div class="glass-card glow-hover p-5 rounded-2xl transition-all duration-300">
-        <div class="flex items-center justify-between text-brand-muted mb-3">
-          <span class="text-xs font-semibold tracking-wider uppercase">Secure Messages</span>
-          <span class="iconify text-brand-accent text-xl" data-icon="solar:chat-line-bold-duotone"></span>
+      <!-- Active Users Breakdown -->
+      <div class="bg-brand-card custom-shadow p-6 rounded-2xl border border-brand-border hover:border-brand-primary/30 transition-all">
+        <div class="flex items-center justify-between text-brand-muted mb-4">
+          <span class="text-xs font-bold tracking-wider uppercase text-slate-500">Active Accounts</span>
+          <span class="p-2 rounded-lg bg-sky-50 text-sky-600">
+            <span class="iconify text-xl" data-icon="solar:user-bold-duotone"></span>
+          </span>
         </div>
-        <div class="font-outfit text-3xl md:text-4xl font-bold text-white mb-2" id="val-messages">-</div>
-        <div class="text-xs text-brand-muted flex items-center gap-1">
-          <span class="text-brand-success font-medium">WhatsApp Sandboxed</span>
-          <span>via DB pooler</span>
+        <div class="font-outfit text-4xl font-bold text-slate-900 mb-2" id="val-users">-</div>
+        <div class="text-xs text-brand-muted font-medium truncate" id="val-users-roles">
+          0 Teachers | 0 Parents
         </div>
       </div>
 
-      <!-- Classroom Sessions & Announcements -->
-      <div class="glass-card glow-hover p-5 rounded-2xl transition-all duration-300">
-        <div class="flex items-center justify-between text-brand-muted mb-3">
-          <span class="text-xs font-semibold tracking-wider uppercase">Daily Attendance</span>
-          <span class="iconify text-brand-accent text-xl" data-icon="solar:check-square-bold-duotone"></span>
+      <!-- Messages Volume -->
+      <div class="bg-brand-card custom-shadow p-6 rounded-2xl border border-brand-border hover:border-brand-primary/30 transition-all">
+        <div class="flex items-center justify-between text-brand-muted mb-4">
+          <span class="text-xs font-bold tracking-wider uppercase text-slate-500">Secure Messages</span>
+          <span class="p-2 rounded-lg bg-emerald-50 text-emerald-600">
+            <span class="iconify text-xl" data-icon="solar:chat-line-bold-duotone"></span>
+          </span>
         </div>
-        <div class="font-outfit text-3xl md:text-4xl font-bold text-white mb-2" id="val-attendance">-</div>
-        <div class="text-xs text-brand-muted flex items-center gap-1">
-          <span class="text-brand-success font-medium" id="val-announcements">0 bulletins</span>
-          <span>published</span>
+        <div class="font-outfit text-4xl font-bold text-slate-900 mb-2" id="val-messages">-</div>
+        <div class="text-xs text-brand-muted flex items-center gap-1 font-medium">
+          <span class="text-emerald-600">WhatsApp Sandboxed</span>
+        </div>
+      </div>
+
+      <!-- Attendance & Announcements -->
+      <div class="bg-brand-card custom-shadow p-6 rounded-2xl border border-brand-border hover:border-brand-primary/30 transition-all">
+        <div class="flex items-center justify-between text-brand-muted mb-4">
+          <span class="text-xs font-bold tracking-wider uppercase text-slate-500">Attendance Pushes</span>
+          <span class="p-2 rounded-lg bg-amber-50 text-amber-600">
+            <span class="iconify text-xl" data-icon="solar:check-square-bold-duotone"></span>
+          </span>
+        </div>
+        <div class="font-outfit text-4xl font-bold text-slate-900 mb-2" id="val-attendance">-</div>
+        <div class="text-xs text-brand-muted flex items-center gap-1 font-medium" id="val-announcements">
+          0 notices published
         </div>
       </div>
 
@@ -160,68 +144,68 @@ export function pilotDashboardHtmlHandler(c: Context) {
     <!-- ─── DOUBLE COLUMN DETAIL VIEW ─── -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
       
-      <!-- Onboarded Schools & Institutions -->
+      <!-- Left Column: Schools & Compliance -->
       <div class="lg:col-span-1 space-y-6">
         <div>
-          <h2 class="font-outfit text-lg font-semibold flex items-center gap-2 mb-1">
-            <span class="iconify text-brand-accent" data-icon="solar:square-academic-cap-bold-duotone"></span>
-            Onboarded Institutions
+          <h2 class="font-outfit text-lg font-bold text-slate-900 flex items-center gap-2 mb-1">
+            <span class="iconify text-brand-primary" data-icon="solar:square-academic-cap-bold-duotone"></span>
+            Participating Schools
           </h2>
-          <p class="text-xs text-brand-muted">Active pilot environments with secure sandboxing</p>
+          <p class="text-xs text-brand-muted font-medium">Verified tenant workspaces active in the pre-pilot</p>
         </div>
 
         <div class="space-y-4" id="schools-list">
-          <div class="glass-card p-4 rounded-xl text-center text-brand-muted py-8">
-            Loading institutions...
+          <div class="bg-white p-6 rounded-xl border border-brand-border text-center text-brand-muted">
+            Onboarding institutions...
           </div>
         </div>
 
         <!-- Compliance Check Card -->
-        <div class="glass-card p-5 rounded-xl border border-sky-500/20 bg-sky-500/5">
-          <div class="flex items-center gap-2 text-brand-accentLight font-semibold text-sm mb-2">
-            <span class="iconify" data-icon="solar:shield-check-bold"></span>
-            DPDP Act 2023 Compliant
+        <div class="bg-indigo-50/50 p-6 rounded-xl border border-brand-primary/10">
+          <div class="flex items-center gap-2 text-brand-primary font-bold text-sm mb-2">
+            <span class="iconify text-lg" data-icon="solar:shield-keyhole-bold-duotone"></span>
+            Compliance & Legal Scoping
           </div>
-          <p class="text-xs text-brand-muted leading-relaxed">
-            All sandbox communication channels, audit trails, and parental consents satisfy active DPDP data protection obligations for minors.
+          <p class="text-xs text-slate-600 leading-relaxed font-medium">
+            This platform strictly operates under the guidelines of the <strong>DPDP Act 2023</strong>. Personal Identifiable Information (PII) of minors is sandboxed and only shared with verified legal guardians.
           </p>
         </div>
       </div>
 
-      <!-- Live Activities Log -->
+      <!-- Right Column: Audit Log Feed -->
       <div class="lg:col-span-2 space-y-6">
         <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
           <div>
-            <h2 class="font-outfit text-lg font-semibold flex items-center gap-2 mb-1">
-              <span class="iconify text-brand-accent" data-icon="solar:history-bold-duotone"></span>
-              Live System Activity & Audit Trail
+            <h2 class="font-outfit text-lg font-bold text-slate-900 flex items-center gap-2 mb-1">
+              <span class="iconify text-brand-primary" data-icon="solar:history-bold-duotone"></span>
+              Pilot Activity Feed
             </h2>
-            <p class="text-xs text-brand-muted font-sans">Verifiable real-time audit logs of the pilot</p>
+            <p class="text-xs text-brand-muted font-medium">Real-time log of security events and user interactions</p>
           </div>
           
-          <div class="relative min-w-[200px]">
+          <div class="relative">
             <span class="iconify absolute left-3 top-2.5 text-brand-muted" data-icon="solar:magnifer-linear"></span>
             <input 
               type="text" 
               id="search-activities" 
-              placeholder="Filter actions or actors..."
-              class="w-full bg-slate-900/60 border border-brand-border rounded-lg pl-9 pr-4 py-1.5 text-xs text-brand-text focus:outline-none focus:border-brand-accent"
+              placeholder="Search actors, roles, or actions..."
+              class="w-full sm:w-64 bg-white border border-brand-border rounded-lg pl-9 pr-4 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary shadow-sm"
             />
           </div>
         </div>
 
-        <div class="glass-card rounded-2xl overflow-hidden">
+        <div class="bg-brand-card custom-shadow rounded-2xl border border-brand-border overflow-hidden">
           <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
               <thead>
-                <tr class="bg-slate-900/40 text-brand-muted border-b border-brand-border text-xs uppercase font-semibold">
-                  <th class="p-4">Actor</th>
-                  <th class="p-4">Action</th>
-                  <th class="p-4">Resource Target</th>
-                  <th class="p-4 text-right">Timestamp</th>
+                <tr class="bg-slate-50 text-slate-500 border-b border-brand-border text-xs uppercase font-bold tracking-wider">
+                  <th class="p-4">User</th>
+                  <th class="p-4">Action Event</th>
+                  <th class="p-4">Resource Scope</th>
+                  <th class="p-4 text-right">Time</th>
                 </tr>
               </thead>
-              <tbody id="audit-table" class="text-xs font-sans">
+              <tbody id="audit-table" class="text-xs font-medium text-slate-700 divide-y divide-slate-100">
                 <tr>
                   <td colspan="4" class="p-8 text-center text-brand-muted">Loading live activity feed...</td>
                 </tr>
@@ -240,11 +224,11 @@ export function pilotDashboardHtmlHandler(c: Context) {
 
     function getRoleBadgeClass(role) {
       switch(role.toLowerCase()) {
-        case 'super_admin': return 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
-        case 'school_admin': return 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
-        case 'teacher': return 'bg-sky-500/10 text-sky-400 border border-sky-500/20';
-        case 'parent': return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
-        default: return 'bg-slate-700/10 text-slate-400 border border-slate-700/20';
+        case 'super_admin': return 'bg-rose-50 text-rose-700 border border-rose-100';
+        case 'school_admin': return 'bg-amber-50 text-amber-700 border border-amber-100';
+        case 'teacher': return 'bg-indigo-50 text-indigo-700 border border-indigo-100';
+        case 'parent': return 'bg-emerald-50 text-emerald-700 border border-emerald-100';
+        default: return 'bg-slate-50 text-slate-600 border border-slate-100';
       }
     }
 
@@ -258,23 +242,23 @@ export function pilotDashboardHtmlHandler(c: Context) {
           const displayActor = item.actorName ? item.actorName : (item.actor || 'System');
           
           return \`
-            <tr class="border-b border-brand-border/40 hover:bg-slate-800/20 transition-colors">
-              <td class="p-4 font-medium">
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="p-4">
                 <div class="flex flex-col gap-1">
-                  <span class="text-white font-semibold flex items-center gap-1.5">
+                  <span class="text-slate-900 font-bold flex items-center gap-1.5">
                     \${displayActor}
-                    <span class="text-[10px] text-brand-muted font-normal">\${cleanPhone}</span>
+                    <span class="text-[10px] text-slate-400 font-normal">\${cleanPhone}</span>
                   </span>
-                  <span class="px-2 py-0.5 rounded-full text-[9px] font-semibold self-start tracking-wider \${badgeClass}">
+                  <span class="px-2.5 py-0.5 rounded-full text-[9px] font-bold self-start tracking-wider \${badgeClass}">
                     \${formattedRole}
                   </span>
                 </div>
               </td>
               <td class="p-4">
-                <span class="text-brand-accent font-semibold">\${item.action.replace('_', ' ').toUpperCase()}</span>
+                <span class="text-slate-900 font-semibold">\${item.action.replace(/_/g, ' ').toUpperCase()}</span>
               </td>
-              <td class="p-4 text-brand-muted font-mono font-medium">\${item.resource}</td>
-              <td class="p-4 text-right text-brand-muted font-mono">\${new Date(item.createdAt).toLocaleTimeString()}</td>
+              <td class="p-4 text-slate-500 font-mono font-medium">\${item.resource}</td>
+              <td class="p-4 text-right text-slate-400 font-mono">\${new Date(item.createdAt).toLocaleTimeString()}</td>
             </tr>
           \`;
         }).join('');
@@ -290,42 +274,49 @@ export function pilotDashboardHtmlHandler(c: Context) {
         if (!json.success) return;
         const d = json.data;
         
-        // Populate primary stats
-        document.getElementById('val-students').textContent = d.metrics.students;
+        // Populate stats
+        const studentsCount = d.metrics.students || 0;
+        document.getElementById('val-students').textContent = studentsCount;
         document.getElementById('val-users').textContent = d.metrics.totalUsers;
         document.getElementById('val-messages').textContent = d.metrics.chatMessages;
         document.getElementById('val-attendance').textContent = d.metrics.attendanceSessions;
         
+        // Update rollout progress bar
+        const target = 100;
+        const percentage = Math.min(Math.round((studentsCount / target) * 100), 100);
+        document.getElementById('progress-bar-students').style.width = percentage + '%';
+        document.getElementById('percent-students').textContent = percentage + '%';
+
         const rb = d.metrics.rolesBreakdown || {};
         document.getElementById('val-users-roles').textContent = 
           \`\${rb.teacher || 0} Teachers | \${rb.parent || 0} Parents | \${rb.school_admin || 0} Admins\`;
         document.getElementById('val-announcements').textContent = 
-          \`\${d.metrics.announcements || 0} notices & bulletins\`;
+          \`\${d.metrics.announcements || 0} notices published\`;
         
         document.getElementById('uptime').textContent = 
           'Uptime: ' + Math.floor(d.uptimeSeconds / 60) + ' min';
 
-        // Render Schools / Tenants
+        // Render Schools
         const schoolsDiv = document.getElementById('schools-list');
         if (d.activeSchools && d.activeSchools.length > 0) {
           schoolsDiv.innerHTML = d.activeSchools.map(school => \`
-            <div class="glass-card glow-hover p-4 rounded-xl transition-all duration-300">
+            <div class="bg-brand-card p-5 rounded-2xl border border-brand-border custom-shadow hover:border-brand-primary/30 transition-all">
               <div class="flex justify-between items-start mb-2">
-                <h3 class="font-outfit font-semibold text-white text-sm">\${school.name}</h3>
-                <span class="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-500/10 text-brand-success border border-brand-success/20">ACTIVE</span>
+                <h3 class="font-outfit font-bold text-slate-900 text-sm">\${school.name}</h3>
+                <span class="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">ONBOARDED</span>
               </div>
-              <p class="text-xs text-brand-muted flex items-center gap-1.5 mb-1.5">
+              <p class="text-xs text-brand-muted flex items-center gap-1.5 mb-2 font-medium">
                 <span class="iconify" data-icon="solar:pin-bold"></span>
                 \${school.address || 'Address unconfigured'}
               </p>
-              <div class="text-[10px] text-brand-muted font-mono flex justify-between">
-                <span>Slug: /\${school.slug}</span>
-                <span>Code: \${school.phone.slice(-4)}</span>
+              <div class="text-[10px] text-brand-muted font-mono flex justify-between border-t border-slate-100 pt-2">
+                <span>Domain: /\${school.slug}</span>
+                <span>Owner Phone: \${school.phone.slice(0, 3)}***\${school.phone.slice(-3)}</span>
               </div>
             </div>
           \`).join('');
         } else {
-          schoolsDiv.innerHTML = '<div class="glass-card p-4 rounded-xl text-center text-brand-muted text-xs">No active schools onboarded.</div>';
+          schoolsDiv.innerHTML = '<div class="bg-white p-4 rounded-xl text-center text-brand-muted text-xs">No active schools onboarded.</div>';
         }
 
         // Store and render audit logs
@@ -356,7 +347,6 @@ export function pilotDashboardHtmlHandler(c: Context) {
       renderAuditTable(filtered);
     }
 
-    // Set up search listener
     document.getElementById('search-activities').addEventListener('input', filterAndRenderActivities);
 
     fetchStats();
@@ -366,4 +356,5 @@ export function pilotDashboardHtmlHandler(c: Context) {
 </html>`;
   return c.html(html);
 }
+
 
