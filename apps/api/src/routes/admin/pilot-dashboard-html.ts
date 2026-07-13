@@ -9,227 +9,588 @@ export function pilotDashboardHtmlHandler(c: Context) {
   <title>Whiteroom — Pilot Telemetry Center</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://code.iconify.design/3/3.1.0/iconify.min.js"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            outfit: ['Outfit', 'sans-serif'],
-            sans: ['Plus Jakarta Sans', 'sans-serif'],
-          },
-          colors: {
-            brand: {
-              primary: '#4f46e5',     /* Indigo */
-              primaryLight: '#818cf8',
-              bg: '#f8fafc',          /* Slate 50 */
-              card: '#ffffff',
-              border: '#e2e8f0',      /* Slate 200 */
-              text: '#0f172a',        /* Slate 900 */
-              muted: '#64748b'        /* Slate 500 */
-            }
-          }
-        }
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-light: #e0e7ff;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --emerald: #10b981;
+      --emerald-light: #ecfdf5;
+      --emerald-border: #d1fae5;
+      --amber: #f59e0b;
+      --amber-light: #fef3c7;
+      --amber-border: #fde68a;
+      --sky: #0ea5e9;
+      --sky-light: #e0f2fe;
+      --sky-border: #bae6fd;
+      --rose: #ef4444;
+      --rose-light: #fef2f2;
+      --rose-border: #fee2e2;
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      padding: 2rem;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2.5rem;
+    }
+    @media (min-width: 640px) {
+      .header {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
       }
     }
-  </script>
-  <style>
-    body {
-      background-color: #f8fafc;
-      background-image: 
-        radial-gradient(at 0% 0%, rgba(79, 70, 229, 0.05) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.05) 0px, transparent 50%);
+    .header-title-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
     }
-    .custom-shadow {
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.01), 0 20px 25px -5px rgba(0, 0, 0, 0.05);
+    .header-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .header-subtitle {
+      font-size: 0.875rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .header-badge-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .badge-live {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background-color: var(--emerald-light);
+      color: #047857;
+      border: 1px solid var(--emerald-border);
+      padding: 0.4rem 0.8rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--emerald);
+      border-radius: 50%;
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .uptime-badge {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-weight: 600;
+      background-color: #ffffff;
+      padding: 0.4rem 0.8rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    /* Grid layout */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+    @media (min-width: 640px) {
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 1024px) {
+      .metrics-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    /* Card */
+    .card {
+      background-color: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 10px 15px -3px rgba(0, 0, 0, 0.03);
+      transition: all 0.2s ease-in-out;
+    }
+    .card:hover {
+      border-color: rgba(79, 70, 229, 0.2);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .card-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+    .card-icon {
+      font-size: 1.25rem;
+    }
+    .card-value {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2.25rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+    .card-footer {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    /* Progress bar */
+    .progress-container {
+      width: 100%;
+      background-color: #f1f5f9;
+      height: 6px;
+      border-radius: 9999px;
+      margin-bottom: 0.5rem;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background-color: var(--primary);
+      border-radius: 9999px;
+      width: 0%;
+      transition: width 0.6s ease;
+    }
+
+    /* Layout column wrapper */
+    .layout-columns {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2.5rem;
+    }
+    @media (min-width: 1024px) {
+      .layout-columns {
+        grid-template-columns: 1fr 2fr;
+      }
+    }
+
+    .column-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+    .column-subtitle {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-weight: 500;
+      margin-bottom: 1.5rem;
+    }
+
+    /* School cards */
+    .schools-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .school-card {
+      background-color: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+    .school-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+    .school-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .badge-status {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.2rem 0.5rem;
+      border-radius: 9999px;
+      background-color: var(--emerald-light);
+      color: #047857;
+      border: 1px solid var(--emerald-border);
+    }
+    .school-address {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .school-footer {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.65rem;
+      font-family: monospace;
+      color: var(--muted);
+      border-top: 1px solid #f1f5f9;
+      padding-top: 0.75rem;
+    }
+
+    /* Compliance Banner */
+    .compliance-card {
+      background-color: #f5f3ff;
+      border: 1px solid #e0e7ff;
+      padding: 1.25rem;
+      border-radius: 12px;
+    }
+    .compliance-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .compliance-text {
+      font-size: 0.75rem;
+      color: #4f46e5;
+      line-height: 1.5;
+    }
+
+    /* Right column log header */
+    .feed-header-row {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    @media (min-width: 640px) {
+      .feed-header-row {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+      }
+    }
+    .search-wrapper {
+      position: relative;
+      width: 100%;
+    }
+    @media (min-width: 640px) {
+      .search-wrapper {
+        width: 260px;
+      }
+    }
+    .search-input {
+      width: 100%;
+      background-color: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 1rem 0.5rem 2.25rem;
+      font-size: 0.75rem;
+      color: var(--text);
+      outline: none;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+    .search-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+    }
+    .search-icon {
+      position: absolute;
+      left: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 0.85rem;
+      pointer-events: none;
+    }
+
+    /* Table styles */
+    .table-wrapper {
+      background-color: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+      overflow: hidden;
+    }
+    .table-scroll {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    th {
+      background-color: #f8fafc;
+      color: var(--muted);
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 1rem;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 0.75rem;
+      color: #334155;
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+    .actor-name-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .actor-name {
+      font-weight: 700;
+      color: var(--text);
+    }
+    .actor-phone {
+      font-size: 0.65rem;
+      color: var(--muted);
+      font-weight: 400;
+    }
+    .role-tag {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.15rem 0.5rem;
+      border-radius: 9999px;
+      display: inline-block;
+      align-self: flex-start;
+      margin-top: 0.2rem;
+    }
+    .role-super_admin { background-color: var(--rose-light); color: #b91c1c; border: 1px solid var(--rose-border); }
+    .role-school_admin { background-color: var(--amber-light); color: #b45309; border: 1px solid var(--amber-border); }
+    .role-teacher { background-color: var(--sky-light); color: #0369a1; border: 1px solid var(--sky-border); }
+    .role-parent { background-color: var(--emerald-light); color: #047857; border: 1px solid var(--emerald-border); }
+    .role-system { background-color: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+
+    .action-text {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .resource-text {
+      font-family: monospace;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .time-text {
+      font-family: monospace;
+      color: var(--muted);
     }
   </style>
 </head>
-<body class="text-brand-text font-sans min-h-screen p-4 md:p-8">
+<body>
 
-  <div class="max-w-7xl mx-auto space-y-8">
+  <div class="container">
     
-    <!-- ─── HEADER SECTION ─── -->
-    <header class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 pb-6 border-b border-brand-border">
-      <div class="space-y-1">
-        <div class="flex items-center gap-2">
-          <span class="iconify text-brand-primary text-3xl" data-icon="solar:shield-check-bold-duotone"></span>
-          <h1 class="font-outfit text-2xl md:text-3xl font-bold tracking-tight text-slate-900">
-            Whiteroom Telemetry Control
-          </h1>
+    <!-- ─── HEADER ─── -->
+    <header class="header">
+      <div class="header-title-wrapper">
+        <div class="header-title">
+          <span>⚙️</span>
+          <span>Whiteroom Telemetry Control</span>
         </div>
-        <p class="text-brand-muted text-sm font-medium">Live pilot telemetry report for district administration & incubator review</p>
+        <p class="header-subtitle">Live pilot telemetry report for district administration & incubator review</p>
       </div>
       
-      <div class="flex items-center gap-3 self-start sm:self-auto">
-        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          Active Telemetry Connection
+      <div class="header-badge-wrapper">
+        <div class="badge-live">
+          <span class="pulse-dot"></span>
+          LIVE TELEMETRY
         </div>
-        <div id="uptime" class="text-xs text-brand-muted font-medium bg-white px-3 py-1.5 rounded-lg border border-brand-border shadow-sm">
+        <div id="uptime" class="uptime-badge">
           Uptime: --
         </div>
       </div>
     </header>
 
-    <!-- ─── PRIMARY METRICS GRID ─── -->
-    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+    <!-- ─── METRICS GRID ─── -->
+    <section class="metrics-grid">
       
-      <!-- Students Onboarded -->
-      <div class="bg-brand-card custom-shadow p-6 rounded-2xl border border-brand-border hover:border-brand-primary/30 transition-all">
-        <div class="flex items-center justify-between text-brand-muted mb-4">
-          <span class="text-xs font-bold tracking-wider uppercase text-slate-500">Student Rollout</span>
-          <span class="p-2 rounded-lg bg-indigo-50 text-brand-primary">
-            <span class="iconify text-xl" data-icon="solar:users-group-two-rounded-bold-duotone"></span>
-          </span>
+      <!-- Student Rollout -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-label">Student Rollout</span>
+          <span class="card-icon">👥</span>
         </div>
-        <div class="font-outfit text-4xl font-bold text-slate-900 mb-2" id="val-students">-</div>
-        
-        <!-- Onboarding Progress Bar -->
-        <div class="w-full bg-slate-100 rounded-full h-2 mb-2">
-          <div id="progress-bar-students" class="bg-brand-primary h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+        <div class="card-value" id="val-students">-</div>
+        <div class="progress-container">
+          <div id="progress-bar-students" class="progress-bar"></div>
         </div>
-        <div class="text-xs text-brand-muted flex justify-between">
+        <div class="card-footer" style="display:flex; justify-content:space-between">
           <span>Target: 100 students</span>
-          <span id="percent-students" class="font-semibold text-brand-primary">0%</span>
+          <span id="percent-students" style="color: var(--primary)">0%</span>
         </div>
       </div>
 
-      <!-- Active Users Breakdown -->
-      <div class="bg-brand-card custom-shadow p-6 rounded-2xl border border-brand-border hover:border-brand-primary/30 transition-all">
-        <div class="flex items-center justify-between text-brand-muted mb-4">
-          <span class="text-xs font-bold tracking-wider uppercase text-slate-500">Active Accounts</span>
-          <span class="p-2 rounded-lg bg-sky-50 text-sky-600">
-            <span class="iconify text-xl" data-icon="solar:user-bold-duotone"></span>
-          </span>
+      <!-- Active Users -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-label">Active Accounts</span>
+          <span class="card-icon">👤</span>
         </div>
-        <div class="font-outfit text-4xl font-bold text-slate-900 mb-2" id="val-users">-</div>
-        <div class="text-xs text-brand-muted font-medium truncate" id="val-users-roles">
+        <div class="card-value" id="val-users">-</div>
+        <div class="card-footer" id="val-users-roles">
           0 Teachers | 0 Parents
         </div>
       </div>
 
-      <!-- Messages Volume -->
-      <div class="bg-brand-card custom-shadow p-6 rounded-2xl border border-brand-border hover:border-brand-primary/30 transition-all">
-        <div class="flex items-center justify-between text-brand-muted mb-4">
-          <span class="text-xs font-bold tracking-wider uppercase text-slate-500">Secure Messages</span>
-          <span class="p-2 rounded-lg bg-emerald-50 text-emerald-600">
-            <span class="iconify text-xl" data-icon="solar:chat-line-bold-duotone"></span>
-          </span>
+      <!-- Secure Messages -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-label">Secure Messages</span>
+          <span class="card-icon">💬</span>
         </div>
-        <div class="font-outfit text-4xl font-bold text-slate-900 mb-2" id="val-messages">-</div>
-        <div class="text-xs text-brand-muted flex items-center gap-1 font-medium">
-          <span class="text-emerald-600">WhatsApp Sandboxed</span>
+        <div class="card-value" id="val-messages">-</div>
+        <div class="card-footer" style="color: var(--emerald)">
+          WhatsApp Sandboxed
         </div>
       </div>
 
-      <!-- Attendance & Announcements -->
-      <div class="bg-brand-card custom-shadow p-6 rounded-2xl border border-brand-border hover:border-brand-primary/30 transition-all">
-        <div class="flex items-center justify-between text-brand-muted mb-4">
-          <span class="text-xs font-bold tracking-wider uppercase text-slate-500">Attendance Pushes</span>
-          <span class="p-2 rounded-lg bg-amber-50 text-amber-600">
-            <span class="iconify text-xl" data-icon="solar:check-square-bold-duotone"></span>
-          </span>
+      <!-- Attendance Pushes -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-label">Attendance Pushes</span>
+          <span class="card-icon">☑️</span>
         </div>
-        <div class="font-outfit text-4xl font-bold text-slate-900 mb-2" id="val-attendance">-</div>
-        <div class="text-xs text-brand-muted flex items-center gap-1 font-medium" id="val-announcements">
+        <div class="card-value" id="val-attendance">-</div>
+        <div class="card-footer" id="val-announcements">
           0 notices published
         </div>
       </div>
 
     </section>
 
-    <!-- ─── DOUBLE COLUMN DETAIL VIEW ─── -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- ─── DETAIL VIEW columns ─── -->
+    <div class="layout-columns">
       
-      <!-- Left Column: Schools & Compliance -->
-      <div class="lg:col-span-1 space-y-6">
-        <div>
-          <h2 class="font-outfit text-lg font-bold text-slate-900 flex items-center gap-2 mb-1">
-            <span class="iconify text-brand-primary" data-icon="solar:square-academic-cap-bold-duotone"></span>
-            Participating Schools
-          </h2>
-          <p class="text-xs text-brand-muted font-medium">Verified tenant workspaces active in the pre-pilot</p>
-        </div>
+      <!-- Left: School List -->
+      <div class="left-column">
+        <h2 class="column-title">Participating Schools</h2>
+        <p class="column-subtitle">Verified tenant workspaces active in the pre-pilot</p>
 
-        <div class="space-y-4" id="schools-list">
-          <div class="bg-white p-6 rounded-xl border border-brand-border text-center text-brand-muted">
+        <div class="schools-list" id="schools-list">
+          <div class="school-card" style="text-align: center; color: var(--muted)">
             Onboarding institutions...
           </div>
         </div>
 
-        <!-- Compliance Check Card -->
-        <div class="bg-indigo-50/50 p-6 rounded-xl border border-brand-primary/10">
-          <div class="flex items-center gap-2 text-brand-primary font-bold text-sm mb-2">
-            <span class="iconify text-lg" data-icon="solar:shield-keyhole-bold-duotone"></span>
+        <div class="compliance-card">
+          <div class="compliance-title">
+            <span>🛡️</span>
             Compliance & Legal Scoping
           </div>
-          <p class="text-xs text-slate-600 leading-relaxed font-medium">
+          <p class="compliance-text">
             This platform strictly operates under the guidelines of the <strong>DPDP Act 2023</strong>. Personal Identifiable Information (PII) of minors is sandboxed and only shared with verified legal guardians.
           </p>
         </div>
       </div>
 
-      <!-- Right Column: Audit Log Feed -->
-      <div class="lg:col-span-2 space-y-6">
-        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+      <!-- Right: Audit Logs -->
+      <div class="right-column">
+        <div class="feed-header-row">
           <div>
-            <h2 class="font-outfit text-lg font-bold text-slate-900 flex items-center gap-2 mb-1">
-              <span class="iconify text-brand-primary" data-icon="solar:history-bold-duotone"></span>
-              Pilot Activity Feed
-            </h2>
-            <p class="text-xs text-brand-muted font-medium">Real-time log of security events and user interactions</p>
+            <h2 class="column-title">Pilot Activity Feed</h2>
+            <p class="column-subtitle">Real-time log of security events and user interactions</p>
           </div>
           
-          <div class="relative">
-            <span class="iconify absolute left-3 top-2.5 text-brand-muted" data-icon="solar:magnifer-linear"></span>
+          <div class="search-wrapper">
+            <span class="search-icon">🔍</span>
             <input 
               type="text" 
               id="search-activities" 
               placeholder="Search actors, roles, or actions..."
-              class="w-full sm:w-64 bg-white border border-brand-border rounded-lg pl-9 pr-4 py-2 text-xs text-brand-text focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary shadow-sm"
+              class="search-input"
             />
           </div>
         </div>
 
-        <div class="bg-brand-card custom-shadow rounded-2xl border border-brand-border overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
+        <div class="table-wrapper">
+          <div class="table-scroll">
+            <table>
               <thead>
-                <tr class="bg-slate-50 text-slate-500 border-b border-brand-border text-xs uppercase font-bold tracking-wider">
-                  <th class="p-4">User</th>
-                  <th class="p-4">Action Event</th>
-                  <th class="p-4">Resource Scope</th>
-                  <th class="p-4 text-right">Time</th>
+                <tr>
+                  <th>User</th>
+                  <th>Action Event</th>
+                  <th>Resource Scope</th>
+                  <th style="text-align: right">Time</th>
                 </tr>
               </thead>
-              <tbody id="audit-table" class="text-xs font-medium text-slate-700 divide-y divide-slate-100">
+              <tbody id="audit-table">
                 <tr>
-                  <td colspan="4" class="p-8 text-center text-brand-muted">Loading live activity feed...</td>
+                  <td colspan="4" style="text-align: center; padding: 2rem; color: var(--muted)">
+                    Loading live activity feed...
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
       </div>
-
     </div>
-
   </div>
 
   <script>
     let rawActivity = [];
 
     function getRoleBadgeClass(role) {
-      switch(role.toLowerCase()) {
-        case 'super_admin': return 'bg-rose-50 text-rose-700 border border-rose-100';
-        case 'school_admin': return 'bg-amber-50 text-amber-700 border border-amber-100';
-        case 'teacher': return 'bg-indigo-50 text-indigo-700 border border-indigo-100';
-        case 'parent': return 'bg-emerald-50 text-emerald-700 border border-emerald-100';
-        default: return 'bg-slate-50 text-slate-600 border border-slate-100';
+      if (!role) return 'role-system';
+      const cleanRole = role.toLowerCase();
+      if (['super_admin', 'school_admin', 'teacher', 'parent', 'system'].includes(cleanRole)) {
+        return 'role-' + cleanRole;
       }
+      return 'role-system';
     }
 
     function renderAuditTable(filteredLogs) {
@@ -237,33 +598,37 @@ export function pilotDashboardHtmlHandler(c: Context) {
       if (filteredLogs && filteredLogs.length > 0) {
         tbody.innerHTML = filteredLogs.map(item => {
           const badgeClass = getRoleBadgeClass(item.role);
-          const formattedRole = item.role.replace('_', ' ').toUpperCase();
+          const formattedRole = item.role ? item.role.replace('_', ' ').toUpperCase() : 'SYSTEM';
           const cleanPhone = item.actorPhone ? ' (' + item.actorPhone.slice(-4) + ')' : '';
           const displayActor = item.actorName ? item.actorName : (item.actor || 'System');
           
           return \`
-            <tr class="hover:bg-slate-50 transition-colors">
-              <td class="p-4">
-                <div class="flex flex-col gap-1">
-                  <span class="text-slate-900 font-bold flex items-center gap-1.5">
+            <tr>
+              <td>
+                <div class="actor-name-wrapper">
+                  <span class="actor-name">
                     \${displayActor}
-                    <span class="text-[10px] text-slate-400 font-normal">\${cleanPhone}</span>
+                    <span class="actor-phone">\${cleanPhone}</span>
                   </span>
-                  <span class="px-2.5 py-0.5 rounded-full text-[9px] font-bold self-start tracking-wider \${badgeClass}">
+                  <span class="role-tag \${badgeClass}">
                     \${formattedRole}
                   </span>
                 </div>
               </td>
-              <td class="p-4">
-                <span class="text-slate-900 font-semibold">\${item.action.replace(/_/g, ' ').toUpperCase()}</span>
+              <td>
+                <span class="action-text">\${item.action.replace(/_/g, ' ').toUpperCase()}</span>
               </td>
-              <td class="p-4 text-slate-500 font-mono font-medium">\${item.resource}</td>
-              <td class="p-4 text-right text-slate-400 font-mono">\${new Date(item.createdAt).toLocaleTimeString()}</td>
+              <td>
+                <span class="resource-text">\${item.resource}</span>
+              </td>
+              <td style="text-align: right" class="time-text">
+                \${new Date(item.createdAt).toLocaleTimeString()}
+              </td>
             </tr>
           \`;
         }).join('');
       } else {
-        tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-brand-muted">No matching audit logs found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 2rem; color: var(--muted)">No matching audit logs found.</td></tr>';
       }
     }
 
@@ -281,7 +646,7 @@ export function pilotDashboardHtmlHandler(c: Context) {
         document.getElementById('val-messages').textContent = d.metrics.chatMessages;
         document.getElementById('val-attendance').textContent = d.metrics.attendanceSessions;
         
-        // Update rollout progress bar
+        // Update progress bar
         const target = 100;
         const percentage = Math.min(Math.round((studentsCount / target) * 100), 100);
         document.getElementById('progress-bar-students').style.width = percentage + '%';
@@ -300,23 +665,23 @@ export function pilotDashboardHtmlHandler(c: Context) {
         const schoolsDiv = document.getElementById('schools-list');
         if (d.activeSchools && d.activeSchools.length > 0) {
           schoolsDiv.innerHTML = d.activeSchools.map(school => \`
-            <div class="bg-brand-card p-5 rounded-2xl border border-brand-border custom-shadow hover:border-brand-primary/30 transition-all">
-              <div class="flex justify-between items-start mb-2">
-                <h3 class="font-outfit font-bold text-slate-900 text-sm">\${school.name}</h3>
-                <span class="px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">ONBOARDED</span>
+            <div class="school-card">
+              <div class="school-card-header">
+                <span class="school-name">\${school.name}</span>
+                <span class="badge-status">ONBOARDED</span>
               </div>
-              <p class="text-xs text-brand-muted flex items-center gap-1.5 mb-2 font-medium">
-                <span class="iconify" data-icon="solar:pin-bold"></span>
+              <div class="school-address">
+                <span>📍</span>
                 \${school.address || 'Address unconfigured'}
-              </p>
-              <div class="text-[10px] text-brand-muted font-mono flex justify-between border-t border-slate-100 pt-2">
+              </div>
+              <div class="school-footer">
                 <span>Domain: /\${school.slug}</span>
-                <span>Owner Phone: \${school.phone.slice(0, 3)}***\${school.phone.slice(-3)}</span>
+                <span>Owner: \${school.phone.slice(0, 3)}***\${school.phone.slice(-3)}</span>
               </div>
             </div>
           \`).join('');
         } else {
-          schoolsDiv.innerHTML = '<div class="bg-white p-4 rounded-xl text-center text-brand-muted text-xs">No active schools onboarded.</div>';
+          schoolsDiv.innerHTML = '<div class="school-card" style="text-align: center; color: var(--muted)">No active schools onboarded.</div>';
         }
 
         // Store and render audit logs
@@ -356,5 +721,3 @@ export function pilotDashboardHtmlHandler(c: Context) {
 </html>`;
   return c.html(html);
 }
-
-
