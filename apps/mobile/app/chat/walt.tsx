@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Alert,
   Linking,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -322,19 +323,16 @@ export default function WaltChatScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+        style={styles.keyboardContainer}
       >
-        <View style={[styles.inputContainer, isFocused && styles.inputContainerFocused]}>
-          <View style={[styles.inputWrapper, isFocused && styles.inputWrapperFocused]}>
-            <Sparkles size={16} color={isFocused ? "#4F46E5" : colors.teal} style={styles.inputIcon} />
+        <View style={styles.newInputContainer}>
+          <View style={styles.newInputWrapper}>
             <TextInput
-              style={styles.input}
+              style={styles.newInput}
               placeholder="Ask Walt a doubt..."
               placeholderTextColor="#94A3B8"
               value={input}
               onChangeText={setInput}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-              editable={true}
               multiline={true}
               autoCapitalize="sentences"
             />
@@ -344,14 +342,17 @@ export default function WaltChatScreen() {
             disabled={waltMutation.isPending || !input.trim()}
             activeOpacity={0.8}
             style={[
-              styles.sendButton,
-              (!input.trim() || waltMutation.isPending) && styles.sendButtonDisabled,
+              styles.newSendButton,
+              (!input.trim() || waltMutation.isPending) && styles.newSendButtonDisabled,
             ]}
           >
             {waltMutation.isPending ? (
               <ActivityIndicator color={colors.white} size="small" />
             ) : (
-              <Send color={colors.white} size={16} style={styles.sendIcon} />
+              <Image
+                source={require("@/assets/send-icon.png")}
+                style={{ width: 20, height: 20, tintColor: colors.white }}
+              />
             )}
           </TouchableOpacity>
         </View>
@@ -556,6 +557,46 @@ const styles = StyleSheet.create({
   },
   sendIcon: {
     marginLeft: 2,
+  },
+  keyboardContainer: {
+    width: "100%",
+  },
+  newInputContainer: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: colors.white,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+  },
+  newInputWrapper: {
+    flex: 1,
+    backgroundColor: "#F1F5F9",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minHeight: 40,
+    maxHeight: 100,
+  },
+  newInput: {
+    fontSize: 15,
+    color: colors.navy,
+    padding: 0,
+    margin: 0,
+    textAlignVertical: "bottom",
+  },
+  newSendButton: {
+    backgroundColor: "#4F46E5",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 8,
+  },
+  newSendButtonDisabled: {
+    backgroundColor: "#CBD5E1",
   },
   teacherBar: {
     backgroundColor: colors.white,

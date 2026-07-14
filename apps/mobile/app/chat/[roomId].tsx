@@ -473,10 +473,9 @@ const AnimatedSendButton = ({
                 opacity: flightOpacity,
               }}
             >
-              <Send
-                color="#FFFFFF"
-                size={20}
-                style={{ marginLeft: 2, transform: [{ rotate: "-15deg" }] }}
+              <Image
+                source={require("@/assets/send-icon.png")}
+                style={{ width: 20, height: 20, tintColor: "#FFFFFF" }}
               />
             </Animated.View>
             <View style={styles.sendSparkleBadge}>
