@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { Alert } from "react-native";
+import { Alert, Linking } from "react-native";
+import Constants from "expo-constants";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -28,6 +29,44 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
+    async function checkAPKUpdateAsync() {
+      try {
+        const apiBaseUrl =
+          (Constants.expoConfig?.extra?.apiBaseUrl as string) ||
+          "https://whiteroomapi-production-7011.up.railway.app/api/v1";
+        const currentVersion = Constants.expoConfig?.version || "0.0.1";
+        const response = await fetch(
+          `${apiBaseUrl.replace(/\/v1$/, "")}/v1/app-version`
+        );
+        if (!response.ok) return;
+
+        const config = await response.json();
+        if (
+          config?.latestVersion &&
+          config.latestVersion !== currentVersion &&
+          config.forceUpdate
+        ) {
+          Alert.alert(
+            "New Update Required 🚀",
+            `Whiteroom v${config.latestVersion} is now available. Please download and install the latest update to continue.`,
+            [
+              {
+                text: "Download Update",
+                onPress: () => {
+                  if (config.apkUrl) {
+                    Linking.openURL(config.apkUrl);
+                  }
+                },
+              },
+            ],
+            { cancelable: false }
+          );
+        }
+      } catch (error) {
+        console.log("Error checking APK version:", error);
+      }
+    }
+
     async function onFetchUpdateAsync() {
       try {
         if (typeof Updates.checkForUpdateAsync !== "function") {
@@ -59,6 +98,7 @@ export default function RootLayout() {
       }
     }
 
+    checkAPKUpdateAsync();
     if (!__DEV__ && Updates.isEnabled) {
       onFetchUpdateAsync();
     }

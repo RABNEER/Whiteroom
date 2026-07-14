@@ -2,10 +2,23 @@ import { Hono } from "hono";
 import { html } from "hono/html";
 import { db } from "../../lib/db.js";
 import { tenants, eq, and } from "@whiteroom/db";
+import { env } from "../../lib/env.js";
 
 const publicRoutes = new Hono();
 
+// ─── APK Version & Update Configuration ───
+publicRoutes.get("/api/v1/app-version", (c) => {
+  return c.json({
+    latestVersion: env.LATEST_APP_VERSION || "0.0.1",
+    apkUrl:
+      env.APK_DOWNLOAD_URL ||
+      "https://whiteroomapi-production-7011.up.railway.app/api/v1/storage/files/whiteroom-latest.apk",
+    forceUpdate: env.FORCE_UPDATE_REQUIRED === "true",
+  });
+});
+
 // ─── Universal / App Link Validation ───
+
 
 publicRoutes.get("/.well-known/apple-app-site-association", (c) => {
   return c.json({

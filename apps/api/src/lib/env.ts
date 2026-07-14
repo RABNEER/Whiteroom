@@ -53,6 +53,9 @@ const envSchema = z.object({
   WHATSAPP_WEBHOOK_SECRET: z.string().min(1).optional(),
   WHATSAPP_WEBHOOK_URL: z.string().url().optional(),
   TURNSTILE_SECRET_KEY: z.string().optional(),
+  LATEST_APP_VERSION: z.string().optional(),
+  APK_DOWNLOAD_URL: z.string().optional(),
+  FORCE_UPDATE_REQUIRED: z.string().optional(),
 }).superRefine((value, ctx) => {
   if (value.NODE_ENV === "production") {
     if (!value.JWT_PRIVATE_KEY) {
