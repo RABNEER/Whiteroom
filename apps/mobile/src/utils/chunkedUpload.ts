@@ -141,7 +141,13 @@ export async function uploadFileInChunks(options: ChunkedUploadOptions) {
 
     // 2. Compute local checksum of the base64 content
     const checksum = sha256(base64Data);
-    const fileSize = Math.round((base64Data.length * 3) / 4); // Approximate binary size
+    let padding = 0;
+    if (base64Data.endsWith("==")) {
+      padding = 2;
+    } else if (base64Data.endsWith("=")) {
+      padding = 1;
+    }
+    const fileSize = (base64Data.length * 3) / 4 - padding;
     
     // Chunk size: 1MB (binary) -> 1,398,104 characters in base64 (each 3 bytes = 4 chars)
     const base64ChunkSize = 1398104;

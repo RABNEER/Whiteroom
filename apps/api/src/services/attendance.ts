@@ -49,6 +49,22 @@ export async function createAttendanceSession(
       )
     );
 
+  const [existing] = await db
+    .select()
+    .from(attendanceSessions)
+    .where(
+      and(
+        eq(attendanceSessions.tenantId, tenantId),
+        eq(attendanceSessions.classId, input.classId),
+        eq(attendanceSessions.date, input.date)
+      )
+    )
+    .limit(1);
+
+  if (existing) {
+    return existing;
+  }
+
   const [session] = await db
     .insert(attendanceSessions)
     .values({

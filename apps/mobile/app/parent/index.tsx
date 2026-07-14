@@ -663,6 +663,12 @@ function ChildClassDetail({
     enabled: Boolean(selectedChild?.id && classId),
   });
 
+  const schedulesQuery = useQuery({
+    queryKey: ['schedules', classId],
+    queryFn: () => api.schedules(classId!),
+    enabled: Boolean(classId && subTab === 'info'),
+  });
+
   // FIX: No pagination on list endpoints — will OOM at 1000+ students
   const logs = attendance.data?.data ?? (Array.isArray(attendance.data) ? attendance.data : []);
   const presentCount = logs.filter((l) => l.status === 'present').length;
@@ -736,12 +742,28 @@ function ChildClassDetail({
           </Banner>
           <Card>
             <Eyebrow>SCHEDULE</Eyebrow>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
-              <Clock size={14} color={colors.teal} />
-              <Text style={{ color: colors.navy, fontSize: 14, fontWeight: '600' }}>
-                View from teacher's timetable
-              </Text>
-            </View>
+            {schedulesQuery.isLoading ? (
+              <ActivityIndicator color={colors.teal} style={{ marginTop: 12 }} />
+            ) : (schedulesQuery.data ?? []).length === 0 ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                <Clock size={14} color={colors.teal} />
+                <Text style={{ color: '#64748B', fontSize: 13 }}>No schedule configured for this class yet.</Text>
+              </View>
+            ) : (
+              <View style={{ marginTop: 8, gap: 8 }}>
+                {(schedulesQuery.data ?? []).map((sch) => (
+                  <View key={sch.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Clock size={14} color={colors.teal} />
+                      <Text style={{ color: colors.navy, fontSize: 14, fontWeight: '600' }}>{sch.dayOfWeek}</Text>
+                    </View>
+                    <Text style={{ color: '#64748B', fontSize: 13, fontWeight: '500' }}>
+                      {sch.startTime} - {sch.endTime}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </Card>
           <View style={s.card}>
             <Text style={[s.sectionTitle, { marginBottom: 12 }]}>CLASS</Text>

@@ -484,7 +484,7 @@ function ClassDetailView({
         onChange={(v) => setSubTab(v as SubTab)}
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginTop: 16 }}>
+      <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1, marginTop: 16 }} contentContainerStyle={{ paddingBottom: 120 }}>
         {subTab === 'Attendance' && <AttendanceView classId={cls.id} />}
         {subTab === 'Students' && <StudentsView classId={cls.id} />}
         {subTab === 'Schedule' && <ScheduleView classId={cls.id} />}
@@ -545,14 +545,54 @@ function AttendanceView({ classId }: { classId: string }) {
     queryFn: () => api.classStudents(classId),
   });
 
+  const existingSessions = useQuery({
+    queryKey: ['sessions', classId, todayIsoDate()],
+    queryFn: () => api.attendanceSessions({ classId, date: todayIsoDate() }),
+  });
+
+  useEffect(() => {
+    const sessionList = existingSessions.data?.data ?? [];
+    if (!sessionId && sessionList.length > 0) {
+      const todaySession = sessionList.find(s => s.classId === classId && s.date === todayIsoDate());
+      if (todaySession) {
+        setSessionId(todaySession.id);
+        api.attendanceSession(todaySession.id).then((detail) => {
+          if (detail.records && detail.records.length > 0) {
+            const initial: Record<string, AttendanceStatus> = {};
+            detail.records.forEach((r) => { initial[r.studentId] = r.status as AttendanceStatus; });
+            setRecords(initial);
+          } else {
+            const initial: Record<string, AttendanceStatus> = {};
+            const studentList = students.data?.data ?? [];
+            studentList.forEach((st) => { initial[st.id] = 'present'; });
+            setRecords(initial);
+          }
+        }).catch(() => {});
+      }
+    }
+  }, [existingSessions.data, classId, sessionId, students.data]);
+
   const createSession = useMutation({
     mutationFn: () => api.attendanceCreateSession({ classId, date: todayIsoDate() }),
     onSuccess: (session) => {
       setSessionId(session.id);
-      const initial: Record<string, AttendanceStatus> = {};
-      const studentList = students.data?.data ?? [];
-      studentList.forEach((st) => { initial[st.id] = 'present'; });
-      setRecords(initial);
+      api.attendanceSession(session.id).then((detail) => {
+        if (detail.records && detail.records.length > 0) {
+          const initial: Record<string, AttendanceStatus> = {};
+          detail.records.forEach((r) => { initial[r.studentId] = r.status as AttendanceStatus; });
+          setRecords(initial);
+        } else {
+          const initial: Record<string, AttendanceStatus> = {};
+          const studentList = students.data?.data ?? [];
+          studentList.forEach((st) => { initial[st.id] = 'present'; });
+          setRecords(initial);
+        }
+      }).catch(() => {
+        const initial: Record<string, AttendanceStatus> = {};
+        const studentList = students.data?.data ?? [];
+        studentList.forEach((st) => { initial[st.id] = 'present'; });
+        setRecords(initial);
+      });
     },
     onError: (err: unknown) => {
       showAlert(
@@ -565,7 +605,7 @@ function AttendanceView({ classId }: { classId: string }) {
   const markAttendance = useMutation({
     mutationFn: async () => {
       const payload = {
-        idempotencyKey: `${classId}-${todayIsoDate()}`,
+        idempotencyKey: `${classId}-${todayIsoDate()}-${Date.now()}`,
         records: Object.entries(records).map(([studentId, status]) => ({ studentId, status })),
       };
 
@@ -607,7 +647,7 @@ function AttendanceView({ classId }: { classId: string }) {
 
   const markAllPresent = useMutation({
     mutationFn: async () => {
-      const idempotencyKey = `${classId}-${todayIsoDate()}-all-present`;
+      const idempotencyKey = `${classId}-${todayIsoDate()}-all-present-${Date.now()}`;
       
       if (!online) {
         showAlert('Offline Mode', 'One-tap attendance requires an internet connection.');
@@ -795,18 +835,35 @@ function StudentRow({
 function StudentsView({ classId }: { classId: string }) {
   const qc = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
+  const [addMode, setAddMode] = useState<'create' | 'existing'>('create');
   const [newName, setNewName] = useState('');
   const [newRoll, setNewRoll] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
   const students = useQuery({
     queryKey: ['classStudents', classId],
     queryFn: () => api.classStudents(classId),
   });
 
+  const allStudents = useQuery({
+    queryKey: ['students'],
+    queryFn: () => api.students(1, 100),
+    enabled: showAdd && addMode === 'existing',
+  });
+
   const addStudent = useMutation({
     mutationFn: async () => {
+      if (addMode === 'existing' && selectedStudentId) {
+        await api.classAddStudents(classId, [selectedStudentId]);
+        return { id: selectedStudentId };
+      }
       // Create the student globally, then enroll them into this specific class
-      const student = await api.studentCreate({ name: newName.trim(), rollNumber: newRoll.trim() || undefined });
+      const student = await api.studentCreate({
+        name: newName.trim(),
+        rollNumber: newRoll.trim() || undefined,
+        phone: newPhone.trim() || undefined,
+      });
       await api.classAddStudents(classId, [student.id]);
       return student;
     },
@@ -815,6 +872,8 @@ function StudentsView({ classId }: { classId: string }) {
       qc.invalidateQueries({ queryKey: ['students'] });
       setNewName('');
       setNewRoll('');
+      setNewPhone('');
+      setSelectedStudentId(null);
       setShowAdd(false);
     },
     onError: (err: unknown) => {
@@ -822,34 +881,89 @@ function StudentsView({ classId }: { classId: string }) {
     },
   });
 
+  const enrolledIds = new Set((students.data?.data ?? []).map(s => s.id));
+  const availableStudents = (allStudents.data?.data ?? []).filter(s => !enrolledIds.has(s.id));
+
   return (
     <View>
       {showAdd ? (
         <Card style={{ marginBottom: 12 }}>
-          <Text style={s.formTitle}>Add Student</Text>
-          <Field
-            label="NAME"
-            placeholder="Rahul Kumar"
-            value={newName}
-            onChangeText={setNewName}
-          />
-          <Field
-            label="ROLL NUMBER (OPTIONAL)"
-            placeholder="07"
-            value={newRoll}
-            onChangeText={setNewRoll}
-          />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={s.formTitle}>Add Student</Text>
+            <Segmented
+              value={addMode}
+              options={[
+                { value: 'create', label: 'Create New' },
+                { value: 'existing', label: 'Pick Existing' },
+              ]}
+              onChange={(v) => setAddMode(v as any)}
+            />
+          </View>
+
+          {addMode === 'create' ? (
+            <>
+              <Field
+                label="NAME"
+                placeholder="Rahul Kumar"
+                value={newName}
+                onChangeText={setNewName}
+              />
+              <Field
+                label="ROLL NUMBER (OPTIONAL)"
+                placeholder="07"
+                value={newRoll}
+                onChangeText={setNewRoll}
+              />
+              <Field
+                label="PARENT PHONE (REQUIRED FOR SIBLINGS & PARENT LINKING)"
+                placeholder="9876543210"
+                value={newPhone}
+                onChangeText={setNewPhone}
+                keyboardType="phone-pad"
+              />
+            </>
+          ) : (
+            <View style={{ marginBottom: 16 }}>
+              {allStudents.isLoading ? (
+                <ActivityIndicator color={colors.teal} style={{ marginVertical: 12 }} />
+              ) : availableStudents.length === 0 ? (
+                <Text style={{ color: '#64748B', fontSize: 13, paddingVertical: 8 }}>No other students available in the school.</Text>
+              ) : (
+                <ScrollView style={{ maxHeight: 200 }}>
+                  {availableStudents.map(st => (
+                    <Pressable
+                      key={st.id}
+                      onPress={() => setSelectedStudentId(st.id)}
+                      style={{
+                        padding: 10,
+                        borderRadius: 8,
+                        backgroundColor: selectedStudentId === st.id ? '#E0F2FE' : 'transparent',
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text style={{ color: colors.navy, fontWeight: '500' }}>{st.name} {st.rollNumber ? `(#${st.rollNumber})` : ''}</Text>
+                      {selectedStudentId === st.id && <Text style={{ color: colors.teal, fontWeight: 'bold' }}>✓ Selected</Text>}
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          )}
+
           <View style={s.formButtons}>
             <Button variant="ghost" onPress={() => setShowAdd(false)} style={{ flex: 1 }}>
               Cancel
             </Button>
             <Button
               onPress={() => addStudent.mutate()}
-              disabled={!newName.trim()}
+              disabled={addMode === 'create' ? !newName.trim() : !selectedStudentId}
               loading={addStudent.isPending}
               style={{ flex: 1 }}
             >
-              Add
+              {addMode === 'create' ? 'Add' : 'Enroll'}
             </Button>
           </View>
         </Card>
@@ -1107,6 +1221,16 @@ function ScheduleView({ classId }: { classId: string }) {
     },
   });
 
+  const deleteSchedule = useMutation({
+    mutationFn: (id: string) => api.scheduleDelete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['classSchedules', classId] });
+    },
+    onError: (err: any) => {
+      showAlert('Error', err?.message || 'Failed to delete schedule');
+    },
+  });
+
   const days = [
     { value: 'monday', label: 'M' },
     { value: 'tuesday', label: 'T' },
@@ -1226,7 +1350,7 @@ function ScheduleView({ classId }: { classId: string }) {
       ) : (
         <View style={{ gap: 10 }}>
           {schedules.data.map((schedule) => (
-            <View key={schedule.id} style={[s.classCard, { marginHorizontal: 0, marginBottom: 0 }]}>
+            <View key={schedule.id} style={[s.classCard, { marginHorizontal: 0, marginBottom: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
               <View style={s.classCardLeft}>
                 <View style={s.classIconBox}>
                   <Text style={{ fontSize: 16 }}>⏰</Text>
@@ -1238,6 +1362,13 @@ function ScheduleView({ classId }: { classId: string }) {
                   </Text>
                 </View>
               </View>
+              <Pressable
+                onPress={() => deleteSchedule.mutate(schedule.id)}
+                disabled={deleteSchedule.isPending}
+                style={{ padding: 8 }}
+              >
+                <Trash2 size={16} color={colors.danger} />
+              </Pressable>
             </View>
           ))}
         </View>

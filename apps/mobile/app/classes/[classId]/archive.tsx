@@ -10,6 +10,8 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
+  Modal,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -29,6 +31,7 @@ import { api } from "@/api/client";
 import { useSession } from "@/auth/session-store";
 import { colors, spacing, font, radius } from "@/theme/tokens";
 import { uploadFileInChunks } from "@/utils/chunkedUpload";
+import * as DocumentPicker from "expo-document-picker";
 
 export default function ClassroomArchiveScreen() {
   const { classId } = useLocalSearchParams<{ classId: string }>();
@@ -37,6 +40,9 @@ export default function ClassroomArchiveScreen() {
   const user = useSession((state) => state.user);
 
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [newCategory, setNewCategory] = useState("");
+  const [pickedFile, setPickedFile] = useState<any | null>(null);
 
   // Fetch Archive Files
   const { data: files = [], isLoading, isRefetching, refetch } = useQuery({
@@ -93,31 +99,60 @@ export default function ClassroomArchiveScreen() {
     },
   });
 
-  const handleMockUpload = () => {
-    Alert.prompt(
-      "Upload Study File",
-      "Enter a category/folder name (e.g. Chapter 4, Homework):",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Upload",
-          onPress: (categoryName) => {
-            const randomId = Math.random().toString(36).substring(7);
-            // Statically encoded base64 matching a mock PDF content (Original quality)
-            const dataUri = "data:application/pdf;base64,VGhpcyBpcyBhIG1vY2sgc3R1ZHkgbm90ZSBkb2N1bWVudCB3aXRoIG9yaWdpbmFsIHF1YWxpdHkgcHJlc2VydmVkLg==";
-            
-            uploadMutation.mutate({
-              file: {
-                uri: dataUri,
-                name: `StudyNotes_${randomId}.pdf`,
-                type: "application/pdf",
-              },
-              category: categoryName || "General",
-            });
+  const handleFileUpload = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+      const file = result.assets[0];
+      setPickedFile(file);
+      setNewCategory("General");
+      setModalVisible(true);
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error", "Failed to select document");
+    }
+  };
+
+  const executeUpload = async (categoryName: string) => {
+    if (!pickedFile) return;
+
+    try {
+      setUploadProgress(0);
+
+      // Read picked file as Data URI using standard fetch & FileReader
+      const response = await fetch(pickedFile.uri);
+      const blob = await response.blob();
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUri = reader.result as string;
+
+        uploadMutation.mutate({
+          file: {
+            uri: dataUri,
+            name: pickedFile.name,
+            type: pickedFile.mimeType || "application/octet-stream",
           },
-        },
-      ]
-    );
+          category: categoryName || "General",
+        });
+      };
+
+      reader.onerror = () => {
+        Alert.alert("Error", "Failed to read file");
+        setUploadProgress(null);
+      };
+
+      reader.readAsDataURL(blob);
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert("Error", err.message || "Failed to process file");
+      setUploadProgress(null);
+    }
   };
 
   const handleDelete = (fileId: string) => {
@@ -175,7 +210,7 @@ export default function ClassroomArchiveScreen() {
           <Text style={styles.headerSub}>Classroom Files & Reference Materials</Text>
         </View>
         {isTeacherOrAdmin && (
-          <TouchableOpacity onPress={handleMockUpload} style={styles.uploadBtn}>
+          <TouchableOpacity onPress={handleFileUpload} style={styles.uploadBtn}>
             <Plus color={colors.white} size={20} />
           </TouchableOpacity>
         )}
@@ -206,7 +241,7 @@ export default function ClassroomArchiveScreen() {
             Teachers have not uploaded study guides, notes, or worksheets yet.
           </Text>
           {isTeacherOrAdmin && (
-            <TouchableOpacity onPress={handleMockUpload} style={styles.emptyUploadBtn}>
+            <TouchableOpacity onPress={handleFileUpload} style={styles.emptyUploadBtn}>
               <Upload size={16} color={colors.white} style={{ marginRight: 8 }} />
               <Text style={styles.emptyUploadText}>Upload First File</Text>
             </TouchableOpacity>
@@ -283,6 +318,45 @@ export default function ClassroomArchiveScreen() {
           )}
         </View>
       )}
+      {/* Upload Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Upload Study File</Text>
+            <Text style={styles.modalLabel}>Enter a category/folder name (e.g. Chapter 4, Homework):</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={newCategory}
+              onChangeText={setNewCategory}
+              placeholder="e.g. General"
+              placeholderTextColor="#94A3B8"
+              autoFocus
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnCancel]}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnSubmit]}
+                onPress={() => {
+                  setModalVisible(false);
+                  executeUpload(newCategory);
+                }}
+              >
+                <Text style={styles.modalBtnSubmitText}>Upload</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -482,5 +556,74 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "700",
     textTransform: "uppercase",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.lg,
+  },
+  modalContent: {
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    width: "100%",
+    maxWidth: 400,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.navy,
+    marginBottom: spacing.xs,
+  },
+  modalLabel: {
+    fontSize: 13,
+    color: colors.teal,
+    marginBottom: spacing.md,
+    lineHeight: 18,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    fontSize: 15,
+    color: colors.navy,
+    marginBottom: spacing.lg,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: spacing.sm,
+  },
+  modalBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBtnCancel: {
+    backgroundColor: "#F1F5F9",
+  },
+  modalBtnCancelText: {
+    color: colors.navy,
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  modalBtnSubmit: {
+    backgroundColor: colors.navy,
+  },
+  modalBtnSubmitText: {
+    color: colors.white,
+    fontWeight: "600",
+    fontSize: 14,
   },
 });

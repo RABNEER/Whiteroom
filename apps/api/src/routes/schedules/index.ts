@@ -9,11 +9,10 @@ import { deleteScheduleHandler } from "./delete.js";
 const scheduleRoutes = new Hono();
 
 scheduleRoutes.use("*", authMiddleware);
-scheduleRoutes.use("*", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN));
 
-scheduleRoutes.post("/", createScheduleHandler);
-scheduleRoutes.get("/", listSchedulesHandler);
-scheduleRoutes.patch("/:id", updateScheduleHandler);
-scheduleRoutes.delete("/:id", deleteScheduleHandler);
+scheduleRoutes.get("/", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN, UserRole.PARENT), listSchedulesHandler);
+scheduleRoutes.post("/", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), createScheduleHandler);
+scheduleRoutes.patch("/:id", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), updateScheduleHandler);
+scheduleRoutes.delete("/:id", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), deleteScheduleHandler);
 
 export { scheduleRoutes };

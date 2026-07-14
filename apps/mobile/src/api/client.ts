@@ -301,6 +301,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  scheduleDelete: (id: string) =>
+    request<{ deleted: boolean }>(`/schedules/${id}`, { method: "DELETE" }),
   attendanceSessions: (filters?: { classId?: string; date?: string; page?: number; limit?: number }) => {
     const params = new URLSearchParams();
     if (filters?.classId) params.set("classId", filters.classId);
