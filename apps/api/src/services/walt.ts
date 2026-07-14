@@ -103,28 +103,37 @@ export async function generateCompletion(
 
   // 1. Try Groq if key is present
   if (groqApiKey) {
-    try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${groqApiKey}`,
-        },
-        body: JSON.stringify({
-          model: env.GROQ_MODEL || "llama-3.3-70b-versatile",
-          messages: [{ role: "user", content: prompt }],
-          response_format: jsonMode ? { type: "json_object" } : undefined,
-        }),
-      });
+    const groqModels = Array.from(
+      new Set([
+        env.GROQ_MODEL || "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+      ])
+    );
+    for (const model of groqModels) {
+      try {
+        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${groqApiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "user", content: prompt }],
+            response_format: jsonMode ? { type: "json_object" } : undefined,
+          }),
+        });
 
-      if (res.ok) {
-        const json = (await res.json()) as any;
-        return json.choices[0].message.content;
+        if (res.ok) {
+          const json = (await res.json()) as any;
+          const text = json.choices?.[0]?.message?.content;
+          if (text) return text;
+        }
+        const errBody = await res.text().catch(() => "");
+        console.warn(`Groq Completion API (${model}) returned status ${res.status}. Body: ${errBody}`);
+      } catch (err) {
+        console.error(`Groq completion failed (${model}):`, err);
       }
-      const errBody = await res.text().catch(() => "");
-      console.warn(`Groq Completion API returned status ${res.status}. Body: ${errBody}. Falling back to Gemini.`);
-    } catch (err) {
-      console.error("Groq completion failed, falling back to Gemini:", err);
     }
   }
 
@@ -154,11 +163,10 @@ export async function generateCompletion(
       return json.candidates[0].content.parts[0].text;
     } catch (err: any) {
       console.error("Gemini completion failed:", err);
-      throw Errors.internal("Failed to obtain response from LLM provider");
     }
   }
 
-  throw Errors.internal("No active LLM model provider available. Please set GROQ_API_KEY or GEMINI_API_KEY in .env");
+  throw Errors.internal("AI assistant is temporarily unavailable. Please verify GROQ_API_KEY or GEMINI_API_KEY in server environment.");
 }
 
 export function isGreetingOrGeneralPoliteness(text: string): boolean {
@@ -201,28 +209,35 @@ export async function solveDoubt(
   // 1. Scrub PII
   const cleanQuestion = scrubPII(rawQuestion);
 
-  const isTeacher = userRole === "teacher" || userRole === "school_admin";
+  const isTeacher =
+    userRole === "teacher" ||
+    userRole === "school_admin" ||
+    userRole === "super_admin" ||
+    userRole === "SUPER_ADMIN";
 
   // 2. Fetch question embedding
   const embedding = await getEmbedding(cleanQuestion);
   const embeddingString = `[${embedding.join(",")}]`;
 
   // 3. Vector search closest chunks (using raw SQL because pgvector needs <=> operator)
-  const query = sql`
-    SELECT c.id, c.content, c.page_number as "pageNumber", f.name as "fileName", f.url as "fileUrl",
-           (1 - (c.embedding <=> ${embeddingString}::vector)) as similarity
-    FROM classroom_file_chunks c
-    JOIN classroom_files f ON c.file_id = f.id
-    WHERE f.class_id = ${classId} AND f.tenant_id = ${tenantId}
-    ORDER BY c.embedding <=> ${embeddingString}::vector
-    LIMIT 3;
-  `;
-
-  const rows = (await db.execute(query)) as any[];
-
-  // 4. Scope gating: If no materials exist or similarity threshold is not met (threshold 0.5)
-  const threshold = 0.5;
-  const validChunks = rows.filter((r) => Number(r.similarity) >= threshold);
+  let validChunks: any[] = [];
+  try {
+    const query = sql`
+      SELECT c.id, c.content, c.page_number as "pageNumber", f.name as "fileName", f.url as "fileUrl",
+             (1 - (c.embedding <=> ${embeddingString}::vector)) as similarity
+      FROM classroom_file_chunks c
+      JOIN classroom_files f ON c.file_id = f.id
+      WHERE f.class_id = ${classId} AND f.tenant_id = ${tenantId}
+      ORDER BY c.embedding <=> ${embeddingString}::vector
+      LIMIT 3;
+    `;
+    const rows = (await db.execute(query)) as any[];
+    const threshold = 0.5;
+    validChunks = rows.filter((r) => Number(r.similarity) >= threshold);
+  } catch (vectorErr) {
+    console.warn("[WALT_VECTOR_SEARCH] Vector query failed or pgvector unavailable:", vectorErr);
+    validChunks = [];
+  }
 
   if (validChunks.length === 0 && !isTeacher) {
     // Check if it's a basic conversational question (greeting, politeness, help query)
@@ -236,8 +251,11 @@ Question: ${cleanQuestion}`;
       return { answer, citations: [] };
     }
 
+    const generalPrompt = `You are Walt, an AI study assistant for Whiteroom. A student has asked an academic question. No uploaded study documents were found matching this topic in the classroom archive yet. Please provide a clear, helpful, educational explanation from general academic knowledge, and mention briefly that no uploaded classroom files matched this topic.
+Question: ${cleanQuestion}`;
+    const answer = await generateCompletion(generalPrompt);
     return {
-      answer: "I'm sorry, but that question is outside the scope of the materials uploaded for this classroom.",
+      answer,
       citations: [],
     };
   }

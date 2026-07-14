@@ -36,6 +36,8 @@ export async function verifyClassAccess(
   role: string,
   classId: string
 ) {
+  if (role === UserRole.SUPER_ADMIN || role === "super_admin") return;
+
   if (role === UserRole.SCHOOL_ADMIN || role === UserRole.TEACHER) {
     const [row] = await db
       .select()

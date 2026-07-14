@@ -17,7 +17,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowLeft, Send, Sparkles, AlertCircle, FileText, Upload, RefreshCw } from "lucide-react-native";
 import * as DocumentPicker from "expo-document-picker";
-import { api } from "@/api/client";
+import { api, ApiError } from "@/api/client";
 import { colors, spacing, font, radius } from "@/theme/tokens";
 import { sessionStore } from "@/auth/session-store";
 
@@ -168,14 +168,18 @@ export default function WaltChatScreen() {
       ]);
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     },
-    onError: (err) => {
+    onError: (err: any) => {
       console.error(err);
+      const errorMsg =
+        err instanceof ApiError && err.message
+          ? err.message
+          : err?.message || "I'm sorry, I encountered an issue connecting to the AI helper. Please check your network and try again.";
       setMessages((prev) => [
         ...prev,
         {
           id: `walt_error_${Date.now()}`,
           sender: "walt",
-          text: "I'm sorry, I encountered an issue connecting to the AI helper. Please check your network and try again.",
+          text: `⚠️ ${errorMsg}`,
         },
       ]);
     },

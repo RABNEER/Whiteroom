@@ -402,7 +402,16 @@ export default function AuthScreen() {
   };
 
   const handleReopenWhatsApp = async () => {
-    await checkActiveSession();
+    try {
+      setLoading(true);
+      setError(null);
+      const verified = await checkActiveSession();
+      if (!verified) {
+        setError("Not verified yet. Please tap the confirmation button sent to your WhatsApp.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handlers
@@ -675,11 +684,30 @@ export default function AuthScreen() {
 
                 <Pressable
                   accessibilityRole="button"
-                  style={[styles.primaryButton, { backgroundColor: '#25D366', marginTop: spacing.lg, flexDirection: 'row', gap: 8 }]}
+                  style={[
+                    styles.primaryButton,
+                    {
+                      backgroundColor: '#25D366',
+                      marginTop: spacing.lg,
+                      flexDirection: 'row',
+                      gap: 8,
+                      opacity: loading ? 0.7 : 1,
+                    },
+                  ]}
                   onPress={handleReopenWhatsApp}
+                  disabled={loading}
                 >
-                  <MessageCircle color="#FFF" size={20} />
-                  <Text style={styles.buttonText}>CHECK AGAIN</Text>
+                  {loading ? (
+                    <>
+                      <ActivityIndicator color="#FFF" size="small" />
+                      <Text style={styles.buttonText}>CHECKING...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <MessageCircle color="#FFF" size={20} />
+                      <Text style={styles.buttonText}>CHECK AGAIN</Text>
+                    </>
+                  )}
                 </Pressable>
 
                 <Pressable
