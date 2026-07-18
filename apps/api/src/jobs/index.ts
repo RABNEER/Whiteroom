@@ -14,6 +14,7 @@ import {
   registerCleanupExpiredUploadsWorker,
   scheduleCleanupExpiredUploads,
 } from "./cleanup-expired-uploads.job.js";
+import { registerBillingCronWorker } from "./billing-cron.job.js";
 
 let started = false;
 
@@ -34,6 +35,7 @@ export async function startJobs() {
     "registration-token-cleanup",
     "assemble-file-upload",
     "cleanup-expired-uploads",
+    "subscription-student-invoice",
   ];
 
   for (const queue of queues) {
@@ -47,6 +49,7 @@ export async function startJobs() {
     registerRegistrationTokenCleanupWorker(),
     registerAssembleUploadWorker(),
     registerCleanupExpiredUploadsWorker(),
+    registerBillingCronWorker(),
   ]);
 
   await scheduleRegistrationTokenCleanup().catch((err) => {

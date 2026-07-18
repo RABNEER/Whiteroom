@@ -6,7 +6,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { router } from "expo-router";
 import { colors, spacing, radius, font } from "@/theme/tokens";
-import { LogOut, GraduationCap, CreditCard, MessageSquare, Shield, BookOpen } from "lucide-react-native";
+import { LogOut, GraduationCap, CreditCard, MessageSquare, Shield, BookOpen, Wallet } from "lucide-react-native";
 
 function showAlert(title: string, message: string) {
   if (Platform.OS === "web") {
@@ -107,6 +107,24 @@ export default function AdminDashboardScreen() {
               <Text style={styles.cardTitle}>Billing & Plan Subscription</Text>
               <Text style={styles.cardDescription}>
                 Upgrade, view monthly pricing estimates, or modify Walt AI addons.
+              </Text>
+            </View>
+          </Pressable>
+        </Card>
+
+        {/* Prepaid Credits Wallet Card */}
+        <Card style={styles.dashboardCard}>
+          <Pressable
+            onPress={() => router.push("/billing/wallet" as any)}
+            style={({ pressed }) => [styles.cardPressable, pressed && { opacity: 0.9 }]}
+          >
+            <View style={[styles.cardIconContainer, { backgroundColor: "#059669" }]}>
+              <Wallet color={colors.white} size={24} />
+            </View>
+            <View style={styles.cardContent}>
+              <Text style={styles.cardTitle}>Prepaid Credits Wallet</Text>
+              <Text style={styles.cardDescription}>
+                Recharge student credits (₹5/mo), view balance, and check transaction history.
               </Text>
             </View>
           </Pressable>

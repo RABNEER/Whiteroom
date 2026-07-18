@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CreditCard, Sparkles, CheckCircle, ShieldAlert, ArrowLeft } from "lucide-react-native";
+import { CreditCard, Sparkles, CheckCircle, ShieldAlert, ArrowLeft, Wallet } from "lucide-react-native";
 import { api } from "@/api/client";
 import { colors, spacing, font, radius } from "@/theme/tokens";
 
@@ -166,6 +166,22 @@ export default function BillingDashboardScreen() {
             </View>
           )}
         </View>
+
+        {/* Prepaid Credits Wallet Link Banner */}
+        <TouchableOpacity
+          style={styles.walletBanner}
+          onPress={() => router.push("/billing/wallet" as any)}
+        >
+          <View style={styles.walletBannerLeft}>
+            <View style={styles.walletIconCircle}>
+              <Wallet size={20} color={colors.white} />
+            </View>
+            <View style={styles.walletBannerTexts}>
+              <Text style={styles.walletBannerTitle}>Open Prepaid Credits Wallet</Text>
+              <Text style={styles.walletBannerSub}>₹5 per student/month • Recharge credits & check usage</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
 
         {/* Configuration Setup Form */}
         <Text style={styles.sectionTitle}>Configure Plan Tier</Text>
@@ -357,6 +373,42 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: "#E2E8F0",
+  },
+  walletBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#059669",
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  walletBannerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  walletIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.sm,
+  },
+  walletBannerTexts: {
+    flex: 1,
+  },
+  walletBannerTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.white,
+  },
+  walletBannerSub: {
+    fontSize: 12,
+    color: "#D1FAE5",
+    marginTop: 2,
   },
   priceText: {
     fontSize: 14,

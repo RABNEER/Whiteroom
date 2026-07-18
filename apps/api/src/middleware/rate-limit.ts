@@ -36,7 +36,8 @@ export function rateLimitMiddleware(options: RateLimitOptions) {
   const { windowMs, max, keyFn, errorCode = "RATE_LIMITED" } = options;
 
   return async (c: Context, next: Next) => {
-    const key = keyFn ? keyFn(c) : c.req.header("x-forwarded-for") || "unknown";
+    const user = c.get("user") as { userId?: string } | undefined;
+    const key = keyFn ? keyFn(c) : (user?.userId || c.req.header("x-forwarded-for") || "unknown");
     const now = new Date();
     const resetAt = new Date(now.getTime() + windowMs);
 

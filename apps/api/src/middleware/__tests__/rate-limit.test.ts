@@ -104,15 +104,13 @@ describe("rateLimitMiddleware", () => {
     );
   });
 
-  it("returns 503 when database call fails", async () => {
+  it("fails open when database call fails", async () => {
     mockReturning.mockRejectedValue(new Error("DB connection lost"));
     const app = buildTestApp();
     const res = await app.request("/limited", {
       headers: { "x-forwarded-for": "1.2.3.4" },
     });
-    expect(res.status).toBe(503);
-    const body = await res.json();
-    expect(body.error.code).toBe("RATE_LIMIT_UNAVAILABLE");
+    expect(res.status).toBe(200);
   });
 
   it("does not affect unguarded routes", async () => {

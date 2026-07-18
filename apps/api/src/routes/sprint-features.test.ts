@@ -17,6 +17,8 @@ import {
   subscriptions,
   parentProfiles,
   teacherProfiles,
+  rateLimits,
+  auditLogs,
   eq,
   inArray,
 } from "@whiteroom/db";
@@ -63,6 +65,7 @@ describe("Pre-Launch B2B Sprint Features", () => {
         db.delete(subscriptions).where(eq(subscriptions.tenantId, tenantId)),
         db.delete(classEnrollments).where(eq(classEnrollments.classId, classId)),
         db.delete(messages).where(eq(messages.tenantId, tenantId)),
+        db.delete(rateLimits),
       ]);
 
       await Promise.all([
@@ -76,6 +79,7 @@ describe("Pre-Launch B2B Sprint Features", () => {
       ]);
 
       await db.delete(users).where(inArray(users.id, [schoolAdminId, teacherId, parentId]));
+      await db.delete(auditLogs).where(eq(auditLogs.tenantId, tenantId));
       await db.delete(tenants).where(eq(tenants.id, tenantId));
     } catch (err) {
       console.error("Cleanup failed:", err);

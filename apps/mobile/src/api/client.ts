@@ -561,6 +561,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+  getWalletStatus: (): Promise<any> =>
+    request<any>("/payments/wallet"),
+  getTransactions: (limit?: number): Promise<any[]> =>
+    request<any[]>(limit ? `/payments/transactions?limit=${limit}` : "/payments/transactions"),
+  createRechargeOrder: (payload: { credits: number }): Promise<any> =>
+    request<any>("/payments/recharge/orders", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   simulatePaymentWebhook: (payload: any): Promise<any> =>
     request<any>("/payments/webhook", {
       method: "POST",

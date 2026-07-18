@@ -51,7 +51,15 @@ vi.mock("../../lib/db.js", () => ({
   },
 }));
 
-const { createSubscriptionOrder, handleRazorpayWebhook, downgradeExpiredSubscriptions } = await import("../payments.js");
+const {
+  createSubscriptionOrder,
+  handleRazorpayWebhook,
+  downgradeExpiredSubscriptions,
+  createRechargeOrder,
+  completeRechargePayment,
+  ensureTenantSubscription,
+  getTenantWalletStatus,
+} = await import("../payments.js");
 
 const webhookEvent = {
   id: "evt_test_001",
@@ -227,5 +235,41 @@ describe("downgradeExpiredSubscriptions", () => {
     const result = await downgradeExpiredSubscriptions();
 
     expect(result.downgraded).toBe(0);
+  });
+});
+
+describe("Wallet Recharge & Trial Credits", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockOrderCreate.mockResolvedValue({
+      id: "order_test_recharge",
+      amount: 50000,
+      currency: "INR",
+      receipt: "recharge_tenant-1_1234567890",
+      status: "created",
+    });
+  });
+
+  it("creates a recharge order for ₹5/credit via Razorpay", async () => {
+    const order = await createRechargeOrder("tenant-1", "user-1", { credits: 100 });
+    expect(mockOrderCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 50000, currency: "INR" })
+    );
+    expect(order.id).toBe("order_test_recharge");
+  });
+
+  it("rejects invalid credit counts", async () => {
+    await expect(
+      createRechargeOrder("tenant-1", "user-1", { credits: 0 })
+    ).rejects.toThrow("Credits to recharge must be between 1 and 100,000");
+  });
+
+  it("ensures initial subscription and 100 trial credits if not exists", async () => {
+    mockLimit.mockResolvedValueOnce([]); // No existing subscription
+    mockReturningDoNothing.mockResolvedValueOnce([{ id: "sub-new-1", creditsBalance: 100 }]);
+
+    const sub = await ensureTenantSubscription("tenant-1");
+    expect(mockInsert).toHaveBeenCalled();
+    expect(sub).toBeDefined();
   });
 });

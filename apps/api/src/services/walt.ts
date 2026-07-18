@@ -98,6 +98,9 @@ export async function generateCompletion(
         });
       }
     }
+    if (prompt.includes("No uploaded study documents were found")) {
+      return "I'm sorry, but that question is outside the scope of the materials uploaded for this classroom.";
+    }
     return "This is a mock Walt AI doubt response grounded in classroom files.";
   }
 

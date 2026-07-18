@@ -11,6 +11,8 @@ import {
   fileUploadSessions,
   fileUploadChunks,
   classroomFiles,
+  auditLogs,
+  rateLimits,
   eq,
   inArray,
 } from "@whiteroom/db";
@@ -49,6 +51,8 @@ describe("Pre-Launch Features Integration Tests", () => {
       await db.delete(students).where(eq(students.tenantId, tenantId));
       await db.delete(classes).where(eq(classes.tenantId, tenantId));
       await db.delete(users).where(eq(users.id, schoolAdminId));
+      await db.delete(auditLogs).where(eq(auditLogs.tenantId, tenantId));
+      await db.delete(rateLimits);
       await db.delete(tenants).where(eq(tenants.id, tenantId));
     } catch (err) {
       console.error("Cleanup failed:", err);

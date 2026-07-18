@@ -45,6 +45,7 @@ const envSchema = z.object({
   RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
   SUPER_ADMIN_PHONE: z.string().min(1).optional(),
+  APP_URL: z.string().optional(),
   MOBILE_WEB_URL: z.string().url().optional(),
   ADMIN_URL: z.string().url().optional(),
   GEMINI_API_KEY: z.string().optional(),

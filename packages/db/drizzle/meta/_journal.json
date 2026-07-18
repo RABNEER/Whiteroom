@@ -134,6 +134,13 @@
       "when": 1783624356915,
       "tag": "0018_lame_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1784286081590,
+      "tag": "0019_lush_prowler",
+      "breakpoints": true
     }
   ]
 }

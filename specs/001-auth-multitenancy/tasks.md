@@ -37,3 +37,10 @@
 - [x] Add webhook idempotency/event replay protection beyond tenant upsert behavior
 - [x] Add FCM invalid-token cleanup after partial send failures
 - [x] Update API contract docs for the native Expo app
+
+---
+
+## Future Enhancements: Prepaid Wallet & Autopay Billing (Phase 2)
+
+- [ ] **Usage-Based Monthly Student Counting & Invoice Generation (`0 0 1 * *`)**: Add a monthly background cron job (`subscription-student-invoice`) to query and count active students per school workspace (`COUNT(*) FROM students WHERE is_active = true`), generate dynamic tax invoices based on student count, and trigger automated deductions via Razorpay Autopay mandates (`subscription.charged`).
+- [ ] **Prepaid Credit Wallet & 30-Day Trial Mandate Flow**: Implement a prepaid credit wallet (`₹5/credit = 1 student/month`) where schools receive 100 free initial credits upon sign-up, can top up credits upfront via UPI/PhonePe (eliminating unexpected deduction anxiety), and offer optional Razorpay Autopay mandate setup for discounted rates (`₹5/student`) with a flat monthly cap for institutions exceeding 1,000 students.

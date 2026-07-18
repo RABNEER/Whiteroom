@@ -12,6 +12,8 @@ import {
   roomMutes,
   messageReceipts,
   messageAuditLogs,
+  auditLogs,
+  rateLimits,
   eq,
   inArray,
 } from "@whiteroom/db";
@@ -43,6 +45,8 @@ describe("Native Chat API Routes", () => {
     await db.delete(classes).where(eq(classes.tenantId, tenantId));
     await db.delete(userTenants).where(eq(userTenants.tenantId, tenantId));
     await db.delete(users).where(inArray(users.id, [schoolAdminId, teacherId, parentId, blockParentId]));
+    await db.delete(auditLogs).where(eq(auditLogs.tenantId, tenantId));
+    await db.delete(rateLimits);
     await db.delete(tenants).where(eq(tenants.id, tenantId));
   };
 

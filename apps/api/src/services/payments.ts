@@ -1,6 +1,6 @@
 import { db } from "../lib/db.js";
 import { getRazorpayClient, verifyRazorpaySignature } from "../lib/razorpay.js";
-import { subscriptions, idempotencyKeys, eq, lt, and, or } from "@whiteroom/db";
+import { subscriptions, idempotencyKeys, billingTransactions, tenants, students, eq, lt, and, or, sql, desc, count, isNull } from "@whiteroom/db";
 import { Errors, PlanTier } from "@whiteroom/shared";
 import { env } from "../lib/env.js";
 import { logAuditEvent } from "./audit.js";
@@ -24,6 +24,183 @@ const subscriptionCatalog: Record<
   },
 };
 
+export async function ensureTenantSubscription(tenantId: string) {
+  const [existingSub] = await db
+    .select()
+    .from(subscriptions)
+    .where(eq(subscriptions.tenantId, tenantId))
+    .limit(1);
+
+  if (existingSub) {
+    return existingSub;
+  }
+
+  const startDate = new Date();
+  const [newSub] = await db
+    .insert(subscriptions)
+    .values({
+      tenantId,
+      plan: PlanTier.FREE,
+      creditsBalance: 100, // 100 free initial credits upon setup
+      startDate,
+      billingCycleStartDate: startDate,
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  if (newSub) {
+    await db.insert(billingTransactions).values({
+      tenantId,
+      type: "trial_grant",
+      creditsChange: 100,
+      amountPaise: 0,
+      description: "Initial 100 free student credits",
+    });
+    return newSub;
+  }
+
+  const [retrySub] = await db
+    .select()
+    .from(subscriptions)
+    .where(eq(subscriptions.tenantId, tenantId))
+    .limit(1);
+  return retrySub;
+}
+
+export async function getTenantWalletStatus(tenantId: string) {
+  const sub = await ensureTenantSubscription(tenantId);
+  const transactions = await db
+    .select()
+    .from(billingTransactions)
+    .where(eq(billingTransactions.tenantId, tenantId))
+    .orderBy(desc(billingTransactions.createdAt))
+    .limit(50);
+
+  const isActive = !sub?.endDate || sub.endDate >= new Date();
+
+  return {
+    ...(sub || {}),
+    status: isActive ? "ACTIVE" : "EXPIRED",
+    subscription: sub,
+    transactions,
+  };
+}
+
+export async function createRechargeOrder(
+  tenantId: string,
+  userId: string,
+  input: { credits: number }
+) {
+  if (!input.credits || input.credits < 1 || input.credits > 100000) {
+    throw Errors.validation("Credits to recharge must be between 1 and 100,000.");
+  }
+
+  // ₹5 per student/credit in paise = 500 paise
+  const amountPaise = input.credits * 500;
+
+  if (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET) {
+    if (env.NODE_ENV === "production") {
+      throw Errors.internal("Razorpay credentials are not configured in production");
+    }
+    console.log(`💳 [PAYMENTS MOCK FALLBACK] Razorpay not configured. Simulating recharge order for Tenant: ${tenantId}`);
+    const safeReceipt = (`rc_${tenantId.replace(/[^a-zA-Z0-9]/g, "")}_${Date.now()}`).slice(0, 40);
+    return {
+      id: `mock_recharge_${Math.random().toString(36).substring(2, 9)}`,
+      amount: amountPaise,
+      amountPaise,
+      credits: input.credits,
+      currency: "INR",
+      receipt: safeReceipt,
+      paymentUrl: "https://example.com/mock-checkout",
+      status: "created",
+      notes: {
+        tenantId,
+        userId,
+        credits: String(input.credits),
+        type: "recharge",
+      },
+    };
+  }
+
+  const razorpay = getRazorpayClient();
+  const safeReceipt = (`rc_${tenantId.replace(/[^a-zA-Z0-9]/g, "")}_${Date.now()}`).slice(0, 40);
+  const order = await razorpay.orders.create({
+    amount: amountPaise,
+    currency: "INR",
+    receipt: safeReceipt,
+    notes: {
+      tenantId,
+      userId,
+      credits: String(input.credits),
+      type: "recharge",
+    },
+  });
+
+  const baseUrl = env.APP_URL || "https://whiteroomapi-production-7011.up.railway.app";
+  const checkoutUrl = `${baseUrl}/api/v1/payments/checkout?order_id=${order.id}&amount=${amountPaise}&credits=${input.credits}&key_id=${env.RAZORPAY_KEY_ID || ""}`;
+
+  return {
+    ...order,
+    credits: input.credits,
+    amountPaise,
+    paymentUrl: checkoutUrl,
+  };
+}
+
+export async function completeRechargePayment(
+  tenantId: string,
+  orderId: string,
+  paymentId: string,
+  credits: number,
+  amountPaise: number
+) {
+  const sub = await ensureTenantSubscription(tenantId);
+
+  const inserted = await db
+    .insert(idempotencyKeys)
+    .values({
+      tenantId,
+      key: `recharge_${orderId}_${paymentId}`,
+      scope: "payment.recharge",
+      resourceId: orderId,
+      response: { processed: true, credits },
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  if (inserted.length === 0) {
+    console.log(`💳 [PAYMENTS IDEMPOTENCY] Recharge ${orderId}/${paymentId} already completed.`);
+    return { processed: true, alreadyProcessed: true, subscription: sub };
+  }
+
+  const [updatedSub] = await db
+    .update(subscriptions)
+    .set({
+      creditsBalance: sql`${subscriptions.creditsBalance} + ${credits}`,
+      updatedAt: new Date(),
+    })
+    .where(eq(subscriptions.id, sub?.id ?? ""))
+    .returning();
+
+  await db.insert(billingTransactions).values({
+    tenantId,
+    type: "recharge",
+    amountPaise,
+    creditsChange: credits,
+    description: `Recharged ${credits} credits via Razorpay (${paymentId})`,
+  });
+
+  await logAuditEvent({
+    tenantId,
+    action: "wallet.recharge.completed",
+    resource: "subscription",
+    resourceId: sub?.id ?? "unknown",
+    details: { credits, amountPaise, orderId, paymentId },
+  });
+
+  return { processed: true, creditsBalance: updatedSub?.creditsBalance, subscription: updatedSub };
+}
+
 export async function createSubscriptionOrder(
   tenantId: string,
   userId: string,
@@ -40,11 +217,12 @@ export async function createSubscriptionOrder(
       throw Errors.internal("Razorpay credentials are not configured in production");
     }
     console.log(`💳 [PAYMENTS MOCK FALLBACK] Razorpay not configured. Simulating order for Tenant: ${tenantId}`);
+    const safeReceipt = (`sub_${tenantId.replace(/[^a-zA-Z0-9]/g, "")}_${Date.now()}`).slice(0, 40);
     return {
       id: `mock_order_${Math.random().toString(36).substring(2, 9)}`,
       amount: catalogEntry.amount,
       currency: catalogEntry.currency,
-      receipt: `tenant_${tenantId}_${Date.now()}`,
+      receipt: safeReceipt,
       status: "created",
       notes: {
         tenantId,
@@ -55,10 +233,11 @@ export async function createSubscriptionOrder(
   }
 
   const razorpay = getRazorpayClient();
+  const safeReceipt = (`sub_${tenantId.replace(/[^a-zA-Z0-9]/g, "")}_${Date.now()}`).slice(0, 40);
   const order = await razorpay.orders.create({
     amount: catalogEntry.amount,
     currency: catalogEntry.currency,
-    receipt: `tenant_${tenantId}_${Date.now()}`,
+    receipt: safeReceipt,
     notes: {
       tenantId,
       userId,
@@ -84,13 +263,15 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
         entity?: {
           id?: string;
           order_id?: string;
-          notes?: { tenantId?: string; plan?: string };
+          amount?: number;
+          notes?: { tenantId?: string; plan?: string; type?: string; credits?: string };
         };
       };
       order?: {
         entity?: {
           id?: string;
-          notes?: { tenantId?: string; plan?: string };
+          amount?: number;
+          notes?: { tenantId?: string; plan?: string; type?: string; credits?: string };
         };
       };
       payment_link?: {
@@ -244,6 +425,23 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
     return { processed: false };
   }
 
+  // ── Recharge order events ──────────────────────────────────────
+  const notesType = payment?.notes?.type ?? order?.notes?.type;
+  const hasCreditsNote = Boolean(payment?.notes?.credits || order?.notes?.credits);
+  if (notesType === "recharge" || hasCreditsNote) {
+    if (!tenantId) return { processed: false };
+    const creditsStr = payment?.notes?.credits ?? order?.notes?.credits ?? "0";
+    const credits = parseInt(creditsStr, 10);
+    const amountPaise = payment?.amount ?? (credits * 500);
+    const paymentId = payment?.id ?? eventId ?? `webhook_pay_${Date.now()}`;
+    const orderId = payment?.order_id ?? order?.id ?? eventId ?? `webhook_order_${Date.now()}`;
+
+    if (credits > 0) {
+      return await completeRechargePayment(tenantId, orderId, paymentId, credits, amountPaise);
+    }
+    return { processed: false };
+  }
+
   // ── Legacy order-based payment events ──────────────────────────
   if (!tenantId || planKey !== SubscriptionPlanKey.PRO_YEARLY) {
     return { processed: false };
@@ -361,4 +559,59 @@ export async function downgradeExpiredSubscriptions() {
   }
 
   return { downgraded: result.length };
+}
+
+export async function processMonthlyStudentBilling() {
+  const allTenants = await db.select().from(tenants);
+  let processedCount = 0;
+  let totalDeductions = 0;
+
+  for (const tenant of allTenants) {
+    const [studentCountResult] = await db
+      .select({ value: count() })
+      .from(students)
+      .where(and(eq(students.tenantId, tenant.id), isNull(students.deletedAt)));
+    
+    const studentCount = studentCountResult?.value ?? 0;
+    if (studentCount <= 0) continue;
+
+    const sub = await ensureTenantSubscription(tenant.id);
+    if (!sub) continue;
+
+    const deductionCredits = studentCount;
+    const [updatedSub] = await db
+      .update(subscriptions)
+      .set({
+        creditsBalance: sql`${subscriptions.creditsBalance} - ${deductionCredits}`,
+        billingCycleStartDate: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(subscriptions.id, sub.id))
+      .returning();
+
+    await db.insert(billingTransactions).values({
+      tenantId: tenant.id,
+      type: "usage_deduction",
+      amountPaise: 0,
+      creditsChange: -deductionCredits,
+      description: `Monthly billing for ${studentCount} active students (${deductionCredits} credits deducted)`,
+    });
+
+    await logAuditEvent({
+      tenantId: tenant.id,
+      action: "wallet.usage.deducted",
+      resource: "subscription",
+      resourceId: sub.id,
+      details: {
+        studentCount,
+        deductionCredits,
+        remainingBalance: updatedSub?.creditsBalance ?? 0,
+      },
+    });
+
+    processedCount++;
+    totalDeductions += deductionCredits;
+  }
+
+  return { processedTenants: processedCount, totalCreditsDeducted: totalDeductions };
 }

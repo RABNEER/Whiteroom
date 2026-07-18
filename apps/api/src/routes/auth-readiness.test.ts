@@ -13,9 +13,12 @@ import {
   idempotencyKeys,
   registrationTokens,
   subscriptions,
+  billingTransactions,
   attendanceSessions,
   attendanceRecords,
   otpAttempts,
+  rateLimits,
+  auditLogs,
   eq,
   inArray,
 } from "@whiteroom/db";
@@ -87,6 +90,18 @@ describe("Auth Readiness & Security Integration Tests", () => {
         inArray(classes.id, [classAId, classBId])
       );
 
+      // Delete subscriptions, idempotency keys, billing transactions
+      await db.delete(billingTransactions).where(
+        inArray(billingTransactions.tenantId, [tenantAId, tenantBId])
+      );
+      await db.delete(subscriptions).where(
+        inArray(subscriptions.tenantId, [tenantAId, tenantBId])
+      );
+      await db.delete(idempotencyKeys).where(
+        inArray(idempotencyKeys.tenantId, [tenantAId, tenantBId])
+      );
+      await db.delete(rateLimits);
+
       // Delete user tenants & profiles
       await db.delete(userTenants).where(
         inArray(userTenants.userId, [adminAId, adminBId, parentAId])
@@ -101,6 +116,9 @@ describe("Auth Readiness & Security Integration Tests", () => {
       // Delete users & tenants
       await db.delete(users).where(
         inArray(users.id, [adminAId, adminBId, parentAId])
+      );
+      await db.delete(auditLogs).where(
+        inArray(auditLogs.tenantId, [tenantAId, tenantBId])
       );
       await db.delete(tenants).where(
         inArray(tenants.id, [tenantAId, tenantBId])
@@ -125,41 +143,41 @@ describe("Auth Readiness & Security Integration Tests", () => {
     await db.insert(tenants).values([
       { id: tenantAId, name: "Tenant A School", slug: "tenant-a-school", inviteCode: "TENA12", phone: "+919999999991" },
       { id: tenantBId, name: "Tenant B School", slug: "tenant-b-school", inviteCode: "TENB34", phone: "+919999999992" },
-    ]);
+    ]).onConflictDoNothing();
 
     await db.insert(users).values([
       { id: adminAId, phone: hashSHA256("+919999999991"), role: UserRole.TEACHER, tenantId: tenantAId },
       { id: adminBId, phone: hashSHA256("+919999999992"), role: UserRole.TEACHER, tenantId: tenantBId },
       { id: parentAId, phone: hashSHA256("+919999999993"), role: UserRole.PARENT, tenantId: tenantAId },
-    ]);
+    ]).onConflictDoNothing();
 
     await db.insert(userTenants).values([
       { userId: adminAId, tenantId: tenantAId, role: UserRole.TEACHER, status: "active", activeTenant: true },
       { userId: adminBId, tenantId: tenantBId, role: UserRole.TEACHER, status: "active", activeTenant: true },
       { userId: parentAId, tenantId: tenantAId, role: UserRole.PARENT, status: "active", activeTenant: true },
-    ]);
+    ]).onConflictDoNothing();
 
     await db.insert(parentProfiles).values({
       userId: parentAId,
       tenantId: tenantAId,
-    });
+    }).onConflictDoNothing();
 
     // Student A (Tenant A) is owned by parentA
     const [parentA] = await db.select().from(parentProfiles).where(eq(parentProfiles.userId, parentAId)).limit(1);
     await db.insert(students).values([
       { id: studentAId, tenantId: tenantAId, name: "Student A", parentId: parentA!.id },
       { id: studentBId, tenantId: tenantBId, name: "Student B" },
-    ]);
+    ]).onConflictDoNothing();
 
     await db.insert(classes).values([
       { id: classAId, tenantId: tenantAId, name: "Class A", academicYear: "2026" },
       { id: classBId, tenantId: tenantBId, name: "Class B", academicYear: "2026" },
-    ]);
+    ]).onConflictDoNothing();
 
     await db.insert(classEnrollments).values([
       { classId: classAId, studentId: studentAId, status: "active" },
       { classId: classBId, studentId: studentBId, status: "active" },
-    ]);
+    ]).onConflictDoNothing();
 
     // Create attendance session in Class A
     await db.insert(attendanceSessions).values({
@@ -168,7 +186,7 @@ describe("Auth Readiness & Security Integration Tests", () => {
       classId: classAId,
       date: "2026-07-01",
       status: "open",
-    });
+    }).onConflictDoNothing();
 
     // 3. Generate access tokens
     adminAToken = await signAccessToken({
