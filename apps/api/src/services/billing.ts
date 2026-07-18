@@ -13,12 +13,6 @@ import { getRazorpayClient } from "../lib/razorpay.js";
 import { Errors } from "@whiteroom/shared";
 import { logAuditEvent } from "./audit.js";
 
-function paymentContact(phone?: string | null): string {
-  return phone && phone.startsWith("+91") && !/^\+91(\d)\1{9}$/.test(phone)
-    ? phone
-    : "+919876543210";
-}
-
 /**
  * Calculate the dynamic monthly subscription fee for a tenant.
  * Tuition: standard (₹200) or premium with Walt AI (₹400).

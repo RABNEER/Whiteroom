@@ -1,7 +1,7 @@
 import { db } from "../lib/db.js";
 import { classEnrollments, classes, parentProfiles, students, users } from "@whiteroom/db";
 import { Errors, Limits, PlanTier } from "@whiteroom/shared";
-import { and, eq, isNull, count, or } from "@whiteroom/db";
+import { and, eq, isNull, count } from "@whiteroom/db";
 
 export async function createStudent(
   tenantId: string,

@@ -56,9 +56,7 @@ const {
   handleRazorpayWebhook,
   downgradeExpiredSubscriptions,
   createRechargeOrder,
-  completeRechargePayment,
   ensureTenantSubscription,
-  getTenantWalletStatus,
 } = await import("../payments.js");
 
 const webhookEvent = {

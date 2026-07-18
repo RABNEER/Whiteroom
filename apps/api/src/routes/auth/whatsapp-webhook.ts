@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "../../lib/db.js";
 import { env } from "../../lib/env.js";
 import { whatsappSessions, eq, and, gte } from "@whiteroom/db";
-import { normalizePhone, isValidIndianPhone, hashSHA256 } from "../../lib/otp.js";
+import { normalizePhone, isValidIndianPhone } from "../../lib/otp.js";
 import { Errors } from "@whiteroom/shared";
 import type { ApiResponse } from "@whiteroom/shared";
 
