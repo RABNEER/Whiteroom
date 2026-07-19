@@ -577,11 +577,11 @@ export const api = {
     }),
 
   // ─── Bulletins ───
-  getBulletins: (filters?: { classId?: string }): Promise<any[]> => {
+  getBulletins: (filters?: { classId?: string }): Promise<import('@whiteroom/shared').BulletinResponse[]> => {
     const params = new URLSearchParams();
     if (filters?.classId) params.set("classId", filters.classId);
     const query = params.toString();
-    return request<any[]>(query ? `/bulletins?${query}` : "/bulletins");
+    return request<import('@whiteroom/shared').BulletinResponse[]>(query ? `/bulletins?${query}` : "/bulletins");
   },
   markBulletinRead: (bulletinId: string): Promise<any> =>
     request<any>(`/bulletins/${bulletinId}/read`, {

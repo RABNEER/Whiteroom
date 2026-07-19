@@ -1,3 +1,4 @@
+import { BulletinResponse } from '@whiteroom/shared';
 import { useState, useEffect, useMemo } from 'react';
 import {
   View,
@@ -1684,7 +1685,7 @@ function ClassNoticesView({ classId }: { classId: string }) {
           </Text>
         </View>
       ) : (
-        noticesList.map((notice: any) => (
+        noticesList.map((notice: BulletinResponse) => (
           <View key={notice.id} style={[s.card, { marginBottom: 12, borderLeftWidth: 4, borderLeftColor: getCategoryColor(notice.category) }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
               <Text style={{ fontSize: 11, fontWeight: '700', color: getCategoryColor(notice.category) }}>
