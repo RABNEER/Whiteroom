@@ -202,6 +202,16 @@ Respond with ONLY the word "basic" if it is a greeting/pleasantry/about your ide
   }
 }
 
+// ─── Role Helpers ───
+export function isTeacherRole(userRole?: string): boolean {
+  return (
+    userRole === "teacher" ||
+    userRole === "school_admin" ||
+    userRole === "super_admin" ||
+    userRole === "SUPER_ADMIN"
+  );
+}
+
 // ─── Doubt Solver (RAG Grounded) ───
 export async function solveDoubt(
   tenantId: string,
@@ -212,11 +222,7 @@ export async function solveDoubt(
   // 1. Scrub PII
   const cleanQuestion = scrubPII(rawQuestion);
 
-  const isTeacher =
-    userRole === "teacher" ||
-    userRole === "school_admin" ||
-    userRole === "super_admin" ||
-    userRole === "SUPER_ADMIN";
+  const isTeacher = isTeacherRole(userRole);
 
   // 2. Fetch question embedding
   const embedding = await getEmbedding(cleanQuestion);
