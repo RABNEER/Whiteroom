@@ -64,6 +64,8 @@ export async function getEmbedding(text: string): Promise<number[]> {
   }
 }
 
+let successfulGroqModel: string | null = null;
+
 export async function generateCompletion(
   prompt: string,
   jsonMode = false
@@ -106,12 +108,15 @@ export async function generateCompletion(
 
   // 1. Try Groq if key is present
   if (groqApiKey) {
-    const groqModels = Array.from(
-      new Set([
-        env.GROQ_MODEL || "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
-      ])
-    );
+    const defaultModels = [
+      env.GROQ_MODEL || "llama-3.3-70b-versatile",
+      "llama-3.1-8b-instant",
+    ];
+
+    // Prioritize the previously successful model
+    const initialModels = successfulGroqModel ? [successfulGroqModel, ...defaultModels] : defaultModels;
+
+    const groqModels = Array.from(new Set(initialModels));
     for (const model of groqModels) {
       try {
         const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -130,7 +135,10 @@ export async function generateCompletion(
         if (res.ok) {
           const json = (await res.json()) as any;
           const text = json.choices?.[0]?.message?.content;
-          if (text) return text;
+          if (text) {
+            successfulGroqModel = model;
+            return text;
+          }
         }
         const errBody = await res.text().catch(() => "");
         console.warn(`Groq Completion API (${model}) returned status ${res.status}. Body: ${errBody}`);
@@ -202,6 +210,16 @@ Respond with ONLY the word "basic" if it is a greeting/pleasantry/about your ide
   }
 }
 
+// ─── Role Helpers ───
+export function isTeacherRole(userRole?: string): boolean {
+  return (
+    userRole === "teacher" ||
+    userRole === "school_admin" ||
+    userRole === "super_admin" ||
+    userRole === "SUPER_ADMIN"
+  );
+}
+
 // ─── Doubt Solver (RAG Grounded) ───
 export async function solveDoubt(
   tenantId: string,
@@ -212,11 +230,7 @@ export async function solveDoubt(
   // 1. Scrub PII
   const cleanQuestion = scrubPII(rawQuestion);
 
-  const isTeacher =
-    userRole === "teacher" ||
-    userRole === "school_admin" ||
-    userRole === "super_admin" ||
-    userRole === "SUPER_ADMIN";
+  const isTeacher = isTeacherRole(userRole);
 
   // 2. Fetch question embedding
   const embedding = await getEmbedding(cleanQuestion);

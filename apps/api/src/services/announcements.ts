@@ -49,7 +49,6 @@ export async function listAnnouncements(
   tenantId: string,
   options?: { page?: number; limit?: number }
 ) {
-  // FIX: No pagination on list endpoints — will OOM at 1000+ students
   const page = Math.max(1, options?.page ?? 1);
   const limit = Math.min(100, Math.max(1, options?.limit ?? 20));
   const offset = (page - 1) * limit;

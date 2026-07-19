@@ -25,6 +25,7 @@ import type {
   ChatAttachment,
   ChatReceiptResponse,
   BulletinResponse,
+  RechargeOrderResponse,
 } from "@whiteroom/shared";
 import { sessionStore } from "@/auth/session-store";
 
@@ -566,8 +567,8 @@ export const api = {
     request<any>("/payments/wallet"),
   getTransactions: (limit?: number): Promise<any[]> =>
     request<any[]>(limit ? `/payments/transactions?limit=${limit}` : "/payments/transactions"),
-  createRechargeOrder: (payload: { credits: number }): Promise<any> =>
-    request<any>("/payments/recharge/orders", {
+  createRechargeOrder: (payload: { credits: number }): Promise<RechargeOrderResponse> =>
+    request<RechargeOrderResponse>("/payments/recharge/orders", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

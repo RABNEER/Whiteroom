@@ -180,6 +180,7 @@ async function syncAuthFilesToDb(folder: string) {
 let isWatcherActive = false;
 let syncTimeout: NodeJS.Timeout | null = null;
 let isReconnecting = false;
+let isLoggingOut = false;
 let reconnectAttempts = 0;
 let reconnectTimer: NodeJS.Timeout | null = null;
 
@@ -227,56 +228,98 @@ async function setupFolderWatcher(folder: string) {
   });
 }
 
-export async function logoutBot() {
+/**
+ * Clear WhatsApp session credentials and optionally restart the bot.
+ *
+ * IMPORTANT: Never call sock.logout() when the socket is already closed
+ * (e.g. after a 401 logged-out). Baileys' logout() tries to send a
+ * message on a dead socket, rejects the promise, and an unhandled
+ * rejection kills the entire Node process — taking Railway down with it.
+ */
+export async function logoutBot(options: {
+  /** Skip remote logout when WhatsApp already disconnected us (401). */
+  skipRemoteLogout?: boolean;
+  /** Restart bot after clearing so a new QR can be scanned. Default true. */
+  restart?: boolean;
+} = {}) {
+  const { skipRemoteLogout = false, restart = true } = options;
+
+  if (isLoggingOut) {
+    console.log("ℹ️ [WHATSAPP BOT] Logout already in progress, skipping duplicate.");
+    return;
+  }
+  isLoggingOut = true;
+
   console.log("🗑️ [WHATSAPP BOT] Resetting session credentials...");
 
-  fileHashCache.clear();
-
-  // Cancel any pending backoff reconnect before we restart fresh
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-  reconnectAttempts = 0;
-  isReconnecting = false;
-
-  const authFolder = path.resolve(process.cwd(), "auth_info_baileys");
-  
-  const sock = (globalThis as any).whatsappSocket;
-  if (sock) {
-    try {
-      sock.logout();
-    } catch {}
-    try {
-      sock.end();
-    } catch {}
-  }
-  
   try {
-    await db.execute(sql`DELETE FROM whatsapp_bot_state;`);
-    console.log("✅ [WHATSAPP BOT] Cleared bot state from database.");
-  } catch (err) {
-    console.error("❌ [WHATSAPP BOT] Failed to delete database state:", err);
-  }
-  
-  try {
+    fileHashCache.clear();
+
+    // Cancel any pending backoff reconnect before we restart fresh
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    reconnectAttempts = 0;
+    isReconnecting = false;
+
+    const authFolder = path.resolve(process.cwd(), "auth_info_baileys");
+
+    // Detach socket reference first so concurrent handlers cannot use it
+    const sock = (globalThis as any).whatsappSocket;
+    (globalThis as any).whatsappSocket = null;
+    (globalThis as any).whatsappBotConnected = false;
+    (globalThis as any).whatsappLatestQr = null;
+
+    if (sock) {
+      // Only attempt remote logout when the session is still alive.
+      // On 401/logged-out the connection is already dead — calling logout()
+      // throws Boom('Connection Closed') and crashes the process.
+      if (!skipRemoteLogout) {
+        try {
+          await Promise.race([
+            Promise.resolve(sock.logout?.()).catch(() => undefined),
+            new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
+          ]);
+        } catch {
+          // Socket already closed — safe to ignore
+        }
+      }
+      try {
+        sock.end?.(undefined);
+      } catch {
+        // ignore
+      }
+    }
+
+    // Always wipe persisted credentials so we do not restore a dead session
+    try {
+      await db.execute(sql`DELETE FROM whatsapp_bot_state;`);
+      console.log("✅ [WHATSAPP BOT] Cleared bot state from database.");
+    } catch (err) {
+      console.error("❌ [WHATSAPP BOT] Failed to delete database state:", err);
+    }
+
     try {
       await fs.rm(authFolder, { recursive: true, force: true });
-    } catch {
-      // folder may not exist
+      console.log("✅ [WHATSAPP BOT] Cleared local auth folder.");
+    } catch (err) {
+      console.error("❌ [WHATSAPP BOT] Failed to delete local folder:", err);
     }
-    console.log("✅ [WHATSAPP BOT] Cleared local auth folder.");
-  } catch (err) {
-    console.error("❌ [WHATSAPP BOT] Failed to delete local folder:", err);
-  }
-  
-  (globalThis as any).whatsappBotConnected = false;
-  (globalThis as any).whatsappLatestQr = null;
-  (globalThis as any).whatsappBotStarted = false;
-  isReconnecting = false;
 
-  // Start fresh
-  startBot(true).catch(err => console.error("Failed to restart bot:", err));
+    (globalThis as any).whatsappBotStarted = false;
+    isReconnecting = false;
+
+    if (restart) {
+      // Brief pause so any in-flight Baileys teardown settles
+      await new Promise((r) => setTimeout(r, 500));
+      startBot(false).catch((err) =>
+        console.error("Failed to restart bot:", err)
+      );
+    }
+  } finally {
+    isLoggingOut = false;
+  }
 }
 
 export async function startBot(isReconnect = false) {
@@ -317,7 +360,7 @@ export async function startBot(isReconnect = false) {
     const errMsg = err?.message || "";
     if (errMsg.includes("Bad MAC") || errMsg.includes("decryption")) {
       console.error("⚠️ [WHATSAPP BOT] Bad session keys during initialization. Purging session to self-heal...", err);
-      await logoutBot();
+      await logoutBot({ skipRemoteLogout: true });
       return;
     }
     throw err;
@@ -357,63 +400,85 @@ export async function startBot(isReconnect = false) {
 
   // Monitor connection updates
   sock.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect, qr } = update;
+    try {
+      const { connection, lastDisconnect, qr } = update;
 
-    if (qr) {
-      console.log("\n📱 [WHATSAPP BOT] Scan this QR code using Linked Devices in WhatsApp:");
-      qrcode.generate(qr, { small: true });
-      (globalThis as any).whatsappLatestQr = qr;
-    }
-
-    if (connection === "close") {
-      const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
-      const errorMessage = lastDisconnect?.error?.message || "";
-      const isBadMac = errorMessage.includes("Bad MAC") || errorMessage.includes("decryption");
-      const isRateLimit = statusCode === 429 || errorMessage.toLowerCase().includes("rate") || errorMessage.toLowerCase().includes("unavailable");
-      const isConflict = statusCode === 440; // Stream Errored (conflict) — another WA Web session opened
-      const isLoggedOut = statusCode === DisconnectReason.loggedOut;
-      const shouldReconnect = !isLoggedOut && !isBadMac;
-
-      console.log(
-        `❌ [WHATSAPP BOT] Connection closed. Reason Status: ${statusCode}. Error: ${errorMessage}. Reconnecting: ${shouldReconnect}`
-      );
-      (globalThis as any).whatsappBotConnected = false;
-      isReconnecting = false; // Allow scheduleReconnect to set its own guard
-
-      if (isBadMac || isRateLimit) {
-        console.warn("⚠️ [WHATSAPP BOT] Detected Bad MAC / Rate Limit error. Wiping corrupted session state to self-heal...");
-        await logoutBot();
-      } else if (isLoggedOut) {
-        console.log("⚠️ [WHATSAPP BOT] Logged out. Clearing session state to restart cleanly...");
-        await logoutBot();
-      } else if (isConflict) {
-        // Status 440: another WhatsApp Web session took over. Reconnecting immediately
-        // would kick that session and start an infinite conflict loop. Wait with backoff.
-        console.log(
-          `⚠️ [WHATSAPP BOT] Conflict (440) — another WhatsApp Web session opened. ` +
-          `Backing off before retry (Attempt #${reconnectAttempts}) to avoid conflict death-spiral.`
-        );
-        if (reconnectAttempts >= 4) {
-          console.warn("💥 [WHATSAPP BOT] Persistent 440 conflicts detected. Clearing stale session credentials to self-heal...");
-          await logoutBot();
-        } else {
-          scheduleReconnect(true /* isConflict */);
-        }
-      } else if (shouldReconnect) {
-        scheduleReconnect(false);
+      if (qr) {
+        console.log("\n📱 [WHATSAPP BOT] Scan this QR code using Linked Devices in WhatsApp:");
+        qrcode.generate(qr, { small: true });
+        (globalThis as any).whatsappLatestQr = qr;
       }
-    } else if (connection === "open") {
-      console.log("\n✅ [WHATSAPP BOT] Connected successfully to WhatsApp network!");
-      (globalThis as any).whatsappLatestQr = null;
-      (globalThis as any).whatsappBotConnected = true;
-      isReconnecting = false;
-      // Delay resetting backoff counter so if we get kicked immediately by another session (440),
-      // we correctly increment attempts instead of ping-ponging at attempt 0
-      setTimeout(() => {
-        if ((globalThis as any).whatsappBotConnected) {
-          reconnectAttempts = 0;
+
+      if (connection === "close") {
+        const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
+        const errorMessage = lastDisconnect?.error?.message || "";
+        const isBadMac =
+          errorMessage.includes("Bad MAC") || errorMessage.includes("decryption");
+        const isRateLimit =
+          statusCode === 429 ||
+          errorMessage.toLowerCase().includes("rate") ||
+          errorMessage.toLowerCase().includes("unavailable");
+        const isConflict = statusCode === 440; // another WA Web session opened
+        // 401 = loggedOut. Also treat generic "Connection Failure" with 401 as dead session.
+        const isLoggedOut =
+          statusCode === DisconnectReason.loggedOut ||
+          statusCode === 401;
+        const shouldReconnect = !isLoggedOut && !isBadMac;
+
+        console.log(
+          `❌ [WHATSAPP BOT] Connection closed. Reason Status: ${statusCode}. Error: ${errorMessage}. Reconnecting: ${shouldReconnect}`
+        );
+        (globalThis as any).whatsappBotConnected = false;
+        isReconnecting = false; // Allow scheduleReconnect to set its own guard
+
+        if (isBadMac || isRateLimit) {
+          console.warn(
+            "⚠️ [WHATSAPP BOT] Detected Bad MAC / Rate Limit error. Wiping corrupted session state to self-heal..."
+          );
+          // Session is corrupted — do not attempt remote logout on a dead socket
+          await logoutBot({ skipRemoteLogout: true });
+        } else if (isLoggedOut) {
+          console.log(
+            "⚠️ [WHATSAPP BOT] Logged out (401). Clearing dead session WITHOUT remote logout to avoid process crash..."
+          );
+          // CRITICAL: skipRemoteLogout — socket is already closed; sock.logout() would
+          // throw Boom('Connection Closed') and kill the Railway process in a restart loop.
+          await logoutBot({ skipRemoteLogout: true });
+        } else if (isConflict) {
+          // Status 440: another WhatsApp Web session took over. Reconnecting immediately
+          // would kick that session and start an infinite conflict loop. Wait with backoff.
+          console.log(
+            `⚠️ [WHATSAPP BOT] Conflict (440) — another WhatsApp Web session opened. ` +
+              `Backing off before retry (Attempt #${reconnectAttempts}) to avoid conflict death-spiral.`
+          );
+          if (reconnectAttempts >= 4) {
+            console.warn(
+              "💥 [WHATSAPP BOT] Persistent 440 conflicts detected. Clearing stale session credentials to self-heal..."
+            );
+            await logoutBot({ skipRemoteLogout: true });
+          } else {
+            scheduleReconnect(true /* isConflict */);
+          }
+        } else if (shouldReconnect) {
+          scheduleReconnect(false);
         }
-      }, 30_000);
+      } else if (connection === "open") {
+        console.log("\n✅ [WHATSAPP BOT] Connected successfully to WhatsApp network!");
+        (globalThis as any).whatsappLatestQr = null;
+        (globalThis as any).whatsappBotConnected = true;
+        isReconnecting = false;
+        // Delay resetting backoff counter so if we get kicked immediately by another session (440),
+        // we correctly increment attempts instead of ping-ponging at attempt 0
+        setTimeout(() => {
+          if ((globalThis as any).whatsappBotConnected) {
+            reconnectAttempts = 0;
+          }
+        }, 30_000);
+      }
+    } catch (err) {
+      // Never let connection handler errors take down the whole API process
+      console.error("❌ [WHATSAPP BOT] Unhandled error in connection.update:", err);
+      isReconnecting = false;
     }
   });
 

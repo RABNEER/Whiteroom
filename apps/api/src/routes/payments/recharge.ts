@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { html, raw } from "hono/html";
 import { z } from "zod";
 import type { ApiResponse, JWTPayload } from "@whiteroom/shared";
 import { Errors } from "@whiteroom/shared";
@@ -70,7 +71,11 @@ export async function renderCheckoutPageHandler(c: Context) {
   const credits = c.req.query("credits") || "0";
   const keyId = c.req.query("key_id") || "";
 
-  const html = `<!DOCTYPE html>
+  const safeOrderId = JSON.stringify(orderId).replace(/</g, '\\u003c');
+  const safeCredits = JSON.stringify(credits).replace(/</g, '\\u003c');
+  const safeKeyId = JSON.stringify(keyId).replace(/</g, '\\u003c');
+
+  const htmlContent = html`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -102,10 +107,10 @@ export async function renderCheckoutPageHandler(c: Context) {
     <div class="status" id="statusMsg">✅ Payment completed successfully! You may now close this window or return to the Whiteroom app.</div>
   </div>
   <script>
-    const orderId = "${orderId}";
+    const orderId = ${raw(safeOrderId)};
     const amountPaise = ${amountPaise};
-    const credits = "${credits}";
-    const keyId = "${keyId}";
+    const credits = ${raw(safeCredits)};
+    const keyId = ${raw(safeKeyId)};
 
     function openRazorpay() {
       if (!orderId || orderId.startsWith('mock_') || !keyId) {
@@ -133,5 +138,5 @@ export async function renderCheckoutPageHandler(c: Context) {
 </body>
 </html>`;
 
-  return c.html(html, 200);
+  return c.html(htmlContent, 200);
 }

@@ -199,6 +199,18 @@ export interface AttendanceRecordResponse {
   markedAt: Date;
 }
 
+export interface RechargeOrderResponse {
+  id: string;
+  amount: number;
+  amountPaise: number;
+  credits: number;
+  currency: string;
+  receipt: string;
+  paymentUrl: string;
+  status: string;
+  notes?: Record<string, string>;
+}
+
 export interface AttendanceSessionDetailResponse extends AttendanceSessionResponse {
   records: AttendanceRecordResponse[];
 }

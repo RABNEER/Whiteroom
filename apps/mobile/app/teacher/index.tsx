@@ -1,4 +1,4 @@
-import type { AnnouncementResponse } from '@whiteroom/shared';
+import type { AnnouncementResponse, BulletinResponse } from '@whiteroom/shared';
 import { useState, useEffect, useMemo } from 'react';
 import {
   View,
@@ -78,6 +78,8 @@ import {
 } from '@/components/ui';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+import type { StudentResponse } from '@whiteroom/shared';
 
 type Tab = 'HOME' | 'CLASSES' | 'CHAT' | 'PROFILE';
 type DetailView = 'LIST' | 'DETAIL';
@@ -1003,7 +1005,7 @@ function AttendanceView({ classId }: { classId: string }) {
 
       {/* Student rows */}
       <View style={s.studentList}>
-        {(students.data?.data ?? []).map((student: any) => (
+        {(students.data?.data ?? []).map((student: StudentResponse) => (
           <StudentRow
             key={student.id}
             name={student.name}
@@ -1271,7 +1273,7 @@ function StudentsView({ classId }: { classId: string }) {
         </View>
       ) : (
         <View style={s.studentList}>
-          {(students.data?.data ?? []).map((student: any) => (
+          {(students.data?.data ?? []).map((student: StudentResponse) => (
             <View key={student.id} style={s.studentRow}>
               <View style={s.studentInfo}>
                 <View style={s.studentAvatar}>
@@ -1970,7 +1972,7 @@ function ClassNoticesView({ classId }: { classId: string }) {
           </Text>
         </View>
       ) : (
-        noticesList.map((notice: any) => (
+        noticesList.map((notice: BulletinResponse) => (
           <View key={notice.id} style={[s.card, { marginBottom: 12, borderLeftWidth: 4, borderLeftColor: getCategoryColor(notice.category) }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
               <Text style={{ fontSize: 11, fontWeight: '700', color: getCategoryColor(notice.category) }}>

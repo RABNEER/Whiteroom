@@ -362,13 +362,15 @@ export async function registerHandler(c: Context) {
           .from(classes)
           .where(and(eq(classes.tenantId, tenant.id), isNull(classes.deletedAt)));
 
-        for (const cls of activeSchoolClasses) {
+        if (activeSchoolClasses.length > 0) {
           await tx
             .insert(classEnrollments)
-            .values({
-              classId: cls.id,
-              studentId: linkedStudentId,
-            })
+            .values(
+              activeSchoolClasses.map((cls) => ({
+                classId: cls.id,
+                studentId: linkedStudentId,
+              }))
+            )
             .onConflictDoNothing();
         }
       }

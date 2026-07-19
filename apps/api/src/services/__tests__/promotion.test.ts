@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { promoteAllStudents } from "../promotion.js";
+import { AppError } from "@whiteroom/shared";
 
 // Set environment variables before any imports happen
 vi.hoisted(() => {
@@ -12,12 +14,15 @@ vi.hoisted(() => {
   process.env.RAZORPAY_WEBHOOK_SECRET = "webhook_secret";
 });
 
-const mockOffset = vi.fn();
-const mockLimit = vi.fn(() => ({ offset: mockOffset }));
-const mockOrderBy = vi.fn(() => ({ limit: mockLimit }));
-const mockWhere = vi.fn(() => ({ orderBy: mockOrderBy }));
-const mockFrom = vi.fn(() => ({ where: mockWhere }));
-const mockSelect = vi.fn(() => ({ from: mockFrom }));
+const { mockOffset, mockLimit, mockOrderBy, mockWhere, mockFrom, mockSelect } = vi.hoisted(() => {
+  const mockOffset = vi.fn();
+  const mockLimit = vi.fn(() => ({ offset: mockOffset }));
+  const mockOrderBy = vi.fn(() => ({ limit: mockLimit }));
+  const mockWhere = vi.fn(() => ({ orderBy: mockOrderBy }));
+  const mockFrom = vi.fn(() => ({ where: mockWhere }));
+  const mockSelect = vi.fn(() => ({ from: mockFrom }));
+  return { mockOffset, mockLimit, mockOrderBy, mockWhere, mockFrom, mockSelect };
+});
 
 vi.mock("../../lib/db.js", () => ({
   db: {
@@ -93,5 +98,22 @@ describe("listPromotionHistory", () => {
     await listPromotionHistory("tenant-2", { page: 1, limit: 20 });
 
     expect(mockWhere).toHaveBeenCalled();
+  });
+});
+
+describe("promoteAllStudents", () => {
+  it("throws validation error when academicYear is missing", async () => {
+    const tenantId = "tenant_123";
+    const promotedBy = "user_123";
+    const input = {
+      academicYear: "",
+      promotionRules: [],
+      graduatingClassIds: []
+    };
+
+    await expect(promoteAllStudents(tenantId, promotedBy, input)).rejects.toThrow(
+      "Academic year is required"
+    );
+    await expect(promoteAllStudents(tenantId, promotedBy, input)).rejects.toBeInstanceOf(AppError);
   });
 });

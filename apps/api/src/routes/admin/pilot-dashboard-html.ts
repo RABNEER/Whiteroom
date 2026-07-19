@@ -582,6 +582,16 @@ export function pilotDashboardHtmlHandler(c: Context) {
   </div>
 
   <script>
+    function escapeHtml(unsafe) {
+      if (typeof unsafe !== 'string') return unsafe;
+      return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
     let rawActivity = [];
 
     function getRoleBadgeClass(role) {
@@ -597,10 +607,13 @@ export function pilotDashboardHtmlHandler(c: Context) {
       const tbody = document.getElementById('audit-table');
       if (filteredLogs && filteredLogs.length > 0) {
         tbody.innerHTML = filteredLogs.map(item => {
-          const badgeClass = getRoleBadgeClass(item.role);
-          const formattedRole = item.role ? item.role.replace('_', ' ').toUpperCase() : 'SYSTEM';
-          const cleanPhone = item.actorPhone ? ' (' + item.actorPhone.slice(-4) + ')' : '';
-          const displayActor = item.actorName ? item.actorName : (item.actor || 'System');
+          const badgeClass = escapeHtml(getRoleBadgeClass(item.role));
+          const formattedRole = escapeHtml(item.role ? item.role.replace('_', ' ').toUpperCase() : 'SYSTEM');
+          const cleanPhone = escapeHtml(item.actorPhone ? ' (' + item.actorPhone.slice(-4) + ')' : '');
+          const displayActor = escapeHtml(item.actorName ? item.actorName : (item.actor || 'System'));
+          const actionText = escapeHtml(item.action ? item.action.replace(/_/g, ' ').toUpperCase() : '');
+          const resourceText = escapeHtml(item.resource || '');
+          const timeText = escapeHtml(new Date(item.createdAt).toLocaleTimeString());
           
           return \`
             <tr>
@@ -616,13 +629,13 @@ export function pilotDashboardHtmlHandler(c: Context) {
                 </div>
               </td>
               <td>
-                <span class="action-text">\${item.action.replace(/_/g, ' ').toUpperCase()}</span>
+                <span class="action-text">\${actionText}</span>
               </td>
               <td>
-                <span class="resource-text">\${item.resource}</span>
+                <span class="resource-text">\${resourceText}</span>
               </td>
               <td style="text-align: right" class="time-text">
-                \${new Date(item.createdAt).toLocaleTimeString()}
+                \${timeText}
               </td>
             </tr>
           \`;
@@ -664,22 +677,27 @@ export function pilotDashboardHtmlHandler(c: Context) {
         // Render Schools
         const schoolsDiv = document.getElementById('schools-list');
         if (d.activeSchools && d.activeSchools.length > 0) {
-          schoolsDiv.innerHTML = d.activeSchools.map(school => \`
+          schoolsDiv.innerHTML = d.activeSchools.map(school => {
+            const schoolName = escapeHtml(school.name || '');
+            const schoolAddress = escapeHtml(school.address || 'Address unconfigured');
+            const schoolSlug = escapeHtml(school.slug || '');
+            const schoolPhone = school.phone ? escapeHtml(school.phone.slice(0, 3) + '***' + school.phone.slice(-3)) : '';
+            return \`
             <div class="school-card">
               <div class="school-card-header">
-                <span class="school-name">\${school.name}</span>
+                <span class="school-name">\${schoolName}</span>
                 <span class="badge-status">ONBOARDED</span>
               </div>
               <div class="school-address">
                 <span>📍</span>
-                \${school.address || 'Address unconfigured'}
+                \${schoolAddress}
               </div>
               <div class="school-footer">
-                <span>Domain: /\${school.slug}</span>
-                <span>Owner: \${school.phone.slice(0, 3)}***\${school.phone.slice(-3)}</span>
+                <span>Domain: /\${schoolSlug}</span>
+                <span>Owner: \${schoolPhone}</span>
               </div>
             </div>
-          \`).join('');
+          \`}).join('');
         } else {
           schoolsDiv.innerHTML = '<div class="school-card" style="text-align: center; color: var(--muted)">No active schools onboarded.</div>';
         }

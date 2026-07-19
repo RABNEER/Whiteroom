@@ -2,7 +2,6 @@ import { cors as honoCors } from "hono/cors";
 import { env } from "../lib/env.js";
 
 export function corsMiddleware() {
-  // FIX: CORS wildcard allows requests from any website
   return honoCors({
     origin: (origin) => {
       if (!origin) return "";
@@ -17,9 +16,6 @@ export function corsMiddleware() {
         "http://127.0.0.1:8081",
         "http://192.168.1.*:8081",
         "http://192.168.0.*:8081",
-        "https://*.netlify.app",
-        "https://*.up.railway.app",
-        "https://*.railway.app",
         "https://apps.whiteroom.co.in",
         "https://whiteroom.co.in",
         env.MOBILE_WEB_URL,
@@ -29,8 +25,14 @@ export function corsMiddleware() {
       if (!origin) return origin || ""; // Allow server-to-server or return empty
 
       const isAllowed = allowed.some((pattern) => {
+        if (pattern === "*") {
+          return true;
+        }
         if (pattern.includes("*")) {
-          const escaped = pattern.replace(/\./g, "\\.").replace(/\*/g, ".*");
+          const escaped = pattern
+            .split("*")
+            .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+            .join("[a-zA-Z0-9_-]+");
           const regex = new RegExp("^" + escaped + "$");
           return regex.test(origin);
         }
