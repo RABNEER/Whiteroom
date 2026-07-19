@@ -298,3 +298,17 @@ export interface ChatReceiptResponse {
 }
 
 
+
+// ─── Bulletins ───
+export interface BulletinResponse {
+  id: string;
+  tenantId: string;
+  classId: string | null;
+  authorId: string;
+  title: string;
+  body: string;
+  category: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  isRead?: boolean;
+}

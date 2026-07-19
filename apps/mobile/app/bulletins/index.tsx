@@ -21,6 +21,7 @@ import {
   Check,
   ArrowLeft,
 } from "lucide-react-native";
+import type { BulletinResponse } from "@whiteroom/shared";
 import { api } from "@/api/client";
 import { useSession } from "@/auth/session-store";
 import { colors, spacing, font, radius } from "@/theme/tokens";
@@ -67,7 +68,7 @@ export default function BulletinsFeedScreen() {
     }
   };
 
-  const filteredBulletins = bulletinsList.filter((b: any) => {
+  const filteredBulletins = bulletinsList.filter((b: BulletinResponse) => {
     if (activeTab === "ALL") return true;
     return b.category === activeTab;
   });
