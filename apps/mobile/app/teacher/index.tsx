@@ -1,3 +1,4 @@
+import type { AnnouncementResponse } from '@whiteroom/shared';
 import { useState, useEffect, useMemo } from 'react';
 import {
   View,
@@ -1734,7 +1735,7 @@ function AnnounceTab() {
         </Pressable>
       )}
 
-      {(announcements.data?.data ?? []).map((ann: any) => (
+      {(announcements.data?.data ?? []).map((ann: AnnouncementResponse) => (
         <View key={ann.id} style={[s.card, { marginBottom: 12 }, ann.isPinned && { borderColor: colors.teal }]}>
           {ann.isPinned && <Text style={s.pinnedTag}>📌 PINNED</Text>}
           <Text style={s.announcementTitle}>{ann.title}</Text>
