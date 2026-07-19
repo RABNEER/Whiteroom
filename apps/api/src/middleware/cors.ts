@@ -29,8 +29,14 @@ export function corsMiddleware() {
       if (!origin) return origin || ""; // Allow server-to-server or return empty
 
       const isAllowed = allowed.some((pattern) => {
+        if (pattern === "*") {
+          return true;
+        }
         if (pattern.includes("*")) {
-          const escaped = pattern.replace(/\./g, "\\.").replace(/\*/g, ".*");
+          const escaped = pattern
+            .split("*")
+            .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+            .join("[a-zA-Z0-9_-]+");
           const regex = new RegExp("^" + escaped + "$");
           return regex.test(origin);
         }
