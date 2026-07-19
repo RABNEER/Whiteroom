@@ -272,17 +272,21 @@ export async function logoutBot(options: {
     (globalThis as any).whatsappLatestQr = null;
 
     if (sock) {
-      // Only attempt remote logout when the session is still alive.
-      // On 401/logged-out the connection is already dead — calling logout()
-      // throws Boom('Connection Closed') and crashes the process.
+      // Only attempt remote logout when the session is still alive and socket is open.
+      // On 401/logged-out or closed connection, calling logout() throws Boom('Connection Closed')
+      // and crashes the process.
       if (!skipRemoteLogout) {
         try {
-          await Promise.race([
-            Promise.resolve(sock.logout?.()).catch(() => undefined),
-            new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
-          ]);
-        } catch {
-          // Socket already closed — safe to ignore
+          if (sock.ws && (sock.ws as any).isOpen) {
+            await Promise.race([
+              Promise.resolve(sock.logout?.()).catch((e) => {
+                console.warn("⚠️ [WHATSAPP BOT] Ignored error during sock.logout():", e?.message || e);
+              }),
+              new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
+            ]);
+          }
+        } catch (e: any) {
+          console.warn("⚠️ [WHATSAPP BOT] Socket logout ignored:", e?.message || e);
         }
       }
       try {
@@ -394,6 +398,16 @@ export async function startBot(isReconnect = false) {
   });
 
   (globalThis as any).whatsappSocket = sock;
+
+  // Prevent unhandled socket/emitter errors from crashing the Node.js process
+  (sock.ev as any).on("error", (err: unknown) => {
+    console.warn("⚠️ [WHATSAPP BOT] Socket ev error caught safely:", err);
+  });
+  if (sock.ws) {
+    (sock.ws as any).on("error", (err: unknown) => {
+      console.warn("⚠️ [WHATSAPP BOT] WebSocket error caught safely:", err);
+    });
+  }
 
   // Save credentials when updated
   sock.ev.on("creds.update", saveCreds);

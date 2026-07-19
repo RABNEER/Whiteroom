@@ -157,43 +157,56 @@ export async function promoteAllStudents(
             )
           );
 
-        // Enroll students in new classes
+        // Batch check if students already exist in target class
+        const existingTargetEnrollments = await tx
+          .select()
+          .from(classEnrollments)
+          .where(
+            and(
+              eq(classEnrollments.classId, rule.toClassId),
+              inArray(classEnrollments.studentId, studentIds)
+            )
+          );
+
+        const existingMap = new Map(existingTargetEnrollments.map((e) => [e.studentId, e]));
+        const studentsToUpdate: string[] = [];
+        const studentsToInsert: string[] = [];
+
         for (const studentId of studentIds) {
-          // Check if already active in target class to prevent unique constraint crash
-          const [existingActive] = await tx
-            .select()
-            .from(classEnrollments)
+          const existing = existingMap.get(studentId);
+          if (existing) {
+            if (existing.status !== "active") {
+              studentsToUpdate.push(studentId);
+            }
+          } else {
+            studentsToInsert.push(studentId);
+          }
+        }
+
+        if (studentsToUpdate.length > 0) {
+          await tx
+            .update(classEnrollments)
+            .set({
+              status: "active",
+              enrolledAt: new Date(),
+            })
             .where(
               and(
                 eq(classEnrollments.classId, rule.toClassId),
-                eq(classEnrollments.studentId, studentId)
+                inArray(classEnrollments.studentId, studentsToUpdate)
               )
-            )
-            .limit(1);
+            );
+        }
 
-          if (existingActive) {
-            if (existingActive.status !== "active") {
-              await tx
-                .update(classEnrollments)
-                .set({
-                  status: "active",
-                  enrolledAt: new Date(),
-                })
-                .where(
-                  and(
-                    eq(classEnrollments.classId, rule.toClassId),
-                    eq(classEnrollments.studentId, studentId)
-                  )
-                );
-            }
-          } else {
-            await tx.insert(classEnrollments).values({
+        if (studentsToInsert.length > 0) {
+          await tx.insert(classEnrollments).values(
+            studentsToInsert.map((studentId) => ({
               classId: rule.toClassId,
               studentId,
-              status: "active",
+              status: "active" as const,
               enrolledAt: new Date(),
-            });
-          }
+            }))
+          );
         }
 
         totalPromoted += studentIds.length;
@@ -232,40 +245,53 @@ export async function promoteAllStudents(
     return promotionLog;
   });
 
-  // 5. Fire parent notifications (non-blocking, fire-and-forget)
-  // Send notifications for promotions
+  // 5. Fire parent notifications (non-blocking, batched by class name)
   if (promotionsToSend.length > 0) {
     const studentIds = promotionsToSend.map((p) => p.studentId);
     const parentLinks = await getParentUserIdsForStudents(tenantId, studentIds);
     const parentMap = new Map(parentLinks.map((p) => [p.studentId, p.parentId]));
 
+    const groupedPromotions = new Map<string, string[]>();
     for (const promotion of promotionsToSend) {
       const parentId = parentMap.get(promotion.studentId);
       if (parentId) {
-        sendPushToUsers(tenantId, [parentId], {
-          title: "Class Promotion 🎓",
-          body: `Your child has been promoted to ${promotion.newClassName} for academic year ${academicYear}.`,
-          type: "reminder",
-        });
+        const group = groupedPromotions.get(promotion.newClassName) ?? [];
+        group.push(parentId);
+        groupedPromotions.set(promotion.newClassName, group);
       }
+    }
+
+    for (const [newClassName, parentIds] of groupedPromotions.entries()) {
+      sendPushToUsers(tenantId, parentIds, {
+        title: "Class Promotion 🎓",
+        body: `Your child has been promoted to ${newClassName} for academic year ${academicYear}.`,
+        type: "reminder",
+      });
     }
   }
 
-  // Send notifications for graduations
+  // Send notifications for graduations batched by class name
   if (graduationsToSend.length > 0) {
     const studentIds = graduationsToSend.map((g) => g.studentId);
     const parentLinks = await getParentUserIdsForStudents(tenantId, studentIds);
     const parentMap = new Map(parentLinks.map((p) => [p.studentId, p.parentId]));
 
+    const groupedGraduations = new Map<string, string[]>();
     for (const graduation of graduationsToSend) {
       const parentId = parentMap.get(graduation.studentId);
       if (parentId) {
-        sendPushToUsers(tenantId, [parentId], {
-          title: "Congratulations! 🎉",
-          body: `Your child has graduated from ${graduation.className}.`,
-          type: "reminder",
-        });
+        const group = groupedGraduations.get(graduation.className) ?? [];
+        group.push(parentId);
+        groupedGraduations.set(graduation.className, group);
       }
+    }
+
+    for (const [className, parentIds] of groupedGraduations.entries()) {
+      sendPushToUsers(tenantId, parentIds, {
+        title: "Congratulations! 🎉",
+        body: `Your child has graduated from ${className}.`,
+        type: "reminder",
+      });
     }
   }
 

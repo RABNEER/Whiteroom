@@ -72,7 +72,7 @@ export async function sendPushToUser(
 
 /**
  * Send push notification to multiple users.
- * Used for absent notifications after attendance marking.
+ * Batches token lookup and notification record creation to eliminate N+1 queries.
  */
 export async function sendPushToUsers(
   tenantId: string,
@@ -81,13 +81,67 @@ export async function sendPushToUsers(
 ): Promise<void> {
   if (userIds.length === 0) return;
 
-  // Fire each as independent, non-blocking operations
-  const promises = userIds.map((userId) =>
-    sendPushToUser(tenantId, userId, payload)
-  );
+  try {
+    const uniqueUserIds = Array.from(new Set(userIds));
 
-  // Don't await — fire-and-forget per constitution
-  Promise.allSettled(promises);
+    // 1. Batch lookup tokens for all users
+    const tokens = await db
+      .select({ userId: deviceTokens.userId, fcmToken: deviceTokens.fcmToken })
+      .from(deviceTokens)
+      .where(
+        and(
+          inArray(deviceTokens.userId, uniqueUserIds),
+          eq(deviceTokens.tenantId, tenantId)
+        )
+      );
+
+    // 2. Batch write notification records
+    const insertedNotifications = await db
+      .insert(notifications)
+      .values(
+        uniqueUserIds.map((userId) => ({
+          tenantId,
+          userId,
+          title: payload.title,
+          body: payload.body,
+          type: payload.type,
+          fcmToken: tokens.find((t) => t.userId === userId)?.fcmToken ?? null,
+          sentAt: null,
+        }))
+      )
+      .returning();
+
+    const messaging = getFirebaseMessaging();
+    if (!messaging || tokens.length === 0) {
+      return;
+    }
+
+    const tokenStrings = tokens.map((token) => token.fcmToken);
+    for (let i = 0; i < tokenStrings.length; i += 500) {
+      const chunk = tokenStrings.slice(i, i + 500);
+      await messaging.sendEachForMulticast({
+        tokens: chunk,
+        notification: {
+          title: payload.title,
+          body: payload.body,
+        },
+        data: {
+          type: payload.type,
+          tenantId,
+        },
+      });
+    }
+
+    if (insertedNotifications.length > 0) {
+      const ids = insertedNotifications.map((n) => n.id);
+      await db
+        .update(notifications)
+        .set({ sentAt: new Date() })
+        .where(inArray(notifications.id, ids));
+    }
+  } catch (err) {
+    console.error("[FCM] Batch push notification failed:", err);
+  }
 }
 
 /**
