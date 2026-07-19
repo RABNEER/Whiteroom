@@ -78,6 +78,8 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+import type { StudentResponse } from '@whiteroom/shared';
+
 type Tab = 'HOME' | 'CLASSES' | 'CHAT' | 'PROFILE';
 type DetailView = 'LIST' | 'DETAIL';
 type SubTab = 'Attendance' | 'Students' | 'Schedule' | 'Invite' | 'Notices' | 'Materials';
@@ -760,7 +762,7 @@ function AttendanceView({ classId }: { classId: string }) {
 
       {/* Student rows */}
       <View style={s.studentList}>
-        {(students.data?.data ?? []).map((student: any) => (
+        {(students.data?.data ?? []).map((student: StudentResponse) => (
           <StudentRow
             key={student.id}
             name={student.name}
@@ -985,7 +987,7 @@ function StudentsView({ classId }: { classId: string }) {
         </View>
       ) : (
         <View style={s.studentList}>
-          {(students.data?.data ?? []).map((student: any) => (
+          {(students.data?.data ?? []).map((student: StudentResponse) => (
             <View key={student.id} style={s.studentRow}>
               <View style={s.studentInfo}>
                 <View style={s.studentAvatar}>
