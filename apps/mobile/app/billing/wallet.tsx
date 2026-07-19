@@ -30,6 +30,7 @@ import {
 } from "lucide-react-native";
 import { api } from "@/api/client";
 import { colors, spacing, font, radius } from "@/theme/tokens";
+import type { RechargeOrderResponse } from "@whiteroom/shared";
 
 export default function WalletScreen() {
   const router = useRouter();
@@ -68,7 +69,7 @@ export default function WalletScreen() {
   // Recharge Mutation
   const rechargeMutation = useMutation({
     mutationFn: (credits: number) => api.createRechargeOrder({ credits }),
-    onSuccess: (order: any) => {
+    onSuccess: (order: RechargeOrderResponse) => {
       queryClient.invalidateQueries({ queryKey: ["walletStatus"] });
       queryClient.invalidateQueries({ queryKey: ["walletTransactions"] });
 
