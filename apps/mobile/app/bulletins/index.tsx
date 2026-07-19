@@ -1,3 +1,4 @@
+import { BulletinResponse } from '@whiteroom/shared';
 import { useState } from "react";
 import {
   View,
@@ -67,7 +68,7 @@ export default function BulletinsFeedScreen() {
     }
   };
 
-  const filteredBulletins = bulletinsList.filter((b: any) => {
+  const filteredBulletins = bulletinsList.filter((b: BulletinResponse) => {
     if (activeTab === "ALL") return true;
     return b.category === activeTab;
   });

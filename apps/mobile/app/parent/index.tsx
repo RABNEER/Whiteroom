@@ -1,3 +1,4 @@
+import { BulletinResponse } from '@whiteroom/shared';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -817,7 +818,7 @@ function ChildNoticesView({ classId }: { classId: string }) {
           <Text style={{ color: colors.teal, fontSize: 13 }}>No notices for this class.</Text>
         </Card>
       ) : (
-        bulletinsList.map((notice: any) => (
+        bulletinsList.map((notice: BulletinResponse) => (
           <View key={notice.id} style={[s.classCard, { flexDirection: 'column', alignItems: 'stretch', gap: 6, borderLeftWidth: 4, borderLeftColor: getCategoryColor(notice.category) }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ fontSize: 11, fontWeight: '700', color: getCategoryColor(notice.category) }}>
