@@ -15,7 +15,7 @@ import {
   Alert,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -40,6 +40,7 @@ type Role = 'school_admin' | 'teacher' | 'parent';
 
 export default function AuthScreen() {
   const setSession = useSession((s) => s.setSession);
+  const params = useLocalSearchParams<{ inviteCode?: string; role?: Role }>();
 
   // State Machine
   const [step, setStep] = useState<Step>('SPLASH');
@@ -172,7 +173,26 @@ export default function AuthScreen() {
     return () => clearInterval(interval);
   }, [step, whatsappExpiresAt]);
 
-  // Handle incoming deep links to auto-fill invite code & role
+  const resolveInviteMutation = useMutation({
+    mutationFn: (code: string) => api.inviteResolve(code),
+    onSuccess: (data) => {
+      setResolvedTenant(data.tenantName);
+      setError(null);
+    },
+    onError: (err: unknown) => {
+      setResolvedTenant(null);
+      setError(err instanceof ApiError ? err.message : 'Invalid invite code');
+    },
+  });
+
+  const handleRoleTabChange = (role: Role) => {
+    setSelectedRole(role);
+    setInviteCode('');
+    setResolvedTenant(null);
+    resolveInviteMutation.reset();
+  };
+
+  // Handle incoming deep links and route parameters to auto-fill invite code & role
   useEffect(() => {
     function handleDeepLink(url: string | null) {
       if (!url) return;
@@ -185,16 +205,36 @@ export default function AuthScreen() {
         // Universal Link: https://apps.whiteroom.co.in/invite/CODE or https://whiteroom.co.in/invite/CODE
         url.match(/apps\.whiteroom\.co\.in\/invite\/([A-Za-z0-9]{6})/) ||
         url.match(/whiteroom\.co\.in\/invite\/([A-Za-z0-9]{6})/) ||
-        // Custom scheme fallback: whiteroom://auth?inviteCode=CODE
+        // Custom scheme fallback: whiteroom://auth?inviteCode=CODE or whiteroom://invite/CODE
+        url.match(/whiteroom:\/\/invite\/([A-Za-z0-9]{6})/) ||
         url.match(/[?&]inviteCode=([A-Za-z0-9]{6})/);
       if (match) {
-        setInviteCode(match[1].toUpperCase());
+        const upper = match[1].toUpperCase();
+        setInviteCode(upper);
+        if (upper.length === 6) {
+          resolveInviteMutation.mutate(upper);
+        }
       }
     }
-    Linking.getInitialURL().then(handleDeepLink);
+
+    if (params.inviteCode || params.role) {
+      if (params.role && (params.role === 'teacher' || params.role === 'parent' || params.role === 'school_admin')) {
+        setSelectedRole(params.role);
+      }
+      if (params.inviteCode) {
+        const upper = params.inviteCode.toUpperCase();
+        setInviteCode(upper);
+        if (upper.length === 6) {
+          resolveInviteMutation.mutate(upper);
+        }
+      }
+    } else {
+      Linking.getInitialURL().then(handleDeepLink);
+    }
+
     const sub = Linking.addEventListener('url', (e) => handleDeepLink(e.url));
     return () => sub.remove();
-  }, []);
+  }, [params.inviteCode, params.role]);
 
 
   const handleVerifyWhatsApp = useCallback(async () => {
@@ -288,13 +328,6 @@ export default function AuthScreen() {
     };
   }, [step, whatsappSessionId, whatsappToken, checkActiveSession]);
 
-  // Bug 2+3 fix: reset invite/tenant state when role changes so stale codes can't bleed between roles
-  useEffect(() => {
-    setInviteCode('');
-    setResolvedTenant(null);
-    resolveInviteMutation.reset();
-  }, [selectedRole]);
-
   // Mutations
   const registerMutation = useMutation({
     mutationFn: (params: {
@@ -320,18 +353,6 @@ export default function AuthScreen() {
         setStep('PHONE');
         setError('Session expired. Please verify again.');
       }
-    },
-  });
-
-  const resolveInviteMutation = useMutation({
-    mutationFn: (code: string) => api.inviteResolve(code),
-    onSuccess: (data) => {
-      setResolvedTenant(data.tenantName);
-      setError(null);
-    },
-    onError: (err: unknown) => {
-      setResolvedTenant(null);
-      setError(err instanceof ApiError ? err.message : 'Invalid invite code');
     },
   });
 
@@ -833,7 +854,7 @@ export default function AuthScreen() {
                   styles.roleCard,
                   selectedRole === 'school_admin' && styles.roleCardSelected,
                 ]}
-                onPress={() => setSelectedRole('school_admin')}
+                onPress={() => handleRoleTabChange('school_admin')}
               >
                 <View style={[styles.roleIconBox, { backgroundColor: colors.navy }]}>
                   <Text style={styles.roleIconText}>A</Text>
@@ -853,7 +874,7 @@ export default function AuthScreen() {
                   styles.roleCard,
                   selectedRole === 'teacher' && styles.roleCardSelected,
                 ]}
-                onPress={() => setSelectedRole('teacher')}
+                onPress={() => handleRoleTabChange('teacher')}
               >
                 <View style={[styles.roleIconBox, { backgroundColor: colors.teal }]}>
                   <Text style={styles.roleIconText}>T</Text>
@@ -873,7 +894,7 @@ export default function AuthScreen() {
                   styles.roleCard,
                   selectedRole === 'parent' && styles.roleCardSelected,
                 ]}
-                onPress={() => setSelectedRole('parent')}
+                onPress={() => handleRoleTabChange('parent')}
               >
                 <View style={[styles.roleIconBox, { backgroundColor: colors.sky }]}>
                   <Text style={styles.roleIconText}>P</Text>

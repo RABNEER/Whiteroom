@@ -48,7 +48,12 @@
       "name": "Whiteroom"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "origin": "https://apps.whiteroom.co.in"
+        }
+      ],
       "expo-secure-store",
       [
         "expo-notifications",

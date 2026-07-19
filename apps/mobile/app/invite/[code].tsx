@@ -8,8 +8,9 @@ import { colors } from '@/theme/tokens';
 import { Card, Button, Banner, DisplayTitle, Muted } from '@/components/ui';
 
 export default function InviteScreen() {
-  const { code } = useLocalSearchParams<{ code: string }>();
+  const { code, role } = useLocalSearchParams<{ code: string; role?: string }>();
   const cleanCode = (code || '').trim().toUpperCase();
+  const targetRole = role === 'teacher' ? 'teacher' : 'parent';
 
   const resolveQuery = useQuery({
     queryKey: ['inviteResolve', cleanCode],
@@ -21,7 +22,7 @@ export default function InviteScreen() {
   const handleContinue = () => {
     router.replace({
       pathname: '/auth',
-      params: { inviteCode: cleanCode },
+      params: { inviteCode: cleanCode, role: targetRole },
     });
   };
 
@@ -30,7 +31,7 @@ export default function InviteScreen() {
       <View style={styles.content}>
         <DisplayTitle style={{ textAlign: 'center', marginBottom: 8 }}>School Invitation</DisplayTitle>
         <Muted style={{ textAlign: 'center', marginBottom: 24 }}>
-          You have been invited to join a school workspace on Whiteroom.
+          You have been invited to join a school workspace on Whiteroom as a {targetRole === 'teacher' ? 'Teacher' : 'Parent'}.
         </Muted>
 
         <Card style={styles.card}>
@@ -50,7 +51,7 @@ export default function InviteScreen() {
             </View>
           ) : (
             <View style={styles.successBox}>
-              <Text style={styles.label}>INVITED TO</Text>
+              <Text style={styles.label}>INVITED AS {targetRole.toUpperCase()} TO</Text>
               <Text style={[styles.schoolName, { color: resolveQuery.data.brandColor || colors.navy }]}>
                 {resolveQuery.data.tenantName || 'School Workspace'}
               </Text>
@@ -58,12 +59,12 @@ export default function InviteScreen() {
 
               <View style={{ width: '100%', marginVertical: 16 }}>
                 <Banner tone="info">
-                  Click below to continue signing in or creating your account for this school.
+                  Click below to continue signing in or creating your account as a {targetRole === 'teacher' ? 'Teacher' : 'Parent'} for this school.
                 </Banner>
               </View>
 
               <Button onPress={handleContinue} style={{ width: '100%' }}>
-                Join {resolveQuery.data.tenantName || 'School'}
+                Join {resolveQuery.data.tenantName || 'School'} as {targetRole === 'teacher' ? 'Teacher' : 'Parent'}
               </Button>
             </View>
           )}

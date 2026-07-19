@@ -498,6 +498,228 @@ function ClassDetailView({
 
 // ─── S13/S14: Attendance View ─────────────────────────────────────────────────
 
+function AttendanceQuickAddDrawer({
+  classId,
+  sessionId,
+  onAdded,
+}: {
+  classId: string;
+  sessionId: string | null;
+  onAdded: (studentId: string) => void;
+}) {
+  const qc = useQueryClient();
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [addMode, setAddMode] = useState<'create' | 'existing'>('create');
+  const [newName, setNewName] = useState('');
+  const [newRoll, setNewRoll] = useState('');
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+
+  const students = useQuery({
+    queryKey: ['classStudents', classId],
+    queryFn: () => api.classStudents(classId),
+  });
+
+  const allStudents = useQuery({
+    queryKey: ['students'],
+    queryFn: () => api.students(1, 100),
+    enabled: showQuickAdd && addMode === 'existing',
+  });
+
+  const enrolledIds = new Set((students.data?.data ?? []).map(s => s.id));
+  const availableStudents = (allStudents.data?.data ?? []).filter(s => !enrolledIds.has(s.id));
+
+  const addStudent = useMutation({
+    mutationFn: async () => {
+      if (addMode === 'existing' && selectedStudentId) {
+        await api.classAddStudents(classId, [selectedStudentId]);
+        return selectedStudentId;
+      }
+      const student = await api.studentCreate({
+        name: newName.trim(),
+        rollNumber: newRoll.trim() || undefined,
+      });
+      await api.classAddStudents(classId, [student.id]);
+      return student.id;
+    },
+    onSuccess: (stId) => {
+      qc.invalidateQueries({ queryKey: ['classStudents', classId] });
+      qc.invalidateQueries({ queryKey: ['students'] });
+      if (stId) onAdded(stId);
+      setNewName('');
+      setNewRoll('');
+      setSelectedStudentId(null);
+      setShowQuickAdd(false);
+    },
+    onError: (err: unknown) => {
+      showAlert('Error', err instanceof ApiError ? err.message : 'Failed to add student to class.');
+    },
+  });
+
+  return (
+    <View style={{ marginBottom: 16 }}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setShowQuickAdd(!showQuickAdd)}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          backgroundColor: '#F0F9FF',
+          borderWidth: 1.5,
+          borderColor: '#BAE6FD',
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          borderRadius: 12,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.teal, alignItems: 'center', justifyContent: 'center' }}>
+            <Plus size={16} color={colors.white} />
+          </View>
+          <View>
+            <Text style={{ color: colors.navy, fontWeight: '700', fontSize: 14 }}>
+              {showQuickAdd ? 'Close Add Student Drawer' : 'Quick Add / Enroll Student to Roster'}
+            </Text>
+            {!showQuickAdd && (
+              <Text style={{ color: colors.teal, fontSize: 11, marginTop: 1 }}>
+                {sessionId ? '⚡ Instantly adds to class & marks Present' : 'Add missing student to this class roster'}
+              </Text>
+            )}
+          </View>
+        </View>
+        <Text style={{ color: colors.teal, fontWeight: '700', fontSize: 13 }}>
+          {showQuickAdd ? '✕ CLOSE' : '+ ADD'}
+        </Text>
+      </Pressable>
+
+      {showQuickAdd && (
+        <Card style={{ marginTop: 10, padding: 16, backgroundColor: '#FFFFFF', borderColor: '#BAE6FD', borderWidth: 1 }}>
+          <View style={{ marginBottom: 14 }}>
+            <Segmented
+              value={addMode}
+              options={[
+                { value: 'create', label: 'Create New' },
+                { value: 'existing', label: 'Pick Existing' },
+              ]}
+              onChange={(v) => setAddMode(v as any)}
+            />
+          </View>
+
+          {addMode === 'create' ? (
+            <View style={{ gap: 8 }}>
+              {/* Live Preview Pill */}
+              {newName.trim() ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: '#F0FDF4', borderRadius: 10, borderWidth: 1, borderColor: '#BBF7D0', marginBottom: 4 }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#16A34A', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: colors.white, fontWeight: '700', fontSize: 14 }}>
+                      {newName.trim().slice(0, 1).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#166534', fontWeight: '700', fontSize: 14 }}>{newName.trim()}</Text>
+                    <Text style={{ color: '#15803D', fontSize: 12 }}>
+                      {newRoll.trim() ? `Roll #${newRoll.trim()}` : 'No Roll Number'} {sessionId ? '· Will auto-mark Present ✅' : ''}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              <Field
+                label="STUDENT FULL NAME"
+                placeholder="e.g. Rahul Kumar"
+                value={newName}
+                onChangeText={setNewName}
+              />
+              <Field
+                label="ROLL NUMBER (OPTIONAL)"
+                placeholder="e.g. 07"
+                value={newRoll}
+                onChangeText={setNewRoll}
+              />
+            </View>
+          ) : (
+            <View style={{ marginBottom: 12 }}>
+              {allStudents.isLoading ? (
+                <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                  <ActivityIndicator color={colors.teal} size="small" />
+                  <Text style={{ color: colors.teal, fontSize: 12, marginTop: 8 }}>Loading school students...</Text>
+                </View>
+              ) : availableStudents.length === 0 ? (
+                <View style={{ padding: 14, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: colors.sky, alignItems: 'center' }}>
+                  <Text style={{ color: '#64748B', fontSize: 13, textAlign: 'center' }}>No other unassigned students available in directory.</Text>
+                </View>
+              ) : (
+                <View style={{ borderWidth: 1, borderColor: colors.sky, borderRadius: 10, padding: 6, backgroundColor: '#F8FAFC' }}>
+                  <ScrollView style={{ maxHeight: 200 }}>
+                    {availableStudents.map(st => {
+                      const isSelected = selectedStudentId === st.id;
+                      return (
+                        <Pressable
+                          key={st.id}
+                          onPress={() => setSelectedStudentId(st.id)}
+                          style={{
+                            paddingVertical: 10,
+                            paddingHorizontal: 12,
+                            borderRadius: 8,
+                            backgroundColor: isSelected ? '#E0F2FE' : 'transparent',
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: 2,
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: isSelected ? colors.teal : '#CBD5E1', alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ color: colors.white, fontWeight: '700', fontSize: 12 }}>
+                                {st.name.slice(0, 1).toUpperCase()}
+                              </Text>
+                            </View>
+                            <View>
+                              <Text style={{ color: colors.navy, fontWeight: isSelected ? '700' : '600', fontSize: 14 }}>
+                                {st.name}
+                              </Text>
+                              {st.rollNumber ? (
+                                <Text style={{ color: colors.teal, fontSize: 12, marginTop: 1 }}>Roll #{st.rollNumber}</Text>
+                              ) : null}
+                            </View>
+                          </View>
+                          {isSelected ? (
+                            <View style={{ backgroundColor: colors.teal, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                              <Text style={{ color: colors.white, fontSize: 11, fontWeight: '700' }}>✓ Selected</Text>
+                            </View>
+                          ) : (
+                            <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#CBD5E1' }} />
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+          )}
+
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+            <Button variant="ghost" onPress={() => setShowQuickAdd(false)} style={{ flex: 1 }}>
+              Cancel
+            </Button>
+            <Button
+              onPress={() => addStudent.mutate()}
+              disabled={addMode === 'create' ? !newName.trim() : !selectedStudentId}
+              loading={addStudent.isPending}
+              style={{ flex: 1 }}
+            >
+              {addMode === 'create'
+                ? (sessionId ? 'Add & Mark Present' : 'Add Student')
+                : (sessionId ? 'Enroll & Mark Present' : 'Enroll Selected')}
+            </Button>
+          </View>
+        </Card>
+      )}
+    </View>
+  );
+}
+
 function AttendanceView({ classId }: { classId: string }) {
   const qc = useQueryClient();
   const [records, setRecords] = useState<Record<string, AttendanceStatus>>({});
@@ -701,34 +923,54 @@ function AttendanceView({ classId }: { classId: string }) {
 
   if (!sessionId) {
     return (
-      <View style={s.card}>
-        {offlineCount > 0 && (
-          <View style={{ marginBottom: 12 }}>
-            <Banner tone="warning">
-              ⚠️ {offlineCount} session{offlineCount > 1 ? 's' : ''} saved offline. {online ? 'Syncing...' : 'Will sync when connection is restored.'}
-            </Banner>
-          </View>
-        )}
-        <Text style={s.subViewTitle}>Take Attendance</Text>
-        <Text style={s.subViewSub}>
-          {students.isLoading ? 'Loading students...' : `${(students.data?.data ?? []).length} students enrolled`}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          style={[s.startBtn, (!(students.data?.data ?? []).length || createSession.isPending) && { opacity: 0.5 }]}
-          disabled={!(students.data?.data ?? []).length || createSession.isPending}
-          onPress={() => createSession.mutate()}
-        >
-          {createSession.isPending
-            ? <ActivityIndicator color={colors.white} />
-            : <Text style={s.startBtnText}>START TODAY'S SESSION →</Text>}
-        </Pressable>
+      <View>
+        <AttendanceQuickAddDrawer
+          classId={classId}
+          sessionId={sessionId}
+          onAdded={(stId) => {
+            if (sessionId && stId) {
+              setRecords(r => ({ ...r, [stId]: 'present' }));
+            }
+          }}
+        />
+        <View style={s.card}>
+          {offlineCount > 0 && (
+            <View style={{ marginBottom: 12 }}>
+              <Banner tone="warning">
+                ⚠️ {offlineCount} session{offlineCount > 1 ? 's' : ''} saved offline. {online ? 'Syncing...' : 'Will sync when connection is restored.'}
+              </Banner>
+            </View>
+          )}
+          <Text style={s.subViewTitle}>Take Attendance</Text>
+          <Text style={s.subViewSub}>
+            {students.isLoading ? 'Loading students...' : `${(students.data?.data ?? []).length} students enrolled`}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            style={[s.startBtn, (!(students.data?.data ?? []).length || createSession.isPending) && { opacity: 0.5 }]}
+            disabled={!(students.data?.data ?? []).length || createSession.isPending}
+            onPress={() => createSession.mutate()}
+          >
+            {createSession.isPending
+              ? <ActivityIndicator color={colors.white} />
+              : <Text style={s.startBtnText}>START TODAY'S SESSION →</Text>}
+          </Pressable>
+        </View>
       </View>
     );
   }
 
   return (
     <View>
+      <AttendanceQuickAddDrawer
+        classId={classId}
+        sessionId={sessionId}
+        onAdded={(stId) => {
+          if (sessionId && stId) {
+            setRecords(r => ({ ...r, [stId]: 'present' }));
+          }
+        }}
+      />
       {/* Stats */}
       <View style={s.statsRow}>
         <StatPill value={presentCount} label="Present" />
@@ -838,7 +1080,6 @@ function StudentsView({ classId }: { classId: string }) {
   const [addMode, setAddMode] = useState<'create' | 'existing'>('create');
   const [newName, setNewName] = useState('');
   const [newRoll, setNewRoll] = useState('');
-  const [newPhone, setNewPhone] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
   const students = useQuery({
@@ -862,7 +1103,6 @@ function StudentsView({ classId }: { classId: string }) {
       const student = await api.studentCreate({
         name: newName.trim(),
         rollNumber: newRoll.trim() || undefined,
-        phone: newPhone.trim() || undefined,
       });
       await api.classAddStudents(classId, [student.id]);
       return student;
@@ -872,7 +1112,6 @@ function StudentsView({ classId }: { classId: string }) {
       qc.invalidateQueries({ queryKey: ['students'] });
       setNewName('');
       setNewRoll('');
-      setNewPhone('');
       setSelectedStudentId(null);
       setShowAdd(false);
     },
@@ -887,9 +1126,20 @@ function StudentsView({ classId }: { classId: string }) {
   return (
     <View>
       {showAdd ? (
-        <Card style={{ marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <Text style={s.formTitle}>Add Student</Text>
+        <Card style={{ marginBottom: 16, padding: 18 }}>
+          {/* Header Row */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <Text style={{ color: colors.navy, fontSize: 18, fontWeight: '700' }}>Add Student</Text>
+            <Pressable
+              onPress={() => setShowAdd(false)}
+              style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F1F5F9' }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '600', color: colors.navy }}>✕ Close</Text>
+            </Pressable>
+          </View>
+
+          {/* Mode Selector (Own row to prevent overlap) */}
+          <View style={{ marginBottom: 18 }}>
             <Segmented
               value={addMode}
               options={[
@@ -901,59 +1151,94 @@ function StudentsView({ classId }: { classId: string }) {
           </View>
 
           {addMode === 'create' ? (
-            <>
+            <View style={{ gap: 8 }}>
+              {/* Live Preview Pill */}
+              {newName.trim() ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: '#F0FDF4', borderRadius: 10, borderWidth: 1, borderColor: '#BBF7D0', marginBottom: 4 }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#16A34A', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: colors.white, fontWeight: '700', fontSize: 14 }}>
+                      {newName.trim().slice(0, 1).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#166534', fontWeight: '700', fontSize: 14 }}>{newName.trim()}</Text>
+                    <Text style={{ color: '#15803D', fontSize: 12 }}>
+                      {newRoll.trim() ? `Roll #${newRoll.trim()}` : 'No Roll Number'}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
               <Field
-                label="NAME"
-                placeholder="Rahul Kumar"
+                label="STUDENT FULL NAME"
+                placeholder="e.g. Rahul Kumar"
                 value={newName}
                 onChangeText={setNewName}
               />
               <Field
                 label="ROLL NUMBER (OPTIONAL)"
-                placeholder="07"
+                placeholder="e.g. 07"
                 value={newRoll}
                 onChangeText={setNewRoll}
               />
-              <Field
-                label="PARENT PHONE (REQUIRED FOR SIBLINGS & PARENT LINKING)"
-                placeholder="9876543210"
-                value={newPhone}
-                onChangeText={setNewPhone}
-                keyboardType="phone-pad"
-              />
-            </>
+            </View>
           ) : (
             <View style={{ marginBottom: 16 }}>
               {allStudents.isLoading ? (
-                <ActivityIndicator color={colors.teal} style={{ marginVertical: 12 }} />
+                <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                  <ActivityIndicator color={colors.teal} size="small" />
+                  <Text style={{ color: colors.teal, fontSize: 12, marginTop: 8 }}>Loading school students...</Text>
+                </View>
               ) : availableStudents.length === 0 ? (
-                <Text style={{ color: '#64748B', fontSize: 13, paddingVertical: 8 }}>No other students available in the school.</Text>
+                <View style={{ padding: 16, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: colors.sky, alignItems: 'center' }}>
+                  <Text style={{ color: '#64748B', fontSize: 13, textAlign: 'center' }}>No other unassigned students available in the school directory.</Text>
+                </View>
               ) : (
-                <ScrollView style={{ maxHeight: 200 }}>
-                  {availableStudents.map(st => (
-                    <Pressable
-                      key={st.id}
-                      onPress={() => setSelectedStudentId(st.id)}
-                      style={{
-                        padding: 10,
-                        borderRadius: 8,
-                        backgroundColor: selectedStudentId === st.id ? '#E0F2FE' : 'transparent',
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: 4,
-                      }}
-                    >
-                      <Text style={{ color: colors.navy, fontWeight: '500' }}>{st.name} {st.rollNumber ? `(#${st.rollNumber})` : ''}</Text>
-                      {selectedStudentId === st.id && <Text style={{ color: colors.teal, fontWeight: 'bold' }}>✓ Selected</Text>}
-                    </Pressable>
-                  ))}
-                </ScrollView>
+                <View style={{ borderWidth: 1, borderColor: colors.sky, borderRadius: 10, padding: 6, backgroundColor: '#F8FAFC' }}>
+                  <ScrollView style={{ maxHeight: 220 }}>
+                    {availableStudents.map(st => {
+                      const isSelected = selectedStudentId === st.id;
+                      return (
+                        <Pressable
+                          key={st.id}
+                          onPress={() => setSelectedStudentId(st.id)}
+                          style={{
+                            paddingVertical: 12,
+                            paddingHorizontal: 12,
+                            borderRadius: 8,
+                            backgroundColor: isSelected ? '#E0F2FE' : 'transparent',
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: 2,
+                          }}
+                        >
+                          <View>
+                            <Text style={{ color: colors.navy, fontWeight: isSelected ? '700' : '600', fontSize: 14 }}>
+                              {st.name}
+                            </Text>
+                            {st.rollNumber ? (
+                              <Text style={{ color: colors.teal, fontSize: 12, marginTop: 2 }}>Roll #{st.rollNumber}</Text>
+                            ) : null}
+                          </View>
+                          {isSelected ? (
+                            <View style={{ backgroundColor: colors.teal, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}>
+                              <Text style={{ color: colors.white, fontSize: 11, fontWeight: '700' }}>✓ Selected</Text>
+                            </View>
+                          ) : (
+                            <View style={{ width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#CBD5E1' }} />
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
               )}
             </View>
           )}
 
-          <View style={s.formButtons}>
+          {/* Action Buttons */}
+          <View style={[s.formButtons, { marginTop: 14 }]}>
             <Button variant="ghost" onPress={() => setShowAdd(false)} style={{ flex: 1 }}>
               Cancel
             </Button>
@@ -963,7 +1248,7 @@ function StudentsView({ classId }: { classId: string }) {
               loading={addStudent.isPending}
               style={{ flex: 1 }}
             >
-              {addMode === 'create' ? 'Add' : 'Enroll'}
+              {addMode === 'create' ? 'Create Student' : 'Enroll Selected'}
             </Button>
           </View>
         </Card>
@@ -1011,7 +1296,7 @@ function InviteView() {
   const tenant = useQuery({ queryKey: ['tenant'], queryFn: api.tenantMe });
 
   const code = tenant.data?.inviteCode;
-  const parentLink = code ? `https://apps.whiteroom.co.in/invite/${code}` : null;
+  const parentLink = code ? `https://apps.whiteroom.co.in/invite/${code}?role=parent` : null;
   const teacherLink = code ? `https://apps.whiteroom.co.in/invite/${code}?role=teacher` : null;
 
   const handleCopy = async (lnk: string, type: 'parent' | 'teacher') => {

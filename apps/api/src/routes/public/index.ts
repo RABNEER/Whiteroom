@@ -53,6 +53,7 @@ publicRoutes.get("/.well-known/assetlinks.json", (c) => {
 
 publicRoutes.get("/invite/:code", async (c) => {
   const code = c.req.param("code");
+  const role = c.req.query("role") || "parent";
 
   if (!code || code.length !== 6) {
     return c.html(
@@ -171,8 +172,8 @@ publicRoutes.get("/invite/:code", async (c) => {
               ${tenant.logoUrl ? html`<img src="${tenant.logoUrl}" alt="${tenant.name}">` : tenant.name.substring(0, 1).toUpperCase()}
             </div>
             <h2>${tenant.name}</h2>
-            <p class="subtitle">You've been invited to join on Whiteroom</p>
-            <a class="open-btn" href="whiteroom://auth?inviteCode=${code}">
+            <p class="subtitle">You've been invited to join on Whiteroom as a ${role === 'teacher' ? 'Teacher' : 'Parent'}</p>
+            <a class="open-btn" href="whiteroom://invite/${code}?role=${role}">
               Open in Whiteroom
             </a>
             <div class="fallback">
