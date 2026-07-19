@@ -2,7 +2,6 @@ import { cors as honoCors } from "hono/cors";
 import { env } from "../lib/env.js";
 
 export function corsMiddleware() {
-  // FIX: CORS wildcard allows requests from any website
   return honoCors({
     origin: (origin) => {
       if (!origin) return "";
@@ -17,9 +16,6 @@ export function corsMiddleware() {
         "http://127.0.0.1:8081",
         "http://192.168.1.*:8081",
         "http://192.168.0.*:8081",
-        "https://*.netlify.app",
-        "https://*.up.railway.app",
-        "https://*.railway.app",
         "https://apps.whiteroom.co.in",
         "https://whiteroom.co.in",
         env.MOBILE_WEB_URL,
