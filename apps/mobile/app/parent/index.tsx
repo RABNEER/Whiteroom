@@ -422,7 +422,6 @@ function AttendTab({
     enabled: Boolean(selectedChild?.id),
   });
 
-  // FIX: No pagination on list endpoints — will OOM at 1000+ students
   const logs = attendance.data?.data ?? (Array.isArray(attendance.data) ? attendance.data : []);
   const presentCount = logs.filter((l) => l.status === 'present').length;
   const absentCount = logs.filter((l) => l.status === 'absent').length;
@@ -523,7 +522,6 @@ function ChildAttendDetail({
     enabled: Boolean(selectedChild?.id),
   });
 
-  // FIX: No pagination on list endpoints — will OOM at 1000+ students
   const logs = attendance.data?.data ?? (Array.isArray(attendance.data) ? attendance.data : []);
 
   return (
@@ -669,7 +667,6 @@ function ChildClassDetail({
     enabled: Boolean(classId && subTab === 'info'),
   });
 
-  // FIX: No pagination on list endpoints — will OOM at 1000+ students
   const logs = attendance.data?.data ?? (Array.isArray(attendance.data) ? attendance.data : []);
   const presentCount = logs.filter((l) => l.status === 'present').length;
   const absentCount = logs.filter((l) => l.status === 'absent').length;
