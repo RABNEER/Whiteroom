@@ -24,6 +24,7 @@ import type {
   ChatMessageResponse,
   ChatAttachment,
   ChatReceiptResponse,
+  BulletinResponse,
 } from "@whiteroom/shared";
 import { sessionStore } from "@/auth/session-store";
 
@@ -577,11 +578,11 @@ export const api = {
     }),
 
   // ─── Bulletins ───
-  getBulletins: (filters?: { classId?: string }): Promise<any[]> => {
+  getBulletins: (filters?: { classId?: string }): Promise<BulletinResponse[]> => {
     const params = new URLSearchParams();
     if (filters?.classId) params.set("classId", filters.classId);
     const query = params.toString();
-    return request<any[]>(query ? `/bulletins?${query}` : "/bulletins");
+    return request<BulletinResponse[]>(query ? `/bulletins?${query}` : "/bulletins");
   },
   markBulletinRead: (bulletinId: string): Promise<any> =>
     request<any>(`/bulletins/${bulletinId}/read`, {
