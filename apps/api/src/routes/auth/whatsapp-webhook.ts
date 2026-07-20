@@ -11,6 +11,8 @@ const webhookSchema = z.object({
   from: z.string().min(10),
   text: z.string().min(1),
   isLid: z.boolean().optional(),
+  phone: z.string().optional(),
+  code: z.string().optional(),
 });
 
 export async function whatsappWebhookHandler(c: Context) {
@@ -39,16 +41,15 @@ export async function whatsappWebhookHandler(c: Context) {
     }
 
     const { from, text, isLid } = parsed.data;
-    const match = text.match(/Verify\s+([A-Za-z0-9_-]+)/i);
+    const code = parsed.data.code || text.match(/Verify\s+([A-Za-z0-9_-]+)/i)?.[1];
 
-    if (!match) {
+    if (!code) {
       return c.json({
         success: false,
         error: "No valid session code found in message",
       }, 400);
     }
 
-    const code = match[1];
     const now = new Date();
 
     const queryConditions = [
@@ -57,18 +58,19 @@ export async function whatsappWebhookHandler(c: Context) {
       gte(whatsappSessions.expiresAt, now),
     ];
 
-    if (isLid) {
-      console.log(`[WHATSAPP WEBHOOK] Verifying session ${code} for LID sender (bypassing phone hash check).`);
-    } else {
-      const phone = normalizePhone(from);
-      if (!isValidIndianPhone(phone)) {
+    const phoneToMatch = parsed.data.phone || (isLid ? undefined : normalizePhone(from));
+
+    if (phoneToMatch) {
+      if (!isValidIndianPhone(phoneToMatch)) {
         return c.json({
           success: false,
           error: "Invalid phone number format. Only Indian numbers (+91) are supported.",
         }, 400);
       }
 
-      queryConditions.push(eq(whatsappSessions.phone, phone));
+      queryConditions.push(eq(whatsappSessions.phone, phoneToMatch));
+    } else if (isLid) {
+      console.warn(`[WHATSAPP WEBHOOK] Warning: Verifying session ${code} for LID without explicit phone parameter.`);
     }
 
     // Find active, unverified session
