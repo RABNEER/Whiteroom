@@ -66,10 +66,13 @@ export default function AuthScreen() {
   const [whatsappExpiresAt, setWhatsappExpiresAt] = useState<number | null>(null);
   const verifyingRef = useRef(false);
 
-  // Pending WhatsApp session persistence keys
+  // Pending WhatsApp and Invite session persistence keys
   const PENDING_WHATSAPP_SESSION_ID_KEY = 'whiteroom.pendingWhatsappSessionId';
   const PENDING_WHATSAPP_SESSION_TOKEN_KEY = 'whiteroom.pendingWhatsappSessionToken';
   const PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY = 'whiteroom.pendingWhatsappSessionExpiresAt';
+  const PENDING_INVITE_CODE_KEY = 'whiteroom.pendingInviteCode';
+  const PENDING_INVITE_ROLE_KEY = 'whiteroom.pendingInviteRole';
+  const PENDING_INVITE_TENANT_KEY = 'whiteroom.pendingInviteTenant';
 
   const secureStorage = {
     async getItem(key: string) {
@@ -101,6 +104,9 @@ export default function AuthScreen() {
         secureStorage.deleteItem(PENDING_WHATSAPP_SESSION_ID_KEY),
         secureStorage.deleteItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY),
         secureStorage.deleteItem(PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY),
+        secureStorage.deleteItem(PENDING_INVITE_CODE_KEY),
+        secureStorage.deleteItem(PENDING_INVITE_ROLE_KEY),
+        secureStorage.deleteItem(PENDING_INVITE_TENANT_KEY),
       ]);
     } catch (err) {
       console.error("Failed to clear pending WhatsApp session:", err);
@@ -115,20 +121,44 @@ export default function AuthScreen() {
     const dotInterval = setInterval(() => {
       setActiveDot((d) => (d + 1) % 3);
     }, 400);
-    const timer = setTimeout(() => setStep('WELCOME'), 2000);
+    const timer = setTimeout(() => {
+      setStep((currentStep) => {
+        // If an invite code was loaded or passed via params, jump directly to PHONE step instead of WELCOME
+        if (inviteCode && inviteCode.length === 6) return 'PHONE';
+        return 'WELCOME';
+      });
+    }, 2000);
     return () => {
       clearInterval(dotInterval);
       clearTimeout(timer);
     };
-  }, [step]);
+  }, [step, inviteCode]);
 
-  // Load pending WhatsApp session on mount
+  // Load pending WhatsApp session and invite context on mount
   useEffect(() => {
     const loadPendingSession = async () => {
       try {
-        const id = await secureStorage.getItem(PENDING_WHATSAPP_SESSION_ID_KEY);
-        const token = await secureStorage.getItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY);
-        const expiresAtStr = await secureStorage.getItem(PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY);
+        const [id, token, expiresAtStr, savedInviteCode, savedInviteRole, savedInviteTenant] = await Promise.all([
+          secureStorage.getItem(PENDING_WHATSAPP_SESSION_ID_KEY),
+          secureStorage.getItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY),
+          secureStorage.getItem(PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY),
+          secureStorage.getItem(PENDING_INVITE_CODE_KEY),
+          secureStorage.getItem(PENDING_INVITE_ROLE_KEY),
+          secureStorage.getItem(PENDING_INVITE_TENANT_KEY),
+        ]);
+
+        if (savedInviteCode && savedInviteCode.length === 6) {
+          setInviteCode(savedInviteCode);
+          if (savedInviteRole === 'teacher' || savedInviteRole === 'parent' || savedInviteRole === 'school_admin') {
+            setSelectedRole(savedInviteRole as Role);
+          }
+          if (savedInviteTenant) {
+            setResolvedTenant(savedInviteTenant);
+          } else {
+            resolveInviteMutation.mutate(savedInviteCode);
+          }
+          setStep((currentStep) => (currentStep === 'SPLASH' || currentStep === 'WELCOME' ? 'PHONE' : currentStep));
+        }
 
         if (id && token && expiresAtStr) {
           const expiresAt = parseInt(expiresAtStr, 10);
@@ -178,6 +208,7 @@ export default function AuthScreen() {
     onSuccess: (data) => {
       setResolvedTenant(data.tenantName);
       setError(null);
+      secureStorage.setItem(PENDING_INVITE_TENANT_KEY, data.tenantName || '').catch(() => {});
     },
     onError: (err: unknown) => {
       setResolvedTenant(null);
@@ -198,8 +229,10 @@ export default function AuthScreen() {
       if (!url) return;
       // Parse role from query params (e.g. ?role=teacher)
       const roleMatch = url.match(/[?&]role=(teacher|parent|school_admin)/);
+      let targetRole = selectedRole;
       if (roleMatch) {
-        setSelectedRole(roleMatch[1] as Role);
+        targetRole = roleMatch[1] as Role;
+        setSelectedRole(targetRole);
       }
       const match =
         // Universal Link: https://apps.whiteroom.co.in/invite/CODE or https://whiteroom.co.in/invite/CODE
@@ -211,10 +244,13 @@ export default function AuthScreen() {
       if (match) {
         const upper = match[1].toUpperCase();
         setInviteCode(upper);
+        secureStorage.setItem(PENDING_INVITE_CODE_KEY, upper).catch(() => {});
+        secureStorage.setItem(PENDING_INVITE_ROLE_KEY, targetRole).catch(() => {});
+        setStep((currentStep) => (currentStep === 'SPLASH' || currentStep === 'WELCOME' ? 'PHONE' : currentStep));
         if (upper.length === 6) {
           const { accessToken } = useSession.getState();
           if (accessToken) {
-            api.inviteJoin({ inviteCode: upper, role: selectedRole })
+            api.inviteJoin({ inviteCode: upper, role: targetRole })
               .then(data => {
                 setSession(data);
                 router.replace('/');
@@ -231,16 +267,21 @@ export default function AuthScreen() {
     }
 
     if (params.inviteCode || params.role) {
+      let targetRole = selectedRole;
       if (params.role && (params.role === 'teacher' || params.role === 'parent' || params.role === 'school_admin')) {
-        setSelectedRole(params.role);
+        targetRole = params.role as Role;
+        setSelectedRole(targetRole);
       }
       if (params.inviteCode) {
         const upper = params.inviteCode.toUpperCase();
         setInviteCode(upper);
+        secureStorage.setItem(PENDING_INVITE_CODE_KEY, upper).catch(() => {});
+        secureStorage.setItem(PENDING_INVITE_ROLE_KEY, targetRole).catch(() => {});
+        setStep((currentStep) => (currentStep === 'SPLASH' || currentStep === 'WELCOME' ? 'PHONE' : currentStep));
         if (upper.length === 6) {
           const { accessToken } = useSession.getState();
           if (accessToken) {
-            api.inviteJoin({ inviteCode: upper, role: params.role || selectedRole })
+            api.inviteJoin({ inviteCode: upper, role: targetRole })
               .then(data => {
                 setSession(data);
                 router.replace('/');
@@ -271,11 +312,25 @@ export default function AuthScreen() {
       setLoading(true);
       setError(null);
 
+      // Restore from state or secureStorage if state was cleared during app backgrounding
+      let currentInviteCode = inviteCode;
+      let currentRole = selectedRole;
+      if (!currentInviteCode) {
+        const savedCode = await secureStorage.getItem(PENDING_INVITE_CODE_KEY);
+        const savedRole = await secureStorage.getItem(PENDING_INVITE_ROLE_KEY) as Role | null;
+        if (savedCode && savedCode.length === 6) {
+          currentInviteCode = savedCode;
+          if (savedRole) currentRole = savedRole;
+          setInviteCode(savedCode);
+          if (savedRole) setSelectedRole(savedRole);
+        }
+      }
+
       const response = await api.whatsappVerify({
         id: whatsappSessionId,
         token: whatsappToken,
-        inviteCode: inviteCode || undefined,
-        role: inviteCode ? selectedRole : undefined,
+        inviteCode: currentInviteCode || undefined,
+        role: currentInviteCode ? currentRole : undefined,
       });
 
       await clearPendingSession();
@@ -370,6 +425,7 @@ export default function AuthScreen() {
     }) => api.register(params),
     onSuccess: async (data) => {
       setError(null);
+      await clearPendingSession();
       await setSession(data);
       router.replace(selectedRole === 'parent' ? '/parent' : '/teacher');
     },
@@ -402,11 +458,14 @@ export default function AuthScreen() {
       const expiresAt = Date.now() + (session.expiresIn || 300) * 1000;
       setWhatsappExpiresAt(expiresAt);
 
-      // Persist pending session
+      // Persist pending session & invite context
       await Promise.all([
         secureStorage.setItem(PENDING_WHATSAPP_SESSION_ID_KEY, session.id),
         secureStorage.setItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY, session.token),
         secureStorage.setItem(PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY, expiresAt.toString()),
+        inviteCode ? secureStorage.setItem(PENDING_INVITE_CODE_KEY, inviteCode) : Promise.resolve(),
+        inviteCode ? secureStorage.setItem(PENDING_INVITE_ROLE_KEY, selectedRole) : Promise.resolve(),
+        resolvedTenant ? secureStorage.setItem(PENDING_INVITE_TENANT_KEY, resolvedTenant) : Promise.resolve(),
       ]).catch(err => console.error("Failed to save pending WhatsApp session:", err));
 
       // Redirect to WhatsApp bot (with hardcoded fallback to prevent build-time inlining issues)
@@ -621,7 +680,13 @@ export default function AuthScreen() {
               accessibilityRole="button"
               style={styles.backButton}
               onPress={() => {
-                if (step === 'PHONE') setStep('WELCOME');
+                if (step === 'PHONE') {
+                  if (inviteCode && inviteCode.length === 6) {
+                    router.replace('/');
+                  } else {
+                    setStep('WELCOME');
+                  }
+                }
                 else if (step === 'WHATSAPP_POLL') setStep('PHONE');
                 else if (step === 'ROLE_SELECT') setStep('CONSENT');
               }}
@@ -630,13 +695,32 @@ export default function AuthScreen() {
             </Pressable>
           )}
 
+          {/* Invite Context Banner */}
+          {(step === 'PHONE' || step === 'WHATSAPP_POLL' || step === 'CONSENT') && Boolean(inviteCode && inviteCode.length === 6) && (
+            <View style={styles.inviteAuthBanner}>
+              <View style={styles.inviteAuthIconCircle}>
+                <School color={colors.teal} size={20} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inviteAuthBannerTitle}>
+                  Login to join {resolvedTenant || 'School Workspace'}
+                </Text>
+                <Text style={styles.inviteAuthBannerSub}>
+                  Invited as {selectedRole === 'teacher' ? 'Teacher' : 'Parent'} • Code: {inviteCode}
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/*  S3: Phone  */}
           {step === 'PHONE' && (
             <>
               <Text style={styles.eyebrow}>STEP 1 OF 2</Text>
-              <Text style={styles.pageTitle}>Verify your identity</Text>
+              <Text style={styles.pageTitle}>
+                {inviteCode && inviteCode.length === 6 ? `Join ${resolvedTenant || 'School'}` : 'Verify your identity'}
+              </Text>
               <Text style={styles.pageSub}>
-                Enter your mobile number to get started.
+                {inviteCode && inviteCode.length === 6 ? `Enter your mobile number to sign in and join as ${selectedRole === 'teacher' ? 'Teacher' : 'Parent'}.` : 'Enter your mobile number to get started.'}
               </Text>
 
               <Text style={[styles.fieldLabel, { marginTop: spacing.sm }]}>
@@ -854,13 +938,24 @@ export default function AuthScreen() {
                 accessibilityRole="button"
                 style={[styles.primaryButton, !agreed && { opacity: 0.4 }]}
                 disabled={!agreed}
-                onPress={() => {
-                  if (inviteCode && inviteCode.length === 6 && registrationToken) {
+                onPress={async () => {
+                  let currentInviteCode = inviteCode;
+                  let currentRole = selectedRole;
+                  if (!currentInviteCode) {
+                    const savedCode = await secureStorage.getItem(PENDING_INVITE_CODE_KEY);
+                    const savedRole = await secureStorage.getItem(PENDING_INVITE_ROLE_KEY) as Role | null;
+                    if (savedCode && savedCode.length === 6) {
+                      currentInviteCode = savedCode;
+                      if (savedRole) currentRole = savedRole;
+                    }
+                  }
+
+                  if (currentInviteCode && currentInviteCode.length === 6 && registrationToken) {
                     registerMutation.mutate({
                       registrationToken,
-                      role: selectedRole,
+                      role: currentRole,
                       consentAccepted: true,
-                      inviteCode,
+                      inviteCode: currentInviteCode,
                     });
                   } else {
                     setStep('ROLE_SELECT');
@@ -1743,6 +1838,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.navy,
     marginBottom: 16,
+  },
+  inviteAuthBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+    gap: 12,
+  },
+  inviteAuthIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#99F6E4',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inviteAuthBannerTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.navy,
+    marginBottom: 2,
+  },
+  inviteAuthBannerSub: {
+    fontSize: 12,
+    color: colors.teal,
+    fontWeight: '500',
   },
 });
 
