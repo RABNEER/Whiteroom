@@ -49,6 +49,15 @@ if (process.env.DEBUG_WHATSAPP === "true") {
 config({ path: path.resolve(process.cwd(), ".env") });
 config({ path: path.resolve(process.cwd(), "../../.env") });
 
+import * as Sentry from "@sentry/node";
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || "development",
+    tracesSampleRate: 1.0,
+  });
+}
+
 const port = process.env.PORT || 3000;
 let webhookUrl =
   process.env.WHATSAPP_WEBHOOK_URL ||
@@ -738,6 +747,7 @@ export async function startBot(isReconnect = false) {
       }
     } catch (err) {
       console.error("❌ [WHATSAPP BOT] Unhandled error in messages.upsert:", err);
+      Sentry.captureException(err, { extra: { context: "messages.upsert" } });
     }
   });
 
@@ -747,4 +757,5 @@ export async function startBot(isReconnect = false) {
 // Start the daemon bot
 startBot().catch((err) => {
   console.error("💥 [WHATSAPP BOT] Fatal crash:", err);
+  Sentry.captureException(err, { extra: { context: "startBot fatal crash" } });
 });

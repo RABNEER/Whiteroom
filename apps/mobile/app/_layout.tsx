@@ -16,10 +16,17 @@ import {
   Inter_900Black,
 } from "@expo-google-fonts/inter";
 import * as Updates from "expo-updates";
+import * as Sentry from "@sentry/react-native";
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  debug: false,
+  tracesSampleRate: 1.0,
+});
 
 export { ErrorBoundary } from "expo-router";
 
-export default function RootLayout() {
+function RootLayout() {
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -62,36 +69,16 @@ export default function RootLayout() {
             { cancelable: false }
           );
         }
-      } catch (error) {
-        console.log("Error checking APK version:", error);
+      } catch (err) {
+        console.warn("APK version check failed:", err);
       }
     }
 
     async function onFetchUpdateAsync() {
       try {
-        if (typeof Updates.checkForUpdateAsync !== "function") {
-          return;
-        }
         const update = await Updates.checkForUpdateAsync();
         if (update.isAvailable) {
           await Updates.fetchUpdateAsync();
-          Alert.alert(
-            "Update Available 🚀",
-            "A new version of Whiteroom has been downloaded. Click Update Now to apply the latest improvements.",
-            [
-              {
-                text: "Later",
-                style: "cancel",
-              },
-              {
-                text: "Update Now",
-                onPress: async () => {
-                  await Updates.reloadAsync();
-                },
-              },
-            ],
-            { cancelable: false }
-          );
         }
       } catch (error) {
         console.log("Error fetching latest Expo update:", error);
@@ -124,3 +111,5 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);

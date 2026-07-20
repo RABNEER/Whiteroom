@@ -44,6 +44,16 @@ import { db } from "./lib/db.js";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
+import * as Sentry from "@sentry/node";
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || "development",
+    tracesSampleRate: 1.0,
+  });
+  console.log("🛡️ [SENTRY] Backend error & performance monitoring initialized.");
+}
 
 const app = new Hono();
 
