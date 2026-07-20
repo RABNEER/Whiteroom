@@ -1,7 +1,11 @@
 import { db } from "../lib/db.js";
-import { classroomFileChunks } from "@whiteroom/db";
+import { classroomFileChunks, eq } from "@whiteroom/db";
 import { env } from "../lib/env.js";
 import { getEmbedding } from "./walt.js";
+import crypto from "node:crypto";
+
+// In-memory cache for extracted text from study materials/files by SHA-256 hash
+const extractedTextCache = new Map<string, string>();
 
 /**
  * Clean and chunk text into sizes suitable for embeddings with overlap
@@ -73,6 +77,18 @@ export async function ingestClassroomFile(
   }
 
   try {
+    // 0. Check if file has already been ingested
+    const existingChunks = await db
+      .select({ id: classroomFileChunks.id })
+      .from(classroomFileChunks)
+      .where(eq(classroomFileChunks.fileId, fileRecord.id))
+      .limit(1);
+
+    if (existingChunks.length > 0) {
+      console.log(`ℹ️ [INGESTION] File ${fileRecord.name} already ingested (${existingChunks.length} chunks exist). Skipping.`);
+      return;
+    }
+
     let buffer = fileBuffer;
 
     // 2. Download file if buffer not supplied
@@ -86,46 +102,58 @@ export async function ingestClassroomFile(
       buffer = Buffer.from(arrayBuffer);
     }
 
-    // 3. Send file data to Gemini 1.5 Flash to extract text
-    console.log(`🧠 [INGESTION] Asking Gemini to extract text from ${fileRecord.name}...`);
-    const base64Data = buffer.toString("base64");
+    // Check in-memory cache by SHA-256 hash of file content
+    const fileHash = crypto.createHash("sha256").update(buffer).digest("hex");
+    let extractedText = extractedTextCache.get(fileHash);
 
-    const geminiRes = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": geminiApiKey },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  inlineData: {
-                    mimeType: mimeType,
-                    data: base64Data,
+    if (extractedText) {
+      console.log(`⚡ [INGESTION] Cache hit for file content (${fileRecord.name}, hash ${fileHash.slice(0, 8)}). Skipping Gemini parser.`);
+    } else {
+      // 3. Send file data to Gemini 1.5 Flash to extract text
+      console.log(`🧠 [INGESTION] Asking Gemini to extract text from ${fileRecord.name}...`);
+      const base64Data = buffer.toString("base64");
+
+      const geminiRes = await fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": geminiApiKey },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType: mimeType,
+                      data: base64Data,
+                    },
                   },
-                },
-                {
-                  text: "Extract all notes, textbook content, study points, questions, equations, and context from this file. Format it as plain text. Do not add greetings or commentary. Output the content directly.",
-                },
-              ],
-            },
-          ],
-        }),
+                  {
+                    text: "Extract all notes, textbook content, study points, questions, equations, and context from this file. Format it as plain text. Do not add greetings or commentary. Output the content directly.",
+                  },
+                ],
+              },
+            ],
+          }),
+        }
+      );
+
+      if (!geminiRes.ok) {
+        const errBody = await geminiRes.text().catch(() => "");
+        throw new Error(`Gemini parser API returned an error response: ${errBody}`);
       }
-    );
 
-    if (!geminiRes.ok) {
-      const errBody = await geminiRes.text().catch(() => "");
-      throw new Error(`Gemini parser API returned an error response: ${errBody}`);
-    }
+      const json = (await geminiRes.json()) as any;
+      extractedText = json.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    const json = (await geminiRes.json()) as any;
-    const extractedText = json.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!extractedText) {
+        console.warn(`⚠️ [INGESTION] No text extracted from file: ${fileRecord.name}`);
+        return;
+      }
 
-    if (!extractedText) {
-      console.warn(`⚠️ [INGESTION] No text extracted from file: ${fileRecord.name}`);
-      return;
+      if (extractedTextCache.size < 500) {
+        extractedTextCache.set(fileHash, extractedText);
+      }
     }
 
     console.log(`📝 [INGESTION] Extracted ${extractedText.length} characters. Chunking...`);

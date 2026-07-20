@@ -26,8 +26,16 @@ export function scrubPII(text: string): string {
   return scrubbed;
 }
 
+// In-memory embedding cache to reduce duplicate Gemini requests and speed up RAG checks
+const embeddingCache = new Map<string, number[]>();
+
 // ─── Gemini API Wrappers ───
 export async function getEmbedding(text: string): Promise<number[]> {
+  const cacheKey = text.trim();
+  if (embeddingCache.has(cacheKey)) {
+    return embeddingCache.get(cacheKey)!;
+  }
+
   const apiKey = env.GEMINI_API_KEY;
   if (!apiKey) {
     // Deterministic mock embedding for offline tests (1536 dimensions)
@@ -35,6 +43,7 @@ export async function getEmbedding(text: string): Promise<number[]> {
     for (let i = 0; i < 1536; i++) {
       mockEmbedding[i] = Math.sin(i + text.length) * 0.02;
     }
+    if (embeddingCache.size < 1000) embeddingCache.set(cacheKey, mockEmbedding);
     return mockEmbedding;
   }
 
@@ -56,10 +65,13 @@ export async function getEmbedding(text: string): Promise<number[]> {
     }
 
     const json = (await res.json()) as any;
-    return json.embedding.values;
+    const values = json.embedding.values;
+    if (embeddingCache.size < 1000) embeddingCache.set(cacheKey, values);
+    return values;
   } catch (err) {
     console.error("Gemini embedding failed, falling back to mock:", err);
     const mockEmbedding = new Array(1536).fill(0);
+    if (embeddingCache.size < 1000) embeddingCache.set(cacheKey, mockEmbedding);
     return mockEmbedding;
   }
 }

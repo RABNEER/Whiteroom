@@ -178,6 +178,7 @@ async function syncAuthFilesToDb(folder: string) {
 }
 
 let isWatcherActive = false;
+let activeWatcher: import("node:fs").FSWatcher | null = null;
 let syncTimeout: NodeJS.Timeout | null = null;
 let isReconnecting = false;
 let isLoggingOut = false;
@@ -221,12 +222,20 @@ async function setupFolderWatcher(folder: string) {
   isWatcherActive = true;
   console.log("👀 [WHATSAPP BOT] Watching auth state folder for real-time PostgreSQL backup...");
   
-  fsWatch(folder, () => {
-    if (syncTimeout) clearTimeout(syncTimeout);
-    syncTimeout = setTimeout(() => {
-      syncAuthFilesToDb(folder);
-    }, 3000); // 3.0 seconds debounce
-  });
+  try {
+    activeWatcher = fsWatch(folder, () => {
+      if (syncTimeout) clearTimeout(syncTimeout);
+      syncTimeout = setTimeout(() => {
+        syncAuthFilesToDb(folder);
+      }, 3000); // 3.0 seconds debounce
+    });
+    activeWatcher.on("error", (err) => {
+      console.warn("⚠️ [WHATSAPP BOT] Folder watcher error handled:", err.message);
+    });
+  } catch (err: any) {
+    console.warn("⚠️ [WHATSAPP BOT] Failed to attach folder watcher:", err.message);
+    isWatcherActive = false;
+  }
 }
 
 /**
@@ -290,12 +299,10 @@ export async function logoutBot(options: {
           console.warn("⚠️ [WHATSAPP BOT] Socket logout ignored:", e?.message || e);
         }
       }
-      if (!skipRemoteLogout) {
-        try {
-          sock.end?.(undefined);
-        } catch {
-          // ignore
-        }
+      try {
+        sock.end?.(undefined);
+      } catch {
+        // ignore
       }
     }
 
@@ -305,6 +312,18 @@ export async function logoutBot(options: {
       console.log("✅ [WHATSAPP BOT] Cleared bot state from database.");
     } catch (err) {
       console.error("❌ [WHATSAPP BOT] Failed to delete database state:", err);
+    }
+
+    if (activeWatcher) {
+      try {
+        activeWatcher.close();
+      } catch {}
+      activeWatcher = null;
+    }
+    isWatcherActive = false;
+    if (syncTimeout) {
+      clearTimeout(syncTimeout);
+      syncTimeout = null;
     }
 
     try {
