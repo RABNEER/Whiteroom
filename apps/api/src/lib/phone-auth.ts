@@ -6,6 +6,7 @@ import {
   users,
   tenants,
   parentProfiles,
+  teacherProfiles,
   consentLogs,
   userTenants,
   eq,
@@ -29,6 +30,7 @@ export async function completeVerifiedPhoneAuth(
     phoneHash: string;
     firebaseUid: string;
     inviteCode?: string;
+    role?: string;
   }
 ) {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
@@ -81,6 +83,7 @@ export async function completeVerifiedPhoneAuth(
   let role: string;
 
   if (input.inviteCode) {
+    const targetRole = input.role === UserRole.TEACHER ? UserRole.TEACHER : UserRole.PARENT;
     const [tenant] = await db
       .select()
       .from(tenants)
@@ -106,7 +109,7 @@ export async function completeVerifiedPhoneAuth(
       if (existingMapping) {
         await tx
           .update(userTenants)
-          .set({ activeTenant: true })
+          .set({ activeTenant: true, role: targetRole })
           .where(eq(userTenants.id, existingMapping.id));
         return;
       }
@@ -114,15 +117,22 @@ export async function completeVerifiedPhoneAuth(
       await tx.insert(userTenants).values({
         userId,
         tenantId: tenant.id,
-        role: UserRole.PARENT,
+        role: targetRole,
         status: "active",
         activeTenant: true,
       });
 
-      await tx.insert(parentProfiles).values({
-        userId,
-        tenantId: tenant.id,
-      });
+      if (targetRole === UserRole.TEACHER) {
+        await tx.insert(teacherProfiles).values({
+          userId,
+          tenantId: tenant.id,
+        });
+      } else {
+        await tx.insert(parentProfiles).values({
+          userId,
+          tenantId: tenant.id,
+        });
+      }
 
       await tx.insert(consentLogs).values({
         userId,
@@ -131,10 +141,15 @@ export async function completeVerifiedPhoneAuth(
         ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
         userAgent: c.req.header("user-agent") ?? null,
       });
+
+      await tx
+        .update(users)
+        .set({ role: targetRole, tenantId: tenant.id, updatedAt: new Date() })
+        .where(eq(users.id, userId));
     });
 
     tenantId = tenant.id;
-    role = UserRole.PARENT;
+    role = targetRole;
   } else {
     const userMappings = await db
       .select()

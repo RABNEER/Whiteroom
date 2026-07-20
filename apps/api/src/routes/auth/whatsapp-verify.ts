@@ -10,6 +10,7 @@ const verifySchema = z.object({
   id: z.string().min(1),
   token: z.string().min(1),
   inviteCode: z.string().length(6).optional(),
+  role: z.string().optional(),
 });
 
 export async function whatsappVerifyHandler(c: Context) {
@@ -90,5 +91,6 @@ export async function whatsappVerifyHandler(c: Context) {
     phoneHash,
     firebaseUid: `whatsapp-${session.id}`,
     inviteCode: parsed.data.inviteCode,
+    role: parsed.data.role,
   });
 }

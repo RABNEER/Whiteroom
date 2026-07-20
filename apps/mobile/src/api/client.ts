@@ -218,6 +218,11 @@ export const api = {
     request<InviteGenerateResponse>("/invite", { method: "POST" }),
   inviteResolve: (code: string): Promise<InviteResolveResponse> =>
     request<InviteResolveResponse>(`/invite/${code}`),
+  inviteJoin: (input: { inviteCode: string; role?: string; studentName?: string; rollNumber?: string }): Promise<OTPVerifyResponse> =>
+    request<OTPVerifyResponse>("/invite/join", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
   classes: (page?: number, limit?: number) => {
     const params = new URLSearchParams();
     if (page) params.set("page", String(page));
@@ -407,7 +412,7 @@ export const api = {
     }),
   whatsappSessionGet: (id: string): Promise<{ verified: boolean; isExpired: boolean }> =>
     request<{ verified: boolean; isExpired: boolean }>(`/auth/whatsapp/session/${id}?t=${Date.now()}`),
-  whatsappVerify: (input: { id: string; token: string; inviteCode?: string }): Promise<OTPVerifyResult> =>
+  whatsappVerify: (input: { id: string; token: string; inviteCode?: string; role?: string }): Promise<OTPVerifyResult> =>
     request<OTPVerifyResult>("/auth/whatsapp/verify", {
       method: "POST",
       body: JSON.stringify(input),

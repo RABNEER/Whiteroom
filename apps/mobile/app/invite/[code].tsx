@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
+import { useSession } from '@/auth/session-store';
 import { colors } from '@/theme/tokens';
 import { Card, Button, Banner, DisplayTitle, Muted } from '@/components/ui';
 
@@ -11,6 +12,8 @@ export default function InviteScreen() {
   const { code, role } = useLocalSearchParams<{ code: string; role?: string }>();
   const cleanCode = (code || '').trim().toUpperCase();
   const targetRole = role === 'teacher' ? 'teacher' : 'parent';
+  const { accessToken, setSession } = useSession();
+  const [joining, setJoining] = useState(false);
 
   const resolveQuery = useQuery({
     queryKey: ['inviteResolve', cleanCode],
@@ -19,7 +22,23 @@ export default function InviteScreen() {
     retry: false,
   });
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    if (accessToken && cleanCode.length === 6) {
+      try {
+        setJoining(true);
+        const data = await api.inviteJoin({
+          inviteCode: cleanCode,
+          role: targetRole,
+        });
+        await setSession(data);
+        router.replace('/');
+        return;
+      } catch (err: any) {
+        setJoining(false);
+        Alert.alert('Join Error', err.message || 'Failed to join classroom.');
+        return;
+      }
+    }
     router.replace({
       pathname: '/auth',
       params: { inviteCode: cleanCode, role: targetRole },
@@ -59,12 +78,16 @@ export default function InviteScreen() {
 
               <View style={{ width: '100%', marginVertical: 16 }}>
                 <Banner tone="info">
-                  Click below to continue signing in or creating your account as a {targetRole === 'teacher' ? 'Teacher' : 'Parent'} for this school.
+                  {accessToken
+                    ? `Click below to immediately join ${resolveQuery.data.tenantName || 'this school'} as a ${targetRole === 'teacher' ? 'Teacher' : 'Parent'}.`
+                    : `Click below to continue signing in or creating your account as a ${targetRole === 'teacher' ? 'Teacher' : 'Parent'} for this school.`}
                 </Banner>
               </View>
 
-              <Button onPress={handleContinue} style={{ width: '100%' }}>
-                Join {resolveQuery.data.tenantName || 'School'} as {targetRole === 'teacher' ? 'Teacher' : 'Parent'}
+              <Button onPress={handleContinue} loading={joining} style={{ width: '100%' }}>
+                {accessToken
+                  ? `Join Now as ${targetRole === 'teacher' ? 'Teacher' : 'Parent'}`
+                  : `Join ${resolveQuery.data.tenantName || 'School'} as ${targetRole === 'teacher' ? 'Teacher' : 'Parent'}`}
               </Button>
             </View>
           )}

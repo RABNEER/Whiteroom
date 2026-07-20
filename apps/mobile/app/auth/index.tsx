@@ -212,7 +212,20 @@ export default function AuthScreen() {
         const upper = match[1].toUpperCase();
         setInviteCode(upper);
         if (upper.length === 6) {
-          resolveInviteMutation.mutate(upper);
+          const { accessToken } = useSession.getState();
+          if (accessToken) {
+            api.inviteJoin({ inviteCode: upper, role: selectedRole })
+              .then(data => {
+                setSession(data);
+                router.replace('/');
+              })
+              .catch(err => {
+                console.error("Auto join error:", err);
+                resolveInviteMutation.mutate(upper);
+              });
+          } else {
+            resolveInviteMutation.mutate(upper);
+          }
         }
       }
     }
@@ -225,7 +238,20 @@ export default function AuthScreen() {
         const upper = params.inviteCode.toUpperCase();
         setInviteCode(upper);
         if (upper.length === 6) {
-          resolveInviteMutation.mutate(upper);
+          const { accessToken } = useSession.getState();
+          if (accessToken) {
+            api.inviteJoin({ inviteCode: upper, role: params.role || selectedRole })
+              .then(data => {
+                setSession(data);
+                router.replace('/');
+              })
+              .catch(err => {
+                console.error("Auto join error:", err);
+                resolveInviteMutation.mutate(upper);
+              });
+          } else {
+            resolveInviteMutation.mutate(upper);
+          }
         }
       }
     } else {
@@ -234,7 +260,7 @@ export default function AuthScreen() {
 
     const sub = Linking.addEventListener('url', (e) => handleDeepLink(e.url));
     return () => sub.remove();
-  }, [params.inviteCode, params.role]);
+  }, [params.inviteCode, params.role, selectedRole, setSession]);
 
 
   const handleVerifyWhatsApp = useCallback(async () => {
@@ -249,6 +275,7 @@ export default function AuthScreen() {
         id: whatsappSessionId,
         token: whatsappToken,
         inviteCode: inviteCode || undefined,
+        role: inviteCode ? selectedRole : undefined,
       });
 
       await clearPendingSession();
@@ -268,7 +295,7 @@ export default function AuthScreen() {
       setLoading(false);
       verifyingRef.current = false;
     }
-  }, [whatsappSessionId, whatsappToken, inviteCode, setSession]);
+  }, [whatsappSessionId, whatsappToken, inviteCode, selectedRole, setSession]);
 
   // Check active session status once
   const checkActiveSession = useCallback(async () => {
@@ -827,7 +854,18 @@ export default function AuthScreen() {
                 accessibilityRole="button"
                 style={[styles.primaryButton, !agreed && { opacity: 0.4 }]}
                 disabled={!agreed}
-                onPress={() => setStep('ROLE_SELECT')}
+                onPress={() => {
+                  if (inviteCode && inviteCode.length === 6 && registrationToken) {
+                    registerMutation.mutate({
+                      registrationToken,
+                      role: selectedRole,
+                      consentAccepted: true,
+                      inviteCode,
+                    });
+                  } else {
+                    setStep('ROLE_SELECT');
+                  }
+                }}
               >
                 <Text style={styles.buttonText}>I AGREE & CONTINUE</Text>
               </Pressable>

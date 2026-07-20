@@ -37,6 +37,7 @@ const verifySchema = z.object({
   phone: z.string().min(10).max(15).optional(),
   otp: z.string().min(5).max(6).optional(),
   inviteCode: z.string().length(6).optional(),
+  role: z.string().optional(),
   studentName: z.string().trim().min(1).max(120).optional(),
   rollNumber: z.string().trim().min(1).max(40).optional(),
 }).refine(data => {
@@ -212,6 +213,7 @@ export async function otpVerifyHandler(c: Context) {
     userId = existingUser.id;
 
     if (parsed.data.inviteCode) {
+      const targetRole = parsed.data.role === UserRole.TEACHER ? UserRole.TEACHER : UserRole.PARENT;
       const [tenant] = await db
         .select()
         .from(tenants)
@@ -242,19 +244,28 @@ export async function otpVerifyHandler(c: Context) {
           await tx.insert(userTenants).values({
             userId,
             tenantId: tenant.id,
-            role: UserRole.PARENT,
+            role: targetRole,
             status: "active",
             activeTenant: true,
           });
 
           // Insert profile
-          await tx
-            .insert(parentProfiles)
-            .values({
-              userId,
-              tenantId: tenant.id,
-            })
-            .returning();
+          if (targetRole === UserRole.TEACHER) {
+            await tx
+              .insert(teacherProfiles)
+              .values({
+                userId,
+                tenantId: tenant.id,
+              });
+          } else {
+            await tx
+              .insert(parentProfiles)
+              .values({
+                userId,
+                tenantId: tenant.id,
+              })
+              .returning();
+          }
 
           // Consent log
           await tx.insert(consentLogs).values({
@@ -265,12 +276,12 @@ export async function otpVerifyHandler(c: Context) {
             userAgent: c.req.header("user-agent") ?? null,
           });
 
-          // Automatic student auto-linking removed to prevent IDOR student claiming vulnerability (Finding 3)
+          await tx
+            .update(users)
+            .set({ role: targetRole, tenantId: tenant.id, updatedAt: new Date() })
+            .where(eq(users.id, userId));
         });
       } else {
-        // Already mapped. If student details provided, try to link them
-        // Automatic student auto-linking removed to prevent IDOR student claiming vulnerability (Finding 3)
-
         // Set as active
         await db.transaction(async (tx) => {
           await tx
@@ -279,13 +290,17 @@ export async function otpVerifyHandler(c: Context) {
             .where(eq(userTenants.userId, userId));
           await tx
             .update(userTenants)
-            .set({ activeTenant: true })
+            .set({ activeTenant: true, role: targetRole })
             .where(eq(userTenants.id, existingMapping.id));
+          await tx
+            .update(users)
+            .set({ role: targetRole, tenantId: tenant.id, updatedAt: new Date() })
+            .where(eq(users.id, userId));
         });
       }
 
       tenantId = tenant.id;
-      role = UserRole.PARENT;
+      role = targetRole;
     } else {
       // Returning user - login. Resolve active tenant
       const userMappings = await db
