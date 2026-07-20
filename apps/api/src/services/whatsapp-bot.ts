@@ -366,6 +366,8 @@ export async function startBot(isReconnect = false) {
   const baileys = await import("@whiskeysockets/baileys");
   const useMultiFileAuthState = baileys.useMultiFileAuthState;
   const DisconnectReason = baileys.DisconnectReason;
+  const getBinaryNodeChild = baileys.getBinaryNodeChild;
+  const getBinaryNodeChildren = baileys.getBinaryNodeChildren;
   let makeWASocket = baileys.default;
   if (typeof makeWASocket === "object" && makeWASocket !== null) {
     makeWASocket = (makeWASocket as any).default || makeWASocket;
@@ -593,8 +595,10 @@ export async function startBot(isReconnect = false) {
             if (cleanFrom === registeredDigits) {
               console.log(`✅ [WHATSAPP BOT] Sender JID directly matches registered phone digits (${cleanFrom}).`);
               isValidSender = true;
-            } else if (isLid) {
-              console.log(`ℹ️ [WHATSAPP BOT] Sender is using a LID JID (${from}). Checking Baileys contacts for registered phone ${registeredDigits}...`);
+            } else {
+              console.log(`ℹ️ [WHATSAPP BOT] Checking sender mapping (${from}) against registered phone (${registeredDigits})...`);
+              
+              // 1. Check Baileys onWhatsApp helper
               const waInfoList = await sock.onWhatsApp(registeredDigits).catch(() => [] as any[]);
               const waInfo = waInfoList?.[0];
               if (waInfo && waInfo.exists) {
@@ -602,12 +606,85 @@ export async function startBot(isReconnect = false) {
                 const registeredLid = waInfo.lid?.split("@")[0]?.split(":")[0];
                 console.log(`🔍 [WHATSAPP BOT] onWhatsApp(${registeredDigits}) => JID: ${waInfo.jid}, LID: ${waInfo.lid}`);
                 if (cleanFrom === registeredLid || cleanFrom === registeredJid) {
-                  console.log(`✅ [WHATSAPP BOT] Sender LID (${cleanFrom}) matches registered phone LID/JID.`);
+                  console.log(`✅ [WHATSAPP BOT] Sender (${cleanFrom}) matches registered phone LID/JID.`);
                   isValidSender = true;
                 }
               }
-            } else {
-              console.log(`❌ [WHATSAPP BOT] Sender mismatch! Sender: ${cleanFrom}, Registered for session: ${registeredDigits}`);
+
+              // 2. If not matched, query WhatsApp USync directly to extract both jid and lid attributes for the phone
+              if (!isValidSender && sock.query && sock.generateMessageTag) {
+                try {
+                  const iqPhone = {
+                    tag: 'iq',
+                    attrs: { to: '@s.whatsapp.net', type: 'get', xmlns: 'usync' },
+                    content: [{
+                      tag: 'usync',
+                      attrs: { context: 'interactive', mode: 'query', sid: sock.generateMessageTag(), last: 'true', index: '0' },
+                      content: [
+                        { tag: 'query', attrs: {}, content: [{ tag: 'contact', attrs: {} }] },
+                        { tag: 'list', attrs: {}, content: [{ tag: 'user', attrs: {}, content: [{ tag: 'contact', attrs: {}, content: `+${registeredDigits}` }] }] },
+                      ],
+                    }],
+                  };
+                  const resultPhone = await sock.query(iqPhone);
+                  const usyncNode = getBinaryNodeChild(resultPhone, 'usync');
+                  const listNode = getBinaryNodeChild(usyncNode, 'list');
+                  const userNodes = getBinaryNodeChildren(listNode, 'user');
+                  for (const uNode of userNodes) {
+                    if (uNode?.attrs) {
+                      const attrJid = uNode.attrs.jid?.split("@")[0]?.split(":")[0];
+                      const attrLid = uNode.attrs.lid?.split("@")[0]?.split(":")[0];
+                      console.log(`🔍 [WHATSAPP BOT] USync phone query => JID: ${uNode.attrs.jid}, LID: ${uNode.attrs.lid}`);
+                      if (cleanFrom === attrJid || cleanFrom === attrLid) {
+                        console.log(`✅ [WHATSAPP BOT] Sender (${cleanFrom}) matches USync attributes.`);
+                        isValidSender = true;
+                        break;
+                      }
+                    }
+                  }
+                } catch (err) {
+                  console.warn(`⚠️ [WHATSAPP BOT] USync phone query failed:`, err);
+                }
+              }
+
+              // 3. If still not matched and sender is using LID (@lid), reverse query USync for the LID itself
+              if (!isValidSender && isLid && sock.query && sock.generateMessageTag) {
+                try {
+                  const iqLid = {
+                    tag: 'iq',
+                    attrs: { to: '@s.whatsapp.net', type: 'get', xmlns: 'usync' },
+                    content: [{
+                      tag: 'usync',
+                      attrs: { context: 'interactive', mode: 'query', sid: sock.generateMessageTag(), last: 'true', index: '0' },
+                      content: [
+                        { tag: 'query', attrs: {}, content: [{ tag: 'contact', attrs: {} }] },
+                        { tag: 'list', attrs: {}, content: [{ tag: 'user', attrs: { jid: from } }] },
+                      ],
+                    }],
+                  };
+                  const resultLid = await sock.query(iqLid);
+                  const usyncNode = getBinaryNodeChild(resultLid, 'usync');
+                  const listNode = getBinaryNodeChild(usyncNode, 'list');
+                  const userNodes = getBinaryNodeChildren(listNode, 'user');
+                  for (const uNode of userNodes) {
+                    if (uNode?.attrs) {
+                      const attrJid = uNode.attrs.jid?.split("@")[0]?.split(":")[0];
+                      console.log(`🔍 [WHATSAPP BOT] USync LID reverse query (${from}) => JID: ${uNode.attrs.jid}`);
+                      if (attrJid === registeredDigits) {
+                        console.log(`✅ [WHATSAPP BOT] Reverse LID query proved ${from} belongs to ${registeredDigits}.`);
+                        isValidSender = true;
+                        break;
+                      }
+                    }
+                  }
+                } catch (err) {
+                  console.warn(`⚠️ [WHATSAPP BOT] USync LID reverse query failed:`, err);
+                }
+              }
+
+              if (!isValidSender) {
+                console.log(`❌ [WHATSAPP BOT] Sender mismatch! Sender: ${cleanFrom} (${from}), Registered for session: ${registeredDigits}`);
+              }
             }
           } catch (err) {
             console.error(`❌ [WHATSAPP BOT] Phone verification check error:`, err);
