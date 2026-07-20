@@ -241,6 +241,14 @@ async function runDbMigrations() {
   }
 }
 
+// ─── Global Error Handlers (prevent Baileys uncaught errors from killing the process) ───
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("🛑 [PROCESS] Unhandled Rejection at:", promise, "reason:", reason);
+});
+process.on("uncaughtException", (error) => {
+  console.error("🛑 [PROCESS] Uncaught Exception:", error);
+});
+
 // ─── Start Server Immediately to prevent Railway 502 Bad Gateway during cold starts ───
 serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   console.log(`

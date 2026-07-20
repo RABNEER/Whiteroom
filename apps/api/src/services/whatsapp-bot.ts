@@ -183,6 +183,7 @@ let isReconnecting = false;
 let isLoggingOut = false;
 let reconnectAttempts = 0;
 let reconnectTimer: NodeJS.Timeout | null = null;
+let qrTimeout: NodeJS.Timeout | null = null;
 
 /** Exponential backoff with jitter (capped at 5 minutes). */
 function getBackoffMs(attempt: number, isConflict = false): number {
@@ -277,7 +278,7 @@ export async function logoutBot(options: {
       // and crashes the process.
       if (!skipRemoteLogout) {
         try {
-          if (sock.ws && (sock.ws as any).isOpen) {
+          if (!sock.ws || (sock.ws as any).isOpen) {
             await Promise.race([
               Promise.resolve(sock.logout?.()).catch((e) => {
                 console.warn("⚠️ [WHATSAPP BOT] Ignored error during sock.logout():", e?.message || e);
@@ -289,10 +290,12 @@ export async function logoutBot(options: {
           console.warn("⚠️ [WHATSAPP BOT] Socket logout ignored:", e?.message || e);
         }
       }
-      try {
-        sock.end?.(undefined);
-      } catch {
-        // ignore
+      if (!skipRemoteLogout) {
+        try {
+          sock.end?.(undefined);
+        } catch {
+          // ignore
+        }
       }
     }
 
@@ -421,6 +424,12 @@ export async function startBot(isReconnect = false) {
         console.log("\n📱 [WHATSAPP BOT] Scan this QR code using Linked Devices in WhatsApp:");
         qrcode.generate(qr, { small: true });
         (globalThis as any).whatsappLatestQr = qr;
+        if (qrTimeout) clearTimeout(qrTimeout);
+        qrTimeout = setTimeout(() => {
+          if (!(globalThis as any).whatsappBotConnected && (globalThis as any).whatsappLatestQr) {
+            console.log("⏰ [WHATSAPP BOT] QR code has been available for 60s — visit /api/v1/auth/whatsapp/qr to view and scan on your phone.");
+          }
+        }, 60_000);
       }
 
       if (connection === "close") {
@@ -498,135 +507,133 @@ export async function startBot(isReconnect = false) {
 
   // Listen for incoming messages
   sock.ev.on("messages.upsert", async (m) => {
-    console.log(`✉️ [WHATSAPP BOT] Message event: type = ${m.type}, messages = ${m.messages.length}`);
-    if (m.type !== "notify" && m.type !== "append") return;
+    try {
+      console.log(`✉️ [WHATSAPP BOT] Message event: type = ${m.type}, messages = ${m.messages.length}`);
+      if (m.type !== "notify" && m.type !== "append") return;
 
-    for (const msg of m.messages) {
-      if (!msg.message) continue;
+      for (const msg of m.messages) {
+        if (!msg.message) continue;
 
-      const from = msg.key.remoteJid; // JID format: 919999999999@s.whatsapp.net or LID format
-      if (!from || (!from.endsWith("@s.whatsapp.net") && !from.endsWith("@lid"))) continue;
+        const from = msg.key.remoteJid;
+        if (!from || (!from.endsWith("@s.whatsapp.net") && !from.endsWith("@lid"))) continue;
 
-      // Extract text content from various message types
-      const text =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        "";
+        const text =
+          msg.message.conversation ||
+          msg.message.extendedTextMessage?.text ||
+          "";
 
-      console.log(`✉️ [WHATSAPP BOT] Received message from ${from}: "${text}"`);
+        console.log(`✉️ [WHATSAPP BOT] Received message from ${from}: "${text}"`);
 
-      // Ignore messages containing our bot's own response template to prevent infinite loops
-      if (text.includes("Whiteroom Verification")) continue;
+        if (text.includes("Whiteroom Verification")) continue;
 
-      // Match the validation pattern (e.g. Verify <session_id>)
-      const match = text.match(/Verify\s+([A-Za-z0-9_-]+)/i);
+        const match = text.match(/Verify\s+([A-Za-z0-9_-]+)/i);
 
-      if (match) {
-        const code = match[1];
-        console.log(`📩 [WHATSAPP BOT] Found verification code ${code} from sender: ${from}`);
+        if (match) {
+          const code = match[1];
+          console.log(`📩 [WHATSAPP BOT] Found verification code ${code} from sender: ${from}`);
 
-        // Resolve phone number corresponding to the verification session from backend
-        let registeredPhoneHash: string | null = null;
-        try {
-          const resolveUrl = webhookUrl.replace(/\/webhook\/?$/, `/session/${code}/phone`);
-          console.log(`🔍 [WHATSAPP BOT] Resolving session phone via: GET ${resolveUrl}`);
+          let registeredPhoneHash: string | null = null;
+          try {
+            const resolveUrl = webhookUrl.replace(/\/webhook\/?$/, `/session/${code}/phone`);
+            console.log(`🔍 [WHATSAPP BOT] Resolving session phone via: GET ${resolveUrl}`);
 
-          const resolveRes = await fetch(resolveUrl, {
-            method: "GET",
-            headers: {
-              "x-webhook-secret": webhookSecret || "",
-            },
-          });
-
-          const rawBody = await resolveRes.text();
-          console.log(`🔍 [WHATSAPP BOT] Session phone resolve response: HTTP ${resolveRes.status}`);
-
-          if (resolveRes.ok) {
-            const resolveData = JSON.parse(rawBody) as any;
-            registeredPhoneHash = resolveData.data?.phone || null;
-          } else {
-            console.warn(`⚠️ [WHATSAPP BOT] Could not resolve phone for code ${code}: HTTP ${resolveRes.status} - ${rawBody}`);
-          }
-        } catch (err) {
-          console.error(`❌ [WHATSAPP BOT] Failed to fetch session phone for code ${code}:`, err);
-        }
-
-        if (!registeredPhoneHash) {
-          console.warn(`⚠️ [WHATSAPP BOT] Ignoring code ${code} because no active session phone number matches it.`);
-          await sock.sendMessage(from, {
-            text: `❌ *Whiteroom Verification Failed*\n\nThe code *${code}* is either expired or invalid.\n\nPlease generate a new verification code from the Whiteroom app and try again.`,
-          });
-          continue;
-        }
-
-        // Verify that the sender JID belongs to the registered phone number
-        let isValidSender = false;
-        const cleanFrom = from.split("@")[0]?.split(":")[0];
-        const isLid = from.endsWith("@lid");
-        
-        try {
-          if (isLid) {
-            console.log(`ℹ️ [WHATSAPP BOT] Sender is using a LID JID (${from}). Bypassing local phone hash check for compatibility.`);
-            isValidSender = true;
-          } else {
-            const normalizedSenderPhone = normalizePhone(cleanFrom);
-            const senderPhoneHash = hashSHA256(normalizedSenderPhone);
-            
-            console.log(`🔍 [WHATSAPP BOT] Comparing sender phone hash with registered phone hash`);
-            console.log(`🔍 [WHATSAPP BOT] Sender JID: ${from} -> Cleaned JID: ${cleanFrom} -> Normalized: ${normalizedSenderPhone}`);
-            console.log(`🔍 [WHATSAPP BOT] Sender Phone Hash: ${senderPhoneHash}`);
-            console.log(`🔍 [WHATSAPP BOT] Registered Phone Hash: ${registeredPhoneHash}`);
-            if (senderPhoneHash === registeredPhoneHash) {
-              isValidSender = true;
-            }
-          }
-        } catch (err) {
-          console.error(`❌ [WHATSAPP BOT] Phone normalization or hashing error:`, err);
-        }
-
-        if (!isValidSender) {
-          console.warn(`⚠️ [WHATSAPP BOT] Ignoring code ${code} because sender JID ${from} is not authorized for phone hash ${registeredPhoneHash}`);
-          await sock.sendMessage(from, {
-            text: `❌ *Whiteroom Verification Failed*\n\nThe phone number associated with your WhatsApp account does not match the phone number registered in the Whiteroom session.\n\nPlease verify you are using the same phone number in the app.`,
-          });
-          continue;
-        }
-
-        console.log(`📩 [WHATSAPP BOT] Verified code ${code} for sender JID: ${from}`);
-
-        try {
-          const response = await fetch(webhookUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-webhook-secret": webhookSecret || "",
-            },
-            body: JSON.stringify({
-              from: cleanFrom,
-              text: text,
-              isLid: isLid,
-            }),
-          });
-
-          if (response.ok) {
-            console.log(`✅ [WHATSAPP BOT] Webhook success for code ${code}`);
-            await sock.sendMessage(from, {
-              text: `✅ *Whiteroom Verification*\n\nDevice verification request for code *${code}* was successful.\n\nYou can now switch back to the Whiteroom application to complete your sign-in.`,
+            const resolveRes = await fetch(resolveUrl, {
+              method: "GET",
+              headers: {
+                "x-webhook-secret": webhookSecret || "",
+              },
             });
-          } else {
-            const errData = await response.json().catch(() => ({}));
-            console.error(`❌ [WHATSAPP BOT] Webhook failed for code ${code}:`, errData);
+
+            const rawBody = await resolveRes.text();
+            console.log(`🔍 [WHATSAPP BOT] Session phone resolve response: HTTP ${resolveRes.status}`);
+
+            if (resolveRes.ok) {
+              const resolveData = JSON.parse(rawBody) as any;
+              registeredPhoneHash = resolveData.data?.phone || null;
+            } else {
+              console.warn(`⚠️ [WHATSAPP BOT] Could not resolve phone for code ${code}: HTTP ${resolveRes.status} - ${rawBody}`);
+            }
+          } catch (err) {
+            console.error(`❌ [WHATSAPP BOT] Failed to fetch session phone for code ${code}:`, err);
+          }
+
+          if (!registeredPhoneHash) {
+            console.warn(`⚠️ [WHATSAPP BOT] Ignoring code ${code} because no active session phone number matches it.`);
             await sock.sendMessage(from, {
               text: `❌ *Whiteroom Verification Failed*\n\nThe code *${code}* is either expired or invalid.\n\nPlease generate a new verification code from the Whiteroom app and try again.`,
             });
+            continue;
           }
-        } catch (err) {
-          console.error(`❌ [WHATSAPP BOT] Webhook request error:`, err);
-          await sock.sendMessage(from, {
-            text: `⚠️ *Whiteroom Verification Error*\n\nUnable to reach the verification servers right now. Please try again in a few minutes.`,
-          });
+
+          let isValidSender = false;
+          const cleanFrom = from.split("@")[0]?.split(":")[0];
+          const isLid = from.endsWith("@lid");
+
+          try {
+            if (isLid) {
+              console.log(`ℹ️ [WHATSAPP BOT] Sender is using a LID JID (${from}). Bypassing local phone hash check for compatibility.`);
+              isValidSender = true;
+            } else {
+              const normalizedSenderPhone = normalizePhone(cleanFrom);
+              const senderPhoneHash = hashSHA256(normalizedSenderPhone);
+              console.log(`🔍 [WHATSAPP BOT] Comparing sender phone hash with registered phone hash`);
+              console.log(`🔍 [WHATSAPP BOT] Sender JID: ${from} -> Cleaned JID: ${cleanFrom} -> Normalized: ${normalizedSenderPhone}`);
+              console.log(`🔍 [WHATSAPP BOT] Sender Phone Hash: ${senderPhoneHash}`);
+              console.log(`🔍 [WHATSAPP BOT] Registered Phone Hash: ${registeredPhoneHash}`);
+              if (senderPhoneHash === registeredPhoneHash) {
+                isValidSender = true;
+              }
+            }
+          } catch (err) {
+            console.error(`❌ [WHATSAPP BOT] Phone normalization or hashing error:`, err);
+          }
+
+          if (!isValidSender) {
+            console.warn(`⚠️ [WHATSAPP BOT] Ignoring code ${code} because sender JID ${from} is not authorized for phone hash ${registeredPhoneHash}`);
+            await sock.sendMessage(from, {
+              text: `❌ *Whiteroom Verification Failed*\n\nThe phone number associated with your WhatsApp account does not match the phone number registered in the Whiteroom session.\n\nPlease verify you are using the same phone number in the app.`,
+            });
+            continue;
+          }
+
+          console.log(`📩 [WHATSAPP BOT] Verified code ${code} for sender JID: ${from}`);
+
+          try {
+            const response = await fetch(webhookUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-webhook-secret": webhookSecret || "",
+              },
+              body: JSON.stringify({
+                from: cleanFrom,
+                text: text,
+                isLid: isLid,
+              }),
+            });
+
+            if (response.ok) {
+              console.log(`✅ [WHATSAPP BOT] Webhook success for code ${code}`);
+              await sock.sendMessage(from, {
+                text: `✅ *Whiteroom Verification*\n\nDevice verification request for code *${code}* was successful.\n\nYou can now switch back to the Whiteroom application to complete your sign-in.`,
+              });
+            } else {
+              const errData = await response.json().catch(() => ({}));
+              console.error(`❌ [WHATSAPP BOT] Webhook failed for code ${code}:`, errData);
+              await sock.sendMessage(from, {
+                text: `❌ *Whiteroom Verification Failed*\n\nThe code *${code}* is either expired or invalid.\n\nPlease generate a new verification code from the Whiteroom app and try again.`,
+              });
+            }
+          } catch (err) {
+            console.error(`❌ [WHATSAPP BOT] Webhook request error:`, err);
+            await sock.sendMessage(from, {
+              text: `⚠️ *Whiteroom Verification Error*\n\nUnable to reach the verification servers right now. Please try again in a few minutes.`,
+            });
+          }
         }
       }
+    } catch (err) {
+      console.error("❌ [WHATSAPP BOT] Unhandled error in messages.upsert:", err);
     }
   });
 
