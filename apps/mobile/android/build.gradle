@@ -40,3 +40,24 @@ allprojects {
         maven { url 'https://www.jitpack.io' }
     }
 }
+
+subprojects { p ->
+    if (p.name == "expo") {
+        p.tasks.matching { it.name.contains("compile") || it.name.contains("Java") }.configureEach { task ->
+            rootProject.subprojects.each { otherP ->
+                if (otherP.name.contains("sentry")) {
+                    task.dependsOn(otherP.tasks.matching { it.name.contains("Jar") || it.name.contains("compile") || it.name.contains("Classes") })
+                }
+            }
+        }
+    }
+    if (p.name.contains("sentry_react-native")) {
+        p.tasks.configureEach { task ->
+            rootProject.subprojects.each { otherP ->
+                if (otherP.name == "sentry-react-native") {
+                    task.mustRunAfter(otherP.tasks)
+                }
+            }
+        }
+    }
+}

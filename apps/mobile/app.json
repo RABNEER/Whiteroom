@@ -62,8 +62,7 @@
         }
       ],
       "@react-native-firebase/app",
-      "@react-native-firebase/auth",
-      "@sentry/react-native/expo"
+      "@react-native-firebase/auth"
     ],
     "experiments": {
       "typedRoutes": true
