@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+﻿import { Hono } from "hono";
 import { html } from "hono/html";
 import { db } from "../../lib/db.js";
 import { tenants, eq, and } from "@whiteroom/db";
@@ -131,6 +131,10 @@ publicRoutes.get("/invite/:code", async (c) => {
   }
 
   const brandColor = tenant.brandColor || "#4F46E5";
+  const apkUrl = "https://apps.whiteroom.co.in/api/v1/storage/files/whiteroom-latest.apk";
+  // NOTE: This page is the Universal Link fallback.
+  // Android App Links intercepts the URL at OS level if app is installed -> opens app directly.
+  // This page ONLY loads when the app is NOT installed.
 
   return c.html(
     html`
@@ -140,7 +144,7 @@ publicRoutes.get("/invite/:code", async (c) => {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Join ${tenant.name} on Whiteroom</title>
-        <meta name="description" content="You've been invited to join ${tenant.name} on Whiteroom — classroom administration made simple.">
+        <meta name="description" content="You've been invited to join ${tenant.name} on Whiteroom.">
         <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
         <style>
           :root { --brand: ${brandColor}; --brand-grad: linear-gradient(135deg, ${brandColor} 0%, #a855f7 100%); }
@@ -153,14 +157,16 @@ publicRoutes.get("/invite/:code", async (c) => {
           @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
           .avatar { width: 100px; height: 100px; border-radius: 24px; background: var(--brand-grad); display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; font-weight: 800; font-size: 2.5rem; color: white; overflow: hidden; }
           .avatar img { width: 100%; height: 100%; object-fit: cover; }
-          h2 { font-size: 2rem; font-weight: 800; margin: 0 0 0.25rem; letter-spacing: -0.5px; }
-          .subtitle { color: #94a3b8; margin-bottom: 2rem; font-size: 1rem; }
-          .open-btn { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--brand-grad); color: white; border: none; padding: 1rem 2.5rem; border-radius: 16px; font-size: 1.1rem; font-weight: 700; cursor: pointer; text-decoration: none; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3); }
-          .open-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(99, 102, 241, 0.4); }
-          .fallback { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.06); }
-          .fallback p { color: #64748b; font-size: 0.85rem; margin: 0 0 1rem; }
-          .dl-btn { display: inline-block; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0; padding: 0.75rem 1.5rem; border-radius: 12px; font-weight: 600; font-size: 0.9rem; text-decoration: none; margin: 0.25rem; transition: background 0.2s; }
-          .dl-btn:hover { background: rgba(255,255,255,0.1); }
+          h2 { font-size: 2rem; font-weight: 800; margin: 0 0 0.5rem; letter-spacing: -0.5px; }
+          .invite-pill { display: inline-block; padding: 0.35rem 0.9rem; background: rgba(16,185,129,0.12); border: 1px solid rgba(52,211,153,0.2); color: #34d399; border-radius: 99px; font-size: 0.8rem; font-weight: 600; margin-bottom: 1rem; }
+          .subtitle { color: #94a3b8; margin-bottom: 2rem; font-size: 1rem; line-height: 1.6; }
+          .dl-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.65rem; background: var(--brand-grad); color: white; padding: 1.1rem 2rem; border-radius: 16px; font-size: 1.05rem; font-weight: 700; text-decoration: none; width: 100%; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35); }
+          .dl-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(99, 102, 241, 0.5); }
+          .steps { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 1.25rem 1.5rem; text-align: left; margin-top: 1.5rem; }
+          .steps-label { color: #64748b; font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 0.75rem; }
+          .step { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.6rem; color: #94a3b8; font-size: 0.875rem; }
+          .step:last-child { margin-bottom: 0; }
+          .step-num { background: rgba(99,102,241,0.15); color: #818cf8; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
           footer { width: 100%; padding: 2rem; text-align: center; color: #64748b; font-size: 0.9rem; border-top: 1px solid rgba(255,255,255,0.03); }
         </style>
       </head>
@@ -172,14 +178,22 @@ publicRoutes.get("/invite/:code", async (c) => {
               ${tenant.logoUrl ? html`<img src="${tenant.logoUrl}" alt="${tenant.name}">` : tenant.name.substring(0, 1).toUpperCase()}
             </div>
             <h2>${tenant.name}</h2>
-            <p class="subtitle">You've been invited to join on Whiteroom as a ${role === 'teacher' ? 'Teacher' : 'Parent'}</p>
-            <a class="open-btn" href="whiteroom://invite/${code}?role=${role}">
-              Open in Whiteroom
+            <div class="invite-pill">You are invited</div>
+            <p class="subtitle">
+              You have been invited to join as a <strong style="color:#e2e8f0;">${role === 'teacher' ? 'Teacher' : 'Parent'}</strong>.<br>
+              Download Whiteroom to accept this invite.
+            </p>
+
+            <a class="dl-btn" href="${apkUrl}" download="whiteroom.apk">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Whiteroom
             </a>
-            <div class="fallback">
-              <p>Don't have the app yet?</p>
-              <a class="dl-btn" href="#">Download for iOS</a>
-              <a class="dl-btn" href="#">Download for Android</a>
+
+            <div class="steps">
+              <p class="steps-label">After installing:</p>
+              <div class="step"><div class="step-num">1</div><span>Install the downloaded APK on your device</span></div>
+              <div class="step"><div class="step-num">2</div><span>Open this invite link again</span></div>
+              <div class="step"><div class="step-num">3</div><span>The app will open and your invite to <strong style="color:#e2e8f0;">${tenant.name}</strong> will be ready</span></div>
             </div>
           </div>
         </div>
