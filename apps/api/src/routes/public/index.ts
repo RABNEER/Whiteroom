@@ -12,7 +12,7 @@ publicRoutes.get("/api/v1/app-version", (c) => {
     latestVersion: env.LATEST_APP_VERSION || "0.0.1",
     apkUrl:
       env.APK_DOWNLOAD_URL ||
-      "https://whiteroomapi-production-7011.up.railway.app/api/v1/storage/files/whiteroom-latest.apk",
+      "https://apps.whiteroom.co.in/api/v1/storage/files/whiteroom-latest.apk",
     forceUpdate: env.FORCE_UPDATE_REQUIRED === "true",
   });
 });

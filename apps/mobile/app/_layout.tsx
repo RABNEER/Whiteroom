@@ -40,7 +40,7 @@ function RootLayout() {
       try {
         const apiBaseUrl =
           (Constants.expoConfig?.extra?.apiBaseUrl as string) ||
-          "https://whiteroomapi-production-7011.up.railway.app/api/v1";
+          "https://apps.whiteroom.co.in/api/v1";
         const currentVersion = Constants.expoConfig?.version || "0.0.1";
         const response = await fetch(
           `${apiBaseUrl.replace(/\/v1$/, "")}/v1/app-version`
