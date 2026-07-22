@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { UserRole } from "@whiteroom/shared";
 import { authMiddleware, requireRole } from "../../middleware/auth.js";
+import { contentModerationMiddleware } from "../../middleware/moderation.js";
 import { createAnnouncementHandler } from "./create.js";
 import { listAnnouncementsHandler } from "./list.js";
 import { getAnnouncementHandler } from "./get-one.js";
@@ -16,11 +17,13 @@ announcementRoutes.use("*", authMiddleware);
 announcementRoutes.post(
   "/",
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN),
+  contentModerationMiddleware,
   createAnnouncementHandler
 );
 announcementRoutes.patch(
   "/:id",
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN),
+  contentModerationMiddleware,
   updateAnnouncementHandler
 );
 announcementRoutes.delete(

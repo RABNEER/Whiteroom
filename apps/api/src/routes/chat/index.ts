@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { authMiddleware } from "../../middleware/auth.js";
 import { errorHandler } from "../../middleware/error.js";
 import { rateLimitMiddleware } from "../../middleware/rate-limit.js";
+import { contentModerationMiddleware } from "../../middleware/moderation.js";
 import { listRoomsHandler } from "./rooms.js";
 import {
   getMessagesHandler,
@@ -34,8 +35,8 @@ chatRoutes.get("/rooms", listRoomsHandler);
 
 // Messages
 chatRoutes.get("/rooms/:roomId/messages", getMessagesHandler);
-chatRoutes.post("/rooms/:roomId/messages", chatMutationLimiter, sendMessageHandler);
-chatRoutes.post("/rooms/:roomId/walt", chatMutationLimiter, waltDoubtHandler);
+chatRoutes.post("/rooms/:roomId/messages", chatMutationLimiter, contentModerationMiddleware, sendMessageHandler);
+chatRoutes.post("/rooms/:roomId/walt", chatMutationLimiter, contentModerationMiddleware, waltDoubtHandler);
 chatRoutes.put("/messages/:messageId/pin", chatMutationLimiter, pinMessageHandler);
 chatRoutes.delete("/messages/:messageId/pin", chatMutationLimiter, unpinMessageHandler);
 chatRoutes.delete("/messages/:messageId", chatMutationLimiter, deleteMessageHandler);

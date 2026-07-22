@@ -6,6 +6,11 @@ import { adminMetricsHandler } from "./metrics.js";
 import { adminUsersHandler } from "./users.js";
 import { promoteAllHandler, listPromotionsHandler } from "./promote.js";
 import { pilotStatsHandler } from "./pilot-stats.js";
+import {
+  getSecurityLogsHandler,
+  sendBreachNotificationHandler,
+  exportCertInReportHandler,
+} from "./security.js";
 
 const adminRoutes = new Hono();
 
@@ -18,5 +23,10 @@ adminRoutes.get("/pilot-stats", pilotStatsHandler);
 
 adminRoutes.post("/promote-all", requireRole(UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), promoteAllHandler);
 adminRoutes.get("/promotion-history", requireRole(UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), listPromotionsHandler);
+
+// Security & Compliance (DPDP Act 2023 & CERT-In)
+adminRoutes.get("/security/logs", requireRole(UserRole.SUPER_ADMIN), getSecurityLogsHandler);
+adminRoutes.post("/security/breach-notify", requireRole(UserRole.SUPER_ADMIN), sendBreachNotificationHandler);
+adminRoutes.get("/security/certin-export", requireRole(UserRole.SUPER_ADMIN), exportCertInReportHandler);
 
 export { adminRoutes };

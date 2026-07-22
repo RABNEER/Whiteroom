@@ -11,7 +11,7 @@ export async function errorHandler(err: Error, c: Context) {
 
   if (err instanceof SyntaxError) {
     const validationError = Errors.validation("Invalid or empty JSON request body");
-    return c.json({ ...validationError.toJSON(), correlationId }, 400);
+    return c.json({ success: false, ...validationError.toJSON(), correlationId }, 400);
   }
 
   if (err instanceof AppError) {
@@ -20,7 +20,7 @@ export async function errorHandler(err: Error, c: Context) {
         extra: { correlationId, path: c.req.path, method: c.req.method, statusCode: err.statusCode },
       });
     }
-    return c.json({ ...err.toJSON(), correlationId }, err.statusCode as any);
+    return c.json({ success: false, ...err.toJSON(), correlationId }, err.statusCode as any);
   }
 
   console.error("Unhandled error:", err);

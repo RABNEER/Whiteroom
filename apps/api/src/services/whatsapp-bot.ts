@@ -430,6 +430,60 @@ export async function startBot(isReconnect = false) {
     retryRequestDelayMs: 500,
   });
 
+  // Wrap internal Baileys send functions to prevent "Connection Closed" unhandled rejections when socket drops during internal background tasks (e.g. sendRetryRequest)
+  const originalSendNode = sock.sendNode;
+  if (originalSendNode) {
+    sock.sendNode = async (...args: any[]) => {
+      try {
+        return await originalSendNode.apply(sock, args as any);
+      } catch (err: any) {
+        if (
+          err?.message?.includes("Connection Closed") ||
+          err?.output?.statusCode === DisconnectReason.connectionClosed
+        ) {
+          // Silently absorb or debug log since socket is disconnecting/reconnecting
+          return undefined as any;
+        }
+        throw err;
+      }
+    };
+  }
+
+  const originalRelayMessage = sock.relayMessage;
+  if (originalRelayMessage) {
+    sock.relayMessage = async (...args: any[]) => {
+      try {
+        return await originalRelayMessage.apply(sock, args as any);
+      } catch (err: any) {
+        if (
+          err?.message?.includes("Connection Closed") ||
+          err?.output?.statusCode === DisconnectReason.connectionClosed
+        ) {
+          return undefined as any;
+        }
+        throw err;
+      }
+    };
+  }
+
+  const originalSendMessage = sock.sendMessage;
+  if (originalSendMessage) {
+    sock.sendMessage = async (...args: any[]) => {
+      try {
+        return await originalSendMessage.apply(sock, args as any);
+      } catch (err: any) {
+        if (
+          err?.message?.includes("Connection Closed") ||
+          err?.output?.statusCode === DisconnectReason.connectionClosed
+        ) {
+          console.warn("⚠️ [WHATSAPP BOT] sendMessage skipped: Connection Closed (socket reconnecting)");
+          return undefined as any;
+        }
+        throw err;
+      }
+    };
+  }
+
   (globalThis as any).whatsappSocket = sock;
 
   // Prevent unhandled socket/emitter errors from crashing the Node.js process

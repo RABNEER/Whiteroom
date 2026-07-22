@@ -61,8 +61,6 @@ vi.mock('../whatsapp-bot.js', async (importOriginal) => {
 describe('whatsapp-bot startBot duplication checks', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    vi.spyOn(console, 'log').mockImplementation(() => {});
-    vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -71,6 +69,8 @@ describe('whatsapp-bot startBot duplication checks', () => {
   });
 
   it('should skip duplicate start if daemon already running', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     // Override the global property before loading the module
     (globalThis as any).whatsappBotStarted = true;
 
@@ -79,12 +79,14 @@ describe('whatsapp-bot startBot duplication checks', () => {
     // Explicitly call the function being tested
     await startBot(false);
 
-    expect(console.log).toHaveBeenCalledWith(
+    expect(consoleLogSpy).toHaveBeenCalledWith(
       "ℹ️ [WHATSAPP BOT] Bot daemon already running, skipping duplicate start."
     );
   });
 
   it('should skip duplicate start if already reconnecting', async () => {
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     (globalThis as any).whatsappBotStarted = false;
 
     const { startBot } = await import('../whatsapp-bot.js');
@@ -100,7 +102,7 @@ describe('whatsapp-bot startBot duplication checks', () => {
 
     await pendingStart.catch(() => {});
 
-    expect(console.log).toHaveBeenCalledWith(
+    expect(consoleLogSpy).toHaveBeenCalledWith(
       "ℹ️ [WHATSAPP BOT] Already reconnecting, skipping duplicate start."
     );
   });

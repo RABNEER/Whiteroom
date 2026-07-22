@@ -21,6 +21,9 @@ export const ErrorCode = {
   VALIDATION_ERROR: "VALIDATION_ERROR",
   INVALID_INPUT: "INVALID_INPUT",
 
+  // Moderation / Security
+  CONTENT_BLOCKED: "CONTENT_BLOCKED",
+
   // Server
   INTERNAL_ERROR: "INTERNAL_ERROR",
 } as const;
@@ -48,6 +51,7 @@ export class AppError extends Error {
 
   toJSON() {
     return {
+      success: false,
       error: {
         code: this.code,
         message: this.message,
@@ -76,6 +80,9 @@ export const Errors = {
 
   limitExceeded: (message: string) =>
     new AppError(ErrorCode.LIMIT_EXCEEDED, message, 403),
+
+  contentBlocked: (message = "Content blocked by safety guardrails", details?: Record<string, unknown>) =>
+    new AppError(ErrorCode.CONTENT_BLOCKED, message, 400, details),
 
   internal: (message = "Something went wrong") =>
     new AppError(ErrorCode.INTERNAL_ERROR, message, 500),
