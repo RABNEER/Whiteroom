@@ -8,7 +8,6 @@ import {
   students,
   classEnrollments,
   userTenants,
-  eq,
   inArray,
 } from "@whiteroom/db";
 import { signAccessToken } from "../lib/jwt.js";

@@ -29,7 +29,7 @@ export async function getSecurityLogsHandler(c: Context) {
   const limitQuery = parseInt(c.req.query("limit") || "50", 10);
   const limit = isNaN(limitQuery) ? 50 : Math.min(limitQuery, 200);
 
-  let conditions: any[] = [];
+  const conditions: any[] = [];
   if (severity && severity !== "ALL") {
     conditions.push(eq(securityAuditLogs.severity, severity));
   }
