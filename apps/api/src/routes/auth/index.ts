@@ -76,6 +76,22 @@ authRoutes.post("/whatsapp/reset", authMiddleware, requireRole("super_admin"), a
   return c.json({ success: true, message: "WhatsApp bot credentials cleared and restarted successfully." });
 });
 
+authRoutes.get("/whatsapp/bot-status", async (c) => {
+  const sock = (globalThis as any).whatsappSocket;
+  const connected = !!(globalThis as any).whatsappBotConnected;
+  const hasQr = !!(globalThis as any).whatsappLatestQr;
+  const secret = process.env.WHATSAPP_WEBHOOK_SECRET || "whiteroom-whatsapp-bot-internal-secret";
+  // Don't expose full secret, just a fingerprint for debugging
+  const secretFingerprint = secret.slice(0, 6) + '...' + secret.slice(-4) + ' (len=' + secret.length + ')';
+  return c.json({
+    connected,
+    hasQr,
+    socketReady: !!sock,
+    secretFingerprint,
+    webhookUrl: process.env.WHATSAPP_WEBHOOK_URL || `http://127.0.0.1:${process.env.PORT || 3000}/api/v1/auth/whatsapp/webhook`,
+  });
+});
+
 authRoutes.get("/whatsapp/logs", authMiddleware, requireRole("super_admin"), async (c) => {
   return c.json({ logs: inMemoryLogs });
 });
