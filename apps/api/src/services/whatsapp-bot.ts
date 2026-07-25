@@ -420,7 +420,7 @@ export async function startBot(isReconnect = false) {
             await sock.sendMessage(
               jid,
               { text: responseText },
-              { useUserDevicesCache: false }
+              { useUserDevicesCache: false } as any
             );
           } catch (err) {
             console.warn(`⚠️ [WHATSAPP BOT] Failed to send message to ${jid}, retrying in 1s...`);
@@ -429,7 +429,7 @@ export async function startBot(isReconnect = false) {
               await sock.sendMessage(
                 jid,
                 { text: responseText },
-                { useUserDevicesCache: false }
+                { useUserDevicesCache: false } as any
               );
             } catch (retryErr) {
               console.error(`❌ [WHATSAPP BOT] Retry failed for ${jid}:`, retryErr);
