@@ -61,7 +61,7 @@ if (process.env.SENTRY_DSN) {
 const port = process.env.PORT || 3000;
 let webhookUrl =
   process.env.WHATSAPP_WEBHOOK_URL ||
-  `http://localhost:${port}/api/v1/auth/whatsapp/webhook`;
+  `http://127.0.0.1:${port}/api/v1/auth/whatsapp/webhook`;
 
 // If target is localhost, ensure it uses the correct running port
 if (webhookUrl.includes("localhost") || webhookUrl.includes("127.0.0.1")) {
