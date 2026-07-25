@@ -11,7 +11,7 @@ import {
   students,
   parentProfiles,
 } from "@whiteroom/db";
-import { and, eq, or, isNull, count, inArray } from "@whiteroom/db";
+import { and, eq, or, isNull, count, inArray, ne } from "@whiteroom/db";
 import { ApiResponse, UserRole } from "@whiteroom/shared";
 import type { JWTPayload } from "@whiteroom/shared";
 
@@ -187,7 +187,8 @@ export async function listRoomsHandler(c: Context) {
           inArray(messages.roomId, activeRooms.map((r) => r.id)),
           eq(messages.tenantId, tenantId),
           isNull(messages.deletedAt),
-          isNull(messageReceipts.id)
+          isNull(messageReceipts.id),
+          ne(messages.senderId, userId)
         )
       )
       .groupBy(messages.roomId);

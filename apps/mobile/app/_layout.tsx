@@ -1,5 +1,6 @@
+import { platformAlert } from "@/src/utils/alert";
 import { useEffect } from "react";
-import { Alert, Linking } from "react-native";
+import { Linking } from "react-native";
 import Constants from "expo-constants";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -62,7 +63,7 @@ function RootLayout() {
           config.latestVersion !== currentVersion &&
           config.forceUpdate
         ) {
-          Alert.alert(
+          platformAlert(
             "New Update Required 🚀",
             `Whiteroom v${config.latestVersion} is now available. Please download and install the latest update to continue.`,
             [
@@ -70,7 +71,7 @@ function RootLayout() {
                 text: "Download Update",
                 onPress: () => {
                   if (config.apkUrl) {
-                    Linking.openURL(config.apkUrl);
+                    Linking.openURL(config.apkUrl).catch(console.warn);
                   }
                 },
               },

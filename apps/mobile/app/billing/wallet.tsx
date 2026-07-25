@@ -1,3 +1,4 @@
+import { platformAlert } from "@/src/utils/alert";
 import { useState } from "react";
 import {
   View,
@@ -6,7 +7,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   Linking,
   TextInput,
   RefreshControl,
@@ -29,7 +29,7 @@ import {
   Settings,
 } from "lucide-react-native";
 import { api } from "@/api/client";
-import { colors, spacing, font, radius } from "@/theme/tokens";
+import { colors, spacing, radius } from "@/theme/tokens";
 import type { RechargeOrderResponse } from "@whiteroom/shared";
 
 export default function WalletScreen() {
@@ -85,12 +85,12 @@ export default function WalletScreen() {
         if (Platform.OS === "web") {
           window.alert(`Recharge Initiated\n\n${msg}`);
         } else {
-          Alert.alert("Recharge Initiated", msg, [{ text: "OK" }]);
+          platformAlert("Recharge Initiated", msg, [{ text: "OK" }]);
         }
         return;
       }
 
-      Alert.alert(
+      platformAlert(
         "Complete Your Recharge",
         `Order created! Tap below to complete payment of ₹${(order.amountPaise / 100).toFixed(0)} for ${order.credits} student credits via Razorpay.\n\nOrder ID: ${order.id}`,
         [
@@ -101,7 +101,7 @@ export default function WalletScreen() {
               try {
                 await Linking.openURL(order.paymentUrl);
               } catch (err) {
-                Alert.alert("Error", "Could not open payment gateway link.");
+                platformAlert("Error", "Could not open payment gateway link.");
               }
             },
           },
@@ -114,7 +114,7 @@ export default function WalletScreen() {
       if (Platform.OS === "web") {
         window.alert(`Error: ${msg}`);
       } else {
-        Alert.alert("Recharge Error", msg);
+        platformAlert("Recharge Error", msg);
       }
     },
   });
@@ -125,7 +125,7 @@ export default function WalletScreen() {
       if (Platform.OS === "web") {
         window.alert("Invalid Amount: Please select or enter a valid number of credits to buy.");
       } else {
-        Alert.alert("Invalid Amount", "Please select or enter a valid number of credits to buy.");
+        platformAlert("Invalid Amount", "Please select or enter a valid number of credits to buy.");
       }
       return;
     }

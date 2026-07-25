@@ -86,10 +86,9 @@ export async function registerHandler(c: Context) {
   }
 
   // Cloudflare Turnstile Verification (Bug 13)
-  // Native mobile clients cannot run browser-based CAPTCHA — skip for them.
-  const isMobileClient = c.req.header("x-client-platform") === "mobile";
+  // Enforce CAPTCHA for all clients.
   const turnstileSecret = env.TURNSTILE_SECRET_KEY;
-  if (!isMobileClient && (env.NODE_ENV === "production" || turnstileSecret)) {
+  if (env.NODE_ENV === "production" || turnstileSecret) {
     if (!turnstileToken) {
       throw Errors.validation("CAPTCHA token is required to register.");
     }

@@ -1,3 +1,4 @@
+import { platformAlert } from "@/src/utils/alert";
 import type { AnnouncementResponse, BulletinResponse } from '@whiteroom/shared';
 import { useState, useEffect, useMemo } from 'react';
 import {
@@ -7,7 +8,6 @@ import {
   Pressable,
   ActivityIndicator,
   StyleSheet,
-  Alert,
   Platform,
   FlatList,
   TextInput,
@@ -18,12 +18,12 @@ import {
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 
-// Cross-platform alert — Alert.alert silently fails on web/PWA
+// Cross-platform alert — platformAlert silently fails on web/PWA
 function showAlert(title: string, message: string) {
   if (Platform.OS === 'web') {
     window.alert(`${title}\n\n${message}`);
   } else {
-    Alert.alert(title, message);
+    platformAlert(title, message);
   }
 }
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -33,17 +33,12 @@ import {
   BookOpen,
   Megaphone,
   User,
-  LogOut,
   ChevronRight,
   Plus,
   ArrowLeft,
   MessageSquare,
   Shield,
-  Eye,
   Check,
-  Award,
-  Calendar,
-  CreditCard,
   Trash2,
   Users,
   Lock,
@@ -56,7 +51,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/api/client';
 import { useSession } from '@/auth/session-store';
-import { colors, spacing, font, radius } from '@/theme/tokens';
+import { colors, spacing, radius } from '@/theme/tokens';
 import { todayIsoDate, formatDateDdmmyyyy } from '@/utils/format';
 import { isOnline, offlineQueue } from '@/utils/offlineQueue';
 import {

@@ -13,9 +13,7 @@ import {
   View,
   ViewStyle,
   Modal,
-  Image,
 } from "react-native";
-import LogoImage from "../assets/logo.png";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { LucideProps } from "lucide-react-native";
 import { colors as tokensColors, font, radius, spacing } from "@/theme/tokens";
@@ -29,7 +27,7 @@ const colors = {
   muted: tokensColors.teal,
   ink: tokensColors.navy,
 };
-import Svg, { Defs, LinearGradient, Stop, Rect, Path, Circle } from "react-native-svg";
+import Svg, { Circle } from "react-native-svg";
 
 export type NavItem<T extends string> = {
   value: T;

@@ -12,7 +12,6 @@ import {
   Image,
   AppState,
   Linking,
-  Alert,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { router, useLocalSearchParams } from 'expo-router';

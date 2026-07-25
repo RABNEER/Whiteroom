@@ -1,3 +1,4 @@
+import { platformAlert } from "@/src/utils/alert";
 import { useState } from "react";
 import {
   View,
@@ -7,7 +8,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -24,7 +24,7 @@ import {
 import type { BulletinResponse } from "@whiteroom/shared";
 import { api } from "@/api/client";
 import { useSession } from "@/auth/session-store";
-import { colors, spacing, font, radius } from "@/theme/tokens";
+import { colors, spacing, radius } from "@/theme/tokens";
 
 export default function BulletinsFeedScreen() {
   const router = useRouter();
@@ -57,14 +57,14 @@ export default function BulletinsFeedScreen() {
   const handleShowReceipts = async (bulletinId: string) => {
     try {
       const data = await api.getBulletinReceipts(bulletinId);
-      Alert.alert(
+      platformAlert(
         "Notice Seen Receipts",
         `This notice has been seen by ${data.seenCount} users.\n\nSeen list is visible to school staff and administrators.`,
         [{ text: "OK" }]
       );
     } catch (err) {
       console.error(err);
-      Alert.alert("Error", "Unable to fetch read receipts");
+      platformAlert("Error", "Unable to fetch read receipts");
     }
   };
 

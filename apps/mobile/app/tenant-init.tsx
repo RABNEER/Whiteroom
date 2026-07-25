@@ -1,3 +1,4 @@
+import { platformAlert } from "@/src/utils/alert";
 import React, { useState } from 'react';
 import {
   View,
@@ -9,15 +10,14 @@ import {
   StyleSheet,
   Platform,
   KeyboardAvoidingView,
-  Alert,
 } from 'react-native';
 
-// Cross-platform alert — Alert.alert silently fails on web/PWA
+// Cross-platform alert — platformAlert silently fails on web/PWA
 function showAlert(title: string, message: string) {
   if (Platform.OS === 'web') {
     window.alert(`${title}\n\n${message}`);
   } else {
-    Alert.alert(title, message);
+    platformAlert(title, message);
   }
 }
 import { SafeAreaView } from 'react-native-safe-area-context';

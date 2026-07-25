@@ -1,8 +1,8 @@
+import { platformAlert } from "@/src/utils/alert";
 import { BulletinResponse } from '@whiteroom/shared';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,7 +23,6 @@ import {
   CalendarCheck,
   ChevronRight,
   Clock,
-  LogOut,
   Megaphone,
   Shield,
   User,
@@ -36,7 +35,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, ApiError } from '@/api/client';
 import { useSession } from '@/auth/session-store';
-import { colors, spacing, font, radius } from '@/theme/tokens';
+import { colors, spacing, radius } from '@/theme/tokens';
 import { formatDate } from '@/utils/format';
 import {
   AppHeader,
@@ -51,7 +50,6 @@ import {
   DisplayTitle,
   Muted,
   AvatarBadge,
-  IconButton,
   MetricCard,
   Segmented,
 } from '@/components/ui';
@@ -137,7 +135,7 @@ export default function ParentScreen() {
       router.replace('/auth');
     },
     onError: (err: unknown) => {
-      Alert.alert('Error', err instanceof ApiError ? err.message : 'Logout failed.');
+      platformAlert('Error', err instanceof ApiError ? err.message : 'Logout failed.');
     },
   });
 
@@ -170,7 +168,7 @@ export default function ParentScreen() {
       router.replace('/auth');
     },
     onError: (err: unknown) => {
-      Alert.alert('Error', err instanceof ApiError ? err.message : 'Failed to delete account.');
+      platformAlert('Error', err instanceof ApiError ? err.message : 'Failed to delete account.');
     },
   });
 
@@ -250,13 +248,13 @@ export default function ParentScreen() {
             selectedChild={selectedChild}
             onSelectChildPress={() => setIsSiblingDrawerOpen(true)}
             onLogout={() => {
-              Alert.alert('Log Out', 'Are you sure you want to log out?', [
+              platformAlert('Log Out', 'Are you sure you want to log out?', [
                 { text: 'Cancel', style: 'cancel' },
                 { text: 'Log Out', style: 'destructive', onPress: () => logout.mutate() },
               ]);
             }}
             onDeleteAccount={() => {
-              Alert.alert(
+              platformAlert(
                 'Delete Account',
                 'Are you absolutely sure you want to delete your account? This action is permanent and your data cannot be recovered.',
                 [
@@ -304,7 +302,7 @@ export default function ParentScreen() {
                       await setSession(result);
                       await queryClient.invalidateQueries();
                     } catch (err: unknown) {
-                      Alert.alert(
+                      platformAlert(
                         'Error',
                         err instanceof ApiError ? err.message : 'Failed to switch school tenant.'
                       );

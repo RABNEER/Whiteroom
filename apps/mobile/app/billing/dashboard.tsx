@@ -1,3 +1,4 @@
+import { platformAlert } from "@/src/utils/alert";
 import { useState } from "react";
 import {
   View,
@@ -7,16 +8,15 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Switch,
-  Alert,
   Linking,
   TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CreditCard, Sparkles, CheckCircle, ShieldAlert, ArrowLeft, Wallet } from "lucide-react-native";
+import { CreditCard, Sparkles, ArrowLeft, Wallet } from "lucide-react-native";
 import { api } from "@/api/client";
-import { colors, spacing, font, radius } from "@/theme/tokens";
+import { colors, spacing, radius } from "@/theme/tokens";
 
 export default function BillingDashboardScreen() {
   const router = useRouter();
@@ -48,13 +48,13 @@ export default function BillingDashboardScreen() {
 
       if (isMockOrder) {
         if (order.id?.startsWith("trial_")) {
-          Alert.alert(
+          platformAlert(
             "Free Trial Active",
             "You are currently on a free trial. No payment is needed until your trial expires.",
             [{ text: "OK" }]
           );
         } else {
-          Alert.alert(
+          platformAlert(
             "Payment Gateway Not Configured",
             "Razorpay is not set up yet. Please contact the Whiteroom team or configure RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET in your environment.",
             [{ text: "OK" }]
@@ -64,7 +64,7 @@ export default function BillingDashboardScreen() {
       }
 
       // Real Razorpay subscription link
-      Alert.alert(
+      platformAlert(
         "Complete Your Payment",
         `Plan activated! Tap below to complete your payment securely via Razorpay.\n\nOrder ID: ${order.id}`,
         [
@@ -75,7 +75,7 @@ export default function BillingDashboardScreen() {
               try {
                 await Linking.openURL(order.paymentUrl);
               } catch (err) {
-                Alert.alert("Error", "Could not open payment link. Please try again.");
+                platformAlert("Error", "Could not open payment link. Please try again.");
               }
             },
           },
@@ -84,7 +84,7 @@ export default function BillingDashboardScreen() {
     },
     onError: (err) => {
       console.error(err);
-      Alert.alert("Error", "Failed to initialize payment. Please try again.");
+      platformAlert("Error", "Failed to initialize payment. Please try again.");
     },
   });
 

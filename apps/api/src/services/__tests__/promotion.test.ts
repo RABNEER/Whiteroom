@@ -14,7 +14,7 @@ vi.hoisted(() => {
   process.env.RAZORPAY_WEBHOOK_SECRET = "webhook_secret";
 });
 
-const { mockOffset, mockLimit, mockOrderBy, mockWhere, mockFrom, mockSelect } = vi.hoisted(() => {
+const { mockOffset, mockLimit, mockWhere, mockSelect } = vi.hoisted(() => {
   const mockOffset = vi.fn();
   const mockLimit = vi.fn(() => ({ offset: mockOffset }));
   const mockOrderBy = vi.fn(() => ({ limit: mockLimit }));

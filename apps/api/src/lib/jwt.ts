@@ -8,6 +8,14 @@ import { Limits } from "@whiteroom/shared";
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 const refreshSecret = new TextEncoder().encode(env.JWT_REFRESH_SECRET);
 
+function validatePayload(payload: any): JWTPayload {
+  if (!payload || typeof payload !== "object") throw new Error("Invalid JWT payload");
+  if (!("userId" in payload) || !("tenantId" in payload) || !("role" in payload) || !("plan" in payload)) {
+    throw new Error("Invalid JWT payload structure");
+  }
+  return payload as JWTPayload;
+}
+
 let privateKey: crypto.KeyObject;
 let publicKey: crypto.KeyObject;
 
@@ -55,10 +63,10 @@ export async function verifyAccessToken(token: string): Promise<JWTPayload> {
   const header = decodeProtectedHeader(token);
   if (header.alg === "HS256") {
     const { payload } = await jwtVerify(token, accessSecret, { algorithms: ["HS256"] });
-    return payload as unknown as JWTPayload;
+    return validatePayload(payload);
   }
   const { payload } = await jwtVerify(token, publicKey, { algorithms: ["ES256"] });
-  return payload as unknown as JWTPayload;
+  return validatePayload(payload);
 }
 
 /**
@@ -70,8 +78,8 @@ export async function verifyRefreshToken(token: string): Promise<JWTPayload> {
   const header = decodeProtectedHeader(token);
   if (header.alg === "HS256") {
     const { payload } = await jwtVerify(token, refreshSecret, { algorithms: ["HS256"] });
-    return payload as unknown as JWTPayload;
+    return validatePayload(payload);
   }
   const { payload } = await jwtVerify(token, publicKey, { algorithms: ["ES256"] });
-  return payload as unknown as JWTPayload;
+  return validatePayload(payload);
 }

@@ -1,13 +1,12 @@
+import { platformAlert } from "@/src/utils/alert";
 import { useState, useMemo } from "react";
 import {
   View,
   Text,
-  FlatList,
   Pressable,
   Switch,
   ActivityIndicator,
   StyleSheet,
-  Alert,
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -20,15 +19,13 @@ import {
   VolumeX,
   Volume2,
   UserX,
-  Shield,
   BookOpen,
   UserPlus,
-  Trash2,
   Star,
 } from "lucide-react-native";
 import { api, ApiError } from "@/api/client";
 import { useSession } from "@/auth/session-store";
-import { colors, spacing, font, radius } from "@/theme/tokens";
+import { colors, spacing, radius } from "@/theme/tokens";
 import { AvatarBadge, Card } from "@/components/ui";
 
 export default function ChatInfoScreen() {
@@ -90,7 +87,7 @@ export default function ChatInfoScreen() {
       refetchClass();
     },
     onError: (err: any) => {
-      Alert.alert("Error", err instanceof ApiError ? err.message : "Failed to update classroom settings");
+      platformAlert("Error", err instanceof ApiError ? err.message : "Failed to update classroom settings");
     },
   });
 
@@ -99,10 +96,10 @@ export default function ChatInfoScreen() {
     mutationFn: (blockedUserId: string) => api.chatBlockUser(blockedUserId),
     onSuccess: () => {
       refetchBlocked();
-      Alert.alert("Blocked", "User has been blocked successfully.");
+      platformAlert("Blocked", "User has been blocked successfully.");
     },
     onError: (err: any) => {
-      Alert.alert("Error", err instanceof ApiError ? err.message : "Failed to block user");
+      platformAlert("Error", err instanceof ApiError ? err.message : "Failed to block user");
     },
   });
 
@@ -111,10 +108,10 @@ export default function ChatInfoScreen() {
     mutationFn: (blockedUserId: string) => api.chatUnblockUser(blockedUserId),
     onSuccess: () => {
       refetchBlocked();
-      Alert.alert("Unblocked", "User has been unblocked.");
+      platformAlert("Unblocked", "User has been unblocked.");
     },
     onError: (err: any) => {
-      Alert.alert("Error", err instanceof ApiError ? err.message : "Failed to unblock user");
+      platformAlert("Error", err instanceof ApiError ? err.message : "Failed to unblock user");
     },
   });
 
@@ -123,10 +120,10 @@ export default function ChatInfoScreen() {
     mutationFn: (studentId: string) => api.classRemoveStudent(roomId, studentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["classMembers", roomId] });
-      Alert.alert("Removed", "Student has been removed from this class.");
+      platformAlert("Removed", "Student has been removed from this class.");
     },
     onError: (err: any) => {
-      Alert.alert("Error", err instanceof ApiError ? err.message : "Failed to remove student");
+      platformAlert("Error", err instanceof ApiError ? err.message : "Failed to remove student");
     },
   });
 
@@ -138,7 +135,7 @@ export default function ChatInfoScreen() {
       queryClient.invalidateQueries({ queryKey: ["classMembers", roomId] });
     },
     onError: (err: any) => {
-      Alert.alert("Error", err instanceof ApiError ? err.message : "Failed to update student role");
+      platformAlert("Error", err instanceof ApiError ? err.message : "Failed to update student role");
     },
   });
 
@@ -182,7 +179,7 @@ export default function ChatInfoScreen() {
 
   const handleToggleMute = () => {
     setMuted(!muted);
-    Alert.alert("Notifications", muted ? "Unmuted group notifications" : "Notifications muted for 8 hours");
+    platformAlert("Notifications", muted ? "Unmuted group notifications" : "Notifications muted for 8 hours");
   };
 
   const handleBlockToggle = () => {
@@ -191,7 +188,7 @@ export default function ChatInfoScreen() {
     if (otherParticipantBlocked) {
       unblockMutation.mutate(otherParticipantId);
     } else {
-      Alert.alert(
+      platformAlert(
         "Block User",
         "Blocking this user will prevent them from sending direct messages to you. Block this user?",
         [
@@ -359,7 +356,7 @@ export default function ChatInfoScreen() {
                     key={member.id}
                     onPress={() => {
                       if (!isTeacherOrAdmin) return;
-                      Alert.alert(
+                      platformAlert(
                         member.name,
                         member.isMonitor ? "This student is a class monitor." : "Manage this student.",
                         [
@@ -383,7 +380,7 @@ export default function ChatInfoScreen() {
                             text: "Remove from Class",
                             style: "destructive",
                             onPress: () =>
-                              Alert.alert(
+                              platformAlert(
                                 "Remove Student",
                                 `Remove ${member.name} from this class?`,
                                 [

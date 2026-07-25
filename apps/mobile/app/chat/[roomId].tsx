@@ -1,3 +1,4 @@
+import { platformAlert } from "@/src/utils/alert";
 import { useState, useEffect, useRef, useMemo, memo } from "react";
 import {
   View,
@@ -9,7 +10,6 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   Modal,
   ScrollView,
   Image,
@@ -23,9 +23,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Info,
-  Send,
   Clock,
-  Plus,
   Pin,
   Trash2,
   Check,
@@ -47,7 +45,7 @@ import { api, ApiError } from "@/api/client";
 import { useSession } from "@/auth/session-store";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import { colors, spacing, font, radius } from "@/theme/tokens";
+import { colors, spacing, radius } from "@/theme/tokens";
 import { AvatarBadge } from "@/components/ui";
 
 const ChatImage = ({ uri, onPress }: { uri: string; onPress: () => void }) => {
@@ -695,7 +693,7 @@ export default function ChatRoomScreen() {
       if (context?.previousMessages) {
         queryClient.setQueryData(["chatMessages", roomId], context.previousMessages);
       }
-      Alert.alert("Error", err instanceof ApiError ? err.message : "Failed to send message");
+      platformAlert("Error", err instanceof ApiError ? err.message : "Failed to send message");
     },
     onSettled: () => {
       // Refetch from server to sync actual states
@@ -830,7 +828,7 @@ export default function ChatRoomScreen() {
     setShowAttachmentMenu(false);
     
     if (!uploadClassId) {
-      Alert.alert("Upload Error", "Could not find a valid classroom for file uploads.");
+      platformAlert("Upload Error", "Could not find a valid classroom for file uploads.");
       return;
     }
 
@@ -842,7 +840,7 @@ export default function ChatRoomScreen() {
       if (type === "image" || type === "video") {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) {
-          Alert.alert("Permission Required", "Please allow camera roll access to pick photos/videos.");
+          platformAlert("Permission Required", "Please allow camera roll access to pick photos/videos.");
           return;
         }
 
@@ -902,7 +900,7 @@ export default function ChatRoomScreen() {
 
     } catch (err: any) {
       console.error("[PICK_ATTACHMENT_ERROR]", err);
-      Alert.alert("Upload Failed", err.message || "Failed to upload selected file.");
+      platformAlert("Upload Failed", err.message || "Failed to upload selected file.");
     } finally {
       setIsUploading(false);
     }
@@ -1246,7 +1244,7 @@ export default function ChatRoomScreen() {
             {(selectedMessage?.senderId === user?.id || isTeacherOrAdmin) && (
               <Pressable
                 onPress={() => {
-                  Alert.alert(
+                  platformAlert(
                     "Delete Message",
                     "Are you sure you want to delete this message?",
                     [

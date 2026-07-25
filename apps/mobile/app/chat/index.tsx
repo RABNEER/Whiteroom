@@ -19,13 +19,12 @@ import {
   Lock,
   Megaphone,
   ArrowLeft,
-  LogOut,
   ChevronRight,
   Shield,
 } from "lucide-react-native";
 import { api } from "@/api/client";
 import { useSession } from "@/auth/session-store";
-import { colors, spacing, font, radius } from "@/theme/tokens";
+import { colors, spacing, radius } from "@/theme/tokens";
 import { AvatarBadge } from "@/components/ui";
 
 export default function ChatInboxScreen() {

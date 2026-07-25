@@ -11,7 +11,6 @@ import type {
   InviteResolveResponse,
   OTPVerifyResponse,
   OTPVerifyResult,
-  OTPVerifyRequest,
   OTPSendResponse,
   ParentFeedResponse,
   RefreshResponse,

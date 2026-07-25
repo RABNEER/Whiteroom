@@ -1,3 +1,4 @@
+import { platformAlert } from "@/src/utils/alert";
 import { useState, useRef } from "react";
 import {
   View,
@@ -9,17 +10,16 @@ import {
   Platform,
   ActivityIndicator,
   StyleSheet,
-  Alert,
   Linking,
   Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowLeft, Send, Sparkles, AlertCircle, FileText, Upload, RefreshCw } from "lucide-react-native";
+import { ArrowLeft, Sparkles, AlertCircle, FileText, Upload, RefreshCw } from "lucide-react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { api, ApiError } from "@/api/client";
-import { colors, spacing, font, radius } from "@/theme/tokens";
+import { colors, spacing, radius } from "@/theme/tokens";
 import { sessionStore } from "@/auth/session-store";
 
 interface Message {
@@ -96,7 +96,7 @@ export default function WaltChatScreen() {
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (err: any) {
       console.error("[WALT_UPLOAD_ERROR]", err);
-      Alert.alert("Upload Failed", err.message || "Failed to upload selected file.");
+      platformAlert("Upload Failed", err.message || "Failed to upload selected file.");
     } finally {
       setIsUploading(false);
     }
@@ -141,7 +141,7 @@ export default function WaltChatScreen() {
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (err: any) {
       console.error("[WALT_SYNC_ERROR]", err);
-      Alert.alert("Sync Failed", err.message || "Failed to sync attachments from chat.");
+      platformAlert("Sync Failed", err.message || "Failed to sync attachments from chat.");
     } finally {
       setIsSyncing(false);
     }
@@ -206,7 +206,7 @@ export default function WaltChatScreen() {
 
   const handleOpenCitation = (url: string) => {
     if (url) {
-      Linking.openURL(url).catch(() => Alert.alert("Error", "Unable to open source file."));
+      Linking.openURL(url).catch(() => platformAlert("Error", "Unable to open source file."));
     }
   };
 

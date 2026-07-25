@@ -1,3 +1,4 @@
+import { platformAlert } from "@/src/utils/alert";
 import { useState } from "react";
 import {
   View,
@@ -9,7 +10,6 @@ import {
   Modal,
   FlatList,
   ActivityIndicator,
-  Alert,
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -19,22 +19,19 @@ import {
   ArrowLeft,
   GraduationCap,
   ChevronRight,
-  ChevronDown,
-  History,
   CheckCircle,
-  AlertTriangle,
   Info,
   X,
 } from "lucide-react-native";
 import { api, ApiError } from "@/api/client";
-import { colors, spacing, radius, font } from "@/theme/tokens";
-import { Screen, Card, DisplayTitle, Eyebrow, Muted, Button } from "@/components/ui";
+import { colors, spacing, radius } from "@/theme/tokens";
+import { Card, Muted } from "@/components/ui";
 
 function showAlert(title: string, message: string) {
   if (Platform.OS === "web") {
     window.alert(`${title}\n\n${message}`);
   } else {
-    Alert.alert(title, message);
+    platformAlert(title, message);
   }
 }
 
@@ -169,7 +166,7 @@ This process is irreversible. Would you like to proceed?`;
         });
       }
     } else {
-      Alert.alert("Confirm Annual Promotions", confirmMessage, [
+      platformAlert("Confirm Annual Promotions", confirmMessage, [
         { text: "Cancel", style: "cancel" },
         {
           text: "Promote Students",

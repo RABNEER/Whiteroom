@@ -3,7 +3,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { watch as fsWatch } from "node:fs";
 import { config } from "dotenv";
-import { normalizePhone, hashSHA256 } from "../lib/otp.js";
+
 import { db } from "../lib/db.js";
 import { sql } from "drizzle-orm";
 

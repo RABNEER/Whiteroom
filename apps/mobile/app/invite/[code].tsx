@@ -1,5 +1,6 @@
+import { platformAlert } from "@/src/utils/alert";
 import React, { useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, Alert } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
@@ -35,7 +36,7 @@ export default function InviteScreen() {
         return;
       } catch (err: any) {
         setJoining(false);
-        Alert.alert('Join Error', err.message || 'Failed to join classroom.');
+        platformAlert('Join Error', err.message || 'Failed to join classroom.');
         return;
       }
     }

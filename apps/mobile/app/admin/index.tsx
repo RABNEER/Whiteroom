@@ -1,18 +1,18 @@
-import { useState } from "react";
-import { View, Text, StyleSheet, Pressable, Platform, Alert, ActivityIndicator } from "react-native";
-import { Screen, Card, DisplayTitle, Eyebrow, Muted, Button } from "@/components/ui";
+import { platformAlert } from "@/src/utils/alert";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
+import { Screen, Card, DisplayTitle, Eyebrow, Muted } from "@/components/ui";
 import { useSession } from "@/auth/session-store";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { router } from "expo-router";
-import { colors, spacing, radius, font } from "@/theme/tokens";
-import { LogOut, GraduationCap, CreditCard, MessageSquare, Shield, BookOpen, Wallet } from "lucide-react-native";
+import { colors, spacing, radius } from "@/theme/tokens";
+import { GraduationCap, CreditCard, MessageSquare, Shield, BookOpen, Wallet } from "lucide-react-native";
 
 function showAlert(title: string, message: string) {
   if (Platform.OS === "web") {
     window.alert(`${title}\n\n${message}`);
   } else {
-    Alert.alert(title, message);
+    platformAlert(title, message);
   }
 }
 

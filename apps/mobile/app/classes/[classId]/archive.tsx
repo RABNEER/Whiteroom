@@ -1,3 +1,4 @@
+import { platformAlert } from "@/src/utils/alert";
 import { useState } from "react";
 import {
   View,
@@ -9,7 +10,6 @@ import {
   RefreshControl,
   TouchableOpacity,
   Linking,
-  Alert,
   Modal,
   TextInput,
 } from "react-native";
@@ -29,7 +29,7 @@ import {
 } from "lucide-react-native";
 import { api } from "@/api/client";
 import { useSession } from "@/auth/session-store";
-import { colors, spacing, font, radius } from "@/theme/tokens";
+import { colors, spacing, radius } from "@/theme/tokens";
 import { uploadFileInChunks } from "@/utils/chunkedUpload";
 import * as DocumentPicker from "expo-document-picker";
 
@@ -60,11 +60,11 @@ export default function ClassroomArchiveScreen() {
     mutationFn: (fileId: string) => api.deleteArchiveFile(classId, fileId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["classroomArchive", classId] });
-      Alert.alert("Success", "File deleted successfully");
+      platformAlert("Success", "File deleted successfully");
     },
     onError: (err) => {
       console.error(err);
-      Alert.alert("Error", "Failed to delete file");
+      platformAlert("Error", "Failed to delete file");
     },
   });
 
@@ -90,12 +90,12 @@ export default function ClassroomArchiveScreen() {
     onSuccess: () => {
       setUploadProgress(null);
       queryClient.invalidateQueries({ queryKey: ["classroomArchive", classId] });
-      Alert.alert("Success", "Original quality file uploaded, chunked, and verified!");
+      platformAlert("Success", "Original quality file uploaded, chunked, and verified!");
     },
     onError: (err: any) => {
       setUploadProgress(null);
       console.error(err);
-      Alert.alert("Upload Failed", err.message || "Failed to upload file");
+      platformAlert("Upload Failed", err.message || "Failed to upload file");
     },
   });
 
@@ -114,7 +114,7 @@ export default function ClassroomArchiveScreen() {
       setModalVisible(true);
     } catch (err) {
       console.error(err);
-      Alert.alert("Error", "Failed to select document");
+      platformAlert("Error", "Failed to select document");
     }
   };
 
@@ -143,20 +143,20 @@ export default function ClassroomArchiveScreen() {
       };
 
       reader.onerror = () => {
-        Alert.alert("Error", "Failed to read file");
+        platformAlert("Error", "Failed to read file");
         setUploadProgress(null);
       };
 
       reader.readAsDataURL(blob);
     } catch (err: any) {
       console.error(err);
-      Alert.alert("Error", err.message || "Failed to process file");
+      platformAlert("Error", err.message || "Failed to process file");
       setUploadProgress(null);
     }
   };
 
   const handleDelete = (fileId: string) => {
-    Alert.alert("Delete File", "Are you sure you want to permanently delete this file?", [
+    platformAlert("Delete File", "Are you sure you want to permanently delete this file?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
@@ -195,7 +195,7 @@ export default function ClassroomArchiveScreen() {
   };
 
   const handleOpenFile = (url: string) => {
-    Linking.openURL(url).catch(() => Alert.alert("Error", "Cannot open URL"));
+    Linking.openURL(url).catch(() => platformAlert("Error", "Cannot open URL"));
   };
 
   return (
