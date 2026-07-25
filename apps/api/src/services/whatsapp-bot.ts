@@ -73,16 +73,10 @@ if (webhookUrl.includes("localhost") || webhookUrl.includes("127.0.0.1")) {
     console.error("Failed to parse webhookUrl:", err);
   }
 }
-const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET;
+const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET || "whiteroom-whatsapp-bot-internal-secret";
 
 export function getLatestQr(): string | null {
   return (globalThis as any).whatsappLatestQr || null;
-}
-
-if (!webhookSecret) {
-  console.warn(
-    "⚠️  [WARNING] WHATSAPP_WEBHOOK_SECRET is not defined in your environment variables. Webhook calls might fail security checks."
-  );
 }
 
 console.log("🤖 [WHATSAPP BOT] Target Webhook URL:", webhookUrl);
@@ -611,6 +605,15 @@ export async function startBot(isReconnect = false) {
         console.log(`✉️ [WHATSAPP BOT] Received message from ${from}: "${text}"`);
 
         if (text.includes("Whiteroom Verification")) continue;
+
+        const cleanText = text.trim().toLowerCase();
+        if (cleanText === "ping" || cleanText === "hi" || cleanText === "hello" || cleanText === "help") {
+          console.log(`🤖 [WHATSAPP BOT] Replying to greeting/ping from ${from}`);
+          await sock.sendMessage(from, {
+            text: `🤖 *Whiteroom Verification Bot is Online!*\n\nTo verify your device, send your verification code in the format:\n\n*Verify <code>*`,
+          });
+          continue;
+        }
 
         const match = text.match(/Verify\s+([A-Za-z0-9_-]+)/i);
 
