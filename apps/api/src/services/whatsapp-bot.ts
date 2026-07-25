@@ -407,12 +407,20 @@ export async function startBot(isReconnect = false) {
 
         const sendResponse = async (jid: string, responseText: string) => {
           try {
-            await sock.sendMessage(jid, { text: responseText });
+            await sock.sendMessage(
+              jid,
+              { text: responseText },
+              { useUserDevicesCache: false }
+            );
           } catch (err) {
             console.warn(`⚠️ [WHATSAPP BOT] Failed to send message to ${jid}, retrying in 1s...`);
             try {
               await new Promise(resolve => setTimeout(resolve, 1000));
-              await sock.sendMessage(jid, { text: responseText });
+              await sock.sendMessage(
+                jid,
+                { text: responseText },
+                { useUserDevicesCache: false }
+              );
             } catch (retryErr) {
               console.error(`❌ [WHATSAPP BOT] Retry failed for ${jid}:`, retryErr);
             }
