@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { z } from "zod";
 import { db } from "../../lib/db.js";
 import { env } from "../../lib/env.js";
-import { whatsappSessions, eq, and, gte } from "@whiteroom/db";
+import { whatsappSessions, eq, and, gte, or } from "@whiteroom/db";
 import { normalizePhone, isValidIndianPhone, hashSHA256 } from "../../lib/otp.js";
 import { Errors } from "@whiteroom/shared";
 import type { ApiResponse } from "@whiteroom/shared";
@@ -52,7 +52,7 @@ export async function whatsappWebhookHandler(c: Context) {
     const now = new Date();
 
     const queryConditions = [
-      eq(whatsappSessions.token, tokenHash),
+      or(eq(whatsappSessions.token, tokenHash), eq(whatsappSessions.id, code)),
       eq(whatsappSessions.verified, false),
       gte(whatsappSessions.expiresAt, now),
     ];
@@ -93,7 +93,7 @@ export async function whatsappWebhookHandler(c: Context) {
       .set({
         verified: true,
       })
-      .where(eq(whatsappSessions.token, tokenHash));
+      .where(eq(whatsappSessions.id, session.id));
 
     console.log(`[WHATSAPP WEBHOOK] Session ${code} successfully verified.`);
 

@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { db } from "../../lib/db.js";
-import { whatsappSessions, eq } from "@whiteroom/db";
+import { whatsappSessions, eq, or } from "@whiteroom/db";
 import { env } from "../../lib/env.js";
 import { hashSHA256 } from "../../lib/otp.js";
 import { Errors } from "@whiteroom/shared";
@@ -29,7 +29,7 @@ export async function whatsappSessionPhoneHandler(c: Context) {
     const [session] = await db
       .select({ phone: whatsappSessions.phone })
       .from(whatsappSessions)
-      .where(eq(whatsappSessions.token, tokenHash))
+      .where(or(eq(whatsappSessions.token, tokenHash), eq(whatsappSessions.id, id)))
       .limit(1);
 
     if (!session) {
