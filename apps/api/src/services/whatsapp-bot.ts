@@ -548,25 +548,37 @@ export async function startBot(isReconnect = false) {
           if (response.ok && data.success) {
             console.log(`✅ [WHATSAPP BOT] Verification success for code ${code}! Sending confirmation to ${targetJid}...`);
             
-            await sock.sendMessage(targetJid, {
-              text: `✅ *Whiteroom Verification*\n\nDevice verification request for code *${code}* was successful.\n\nYou can now switch back to the Whiteroom application to complete your sign-in.`,
-            });
+            await sock.sendMessage(
+              targetJid,
+              {
+                text: `✅ *Whiteroom Verification*\n\nDevice verification request for code *${code}* was successful.\n\nYou can now switch back to the Whiteroom application to complete your sign-in.`,
+              },
+              { quoted: msg }
+            );
             
             console.log(`🚀 [WHATSAPP BOT] Success message sent to ${targetJid}`);
           } else {
             console.warn(`❌ [WHATSAPP BOT] Verification failed for code ${code}:`, data);
             
-            await sock.sendMessage(targetJid, {
-              text: `❌ *Whiteroom Verification Failed*\n\nThe code *${code}* is either expired or invalid.\n\nPlease generate a new verification code from the Whiteroom app and try again.`,
-            });
+            await sock.sendMessage(
+              targetJid,
+              {
+                text: `❌ *Whiteroom Verification Failed*\n\nThe code *${code}* is either expired or invalid.\n\nPlease generate a new verification code from the Whiteroom app and try again.`,
+              },
+              { quoted: msg }
+            );
           }
         } catch (err) {
           console.error(`💥 [WHATSAPP BOT] Error during verification execution for code ${code}:`, err);
           
           try {
-            await sock.sendMessage(targetJid, {
-              text: `⚠️ *Whiteroom Verification Error*\n\nSystem error processing your verification. Please try again in a few minutes.`,
-            });
+            await sock.sendMessage(
+              targetJid,
+              {
+                text: `⚠️ *Whiteroom Verification Error*\n\nSystem error processing your verification. Please try again in a few minutes.`,
+              },
+              { quoted: msg }
+            );
           } catch (sendErr) {
             console.error("❌ [WHATSAPP BOT] Failed to send error message:", sendErr);
           }
