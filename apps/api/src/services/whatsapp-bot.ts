@@ -6,13 +6,15 @@ import { config } from "dotenv";
 import { db } from "../lib/db.js";
 import { sql } from "drizzle-orm";
 import * as Sentry from "@sentry/node";
-import makeWASocket, {
+import {
+  makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
   getBinaryNodeChild,
   getBinaryNodeChildren,
 } from "@whiskeysockets/baileys";
+
 
 // Load environment variables from root and app directory
 config({ path: path.resolve(process.cwd(), ".env") });
