@@ -1,4 +1,4 @@
-import { platformAlert } from "@/src/utils/alert";
+import { platformAlert } from "@/utils/alert";
 import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import { Screen, Card, DisplayTitle, Eyebrow, Muted } from "@/components/ui";
 import { useSession } from "@/auth/session-store";

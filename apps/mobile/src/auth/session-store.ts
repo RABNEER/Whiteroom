@@ -11,7 +11,7 @@ type SessionUser = OTPVerifyResponse["user"];
 
 const webMemoryStore = new Map<string, string>();
 
-const tokenStorage = {
+export const tokenStorage = {
   async getItem(key: string) {
     if (Platform.OS !== "web") {
       return SecureStore.getItemAsync(key);

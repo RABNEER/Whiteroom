@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { db } from "../../lib/db.js";
 import { whatsappSessions, eq } from "@whiteroom/db";
 import { env } from "../../lib/env.js";
+import { hashSHA256 } from "../../lib/otp.js";
 import { Errors } from "@whiteroom/shared";
 import type { ApiResponse } from "@whiteroom/shared";
 
@@ -22,10 +23,11 @@ export async function whatsappSessionPhoneHandler(c: Context) {
     const id = c.req.param("id") || "";
     console.log(`[WHATSAPP SESSION PHONE] Looking up phone for session: ${id}`);
 
+    const tokenHash = hashSHA256(id);
     const [session] = await db
       .select({ phone: whatsappSessions.phone })
       .from(whatsappSessions)
-      .where(eq(whatsappSessions.id, id))
+      .where(eq(whatsappSessions.token, tokenHash))
       .limit(1);
 
     if (!session) {

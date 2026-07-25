@@ -1,4 +1,4 @@
-import { platformAlert } from "@/src/utils/alert";
+import { platformAlert } from "@/utils/alert";
 import React, { useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';

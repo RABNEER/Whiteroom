@@ -30,7 +30,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { OTPVerifyResponse } from '@whiteroom/shared';
 
 import { api, ApiError } from '@/api/client';
-import { useSession } from '@/auth/session-store';
+import { useSession, tokenStorage } from '@/auth/session-store';
 import { colors, spacing } from '@/theme/tokens';
 import LogoImage from '../../src/assets/logo.png';
 
@@ -73,39 +73,16 @@ export default function AuthScreen() {
   const PENDING_INVITE_ROLE_KEY = 'whiteroom.pendingInviteRole';
   const PENDING_INVITE_TENANT_KEY = 'whiteroom.pendingInviteTenant';
 
-  const secureStorage = {
-    async getItem(key: string) {
-      if (Platform.OS !== 'web') {
-        return SecureStore.getItemAsync(key);
-      }
-      return globalThis.localStorage?.getItem(key) ?? null;
-    },
-    async setItem(key: string, value: string) {
-      if (Platform.OS !== 'web') {
-        await SecureStore.setItemAsync(key, value);
-        return;
-      }
-      globalThis.localStorage?.setItem(key, value);
-    },
-    async deleteItem(key: string) {
-      if (Platform.OS !== 'web') {
-        await SecureStore.deleteItemAsync(key);
-        return;
-      }
-      globalThis.localStorage?.removeItem(key);
-    },
-  };
-
   const clearPendingSession = async () => {
     setWhatsappExpiresAt(null);
     try {
       await Promise.all([
-        secureStorage.deleteItem(PENDING_WHATSAPP_SESSION_ID_KEY),
-        secureStorage.deleteItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY),
-        secureStorage.deleteItem(PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY),
-        secureStorage.deleteItem(PENDING_INVITE_CODE_KEY),
-        secureStorage.deleteItem(PENDING_INVITE_ROLE_KEY),
-        secureStorage.deleteItem(PENDING_INVITE_TENANT_KEY),
+        tokenStorage.deleteItem(PENDING_WHATSAPP_SESSION_ID_KEY),
+        tokenStorage.deleteItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY),
+        tokenStorage.deleteItem(PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY),
+        tokenStorage.deleteItem(PENDING_INVITE_CODE_KEY),
+        tokenStorage.deleteItem(PENDING_INVITE_ROLE_KEY),
+        tokenStorage.deleteItem(PENDING_INVITE_TENANT_KEY),
       ]);
     } catch (err) {
       console.error("Failed to clear pending WhatsApp session:", err);
@@ -138,12 +115,12 @@ export default function AuthScreen() {
     const loadPendingSession = async () => {
       try {
         const [id, token, expiresAtStr, savedInviteCode, savedInviteRole, savedInviteTenant] = await Promise.all([
-          secureStorage.getItem(PENDING_WHATSAPP_SESSION_ID_KEY),
-          secureStorage.getItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY),
-          secureStorage.getItem(PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY),
-          secureStorage.getItem(PENDING_INVITE_CODE_KEY),
-          secureStorage.getItem(PENDING_INVITE_ROLE_KEY),
-          secureStorage.getItem(PENDING_INVITE_TENANT_KEY),
+          tokenStorage.getItem(PENDING_WHATSAPP_SESSION_ID_KEY),
+          tokenStorage.getItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY),
+          tokenStorage.getItem(PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY),
+          tokenStorage.getItem(PENDING_INVITE_CODE_KEY),
+          tokenStorage.getItem(PENDING_INVITE_ROLE_KEY),
+          tokenStorage.getItem(PENDING_INVITE_TENANT_KEY),
         ]);
 
         if (savedInviteCode && savedInviteCode.length === 6) {
@@ -204,10 +181,10 @@ export default function AuthScreen() {
 
   const resolveInviteMutation = useMutation({
     mutationFn: (code: string) => api.inviteResolve(code),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setResolvedTenant(data.tenantName);
       setError(null);
-      secureStorage.setItem(PENDING_INVITE_TENANT_KEY, data.tenantName || '').catch(() => {});
+      await tokenStorage.setItem(PENDING_INVITE_TENANT_KEY, data.tenantName || '').catch(() => {});
     },
     onError: (err: unknown) => {
       setResolvedTenant(null);
@@ -224,7 +201,7 @@ export default function AuthScreen() {
 
   // Handle incoming deep links and route parameters to auto-fill invite code & role
   useEffect(() => {
-    function handleDeepLink(url: string | null) {
+    async function handleDeepLink(url: string | null) {
       if (!url) return;
       // Parse role from query params (e.g. ?role=teacher)
       const roleMatch = url.match(/[?&]role=(teacher|parent|school_admin)/);
@@ -243,8 +220,10 @@ export default function AuthScreen() {
       if (match) {
         const upper = match[1].toUpperCase();
         setInviteCode(upper);
-        secureStorage.setItem(PENDING_INVITE_CODE_KEY, upper).catch(() => {});
-        secureStorage.setItem(PENDING_INVITE_ROLE_KEY, targetRole).catch(() => {});
+        await Promise.all([
+          tokenStorage.setItem(PENDING_INVITE_CODE_KEY, upper),
+          tokenStorage.setItem(PENDING_INVITE_ROLE_KEY, targetRole),
+        ]).catch(() => {});
         setStep((currentStep) => (currentStep === 'SPLASH' || currentStep === 'WELCOME' ? 'PHONE' : currentStep));
         if (upper.length === 6) {
           const { accessToken } = useSession.getState();
@@ -266,34 +245,10 @@ export default function AuthScreen() {
     }
 
     if (params.inviteCode || params.role) {
-      let targetRole = selectedRole;
-      if (params.role && (params.role === 'teacher' || params.role === 'parent' || params.role === 'school_admin')) {
-        targetRole = params.role as Role;
-        setSelectedRole(targetRole);
-      }
-      if (params.inviteCode) {
-        const upper = params.inviteCode.toUpperCase();
-        setInviteCode(upper);
-        secureStorage.setItem(PENDING_INVITE_CODE_KEY, upper).catch(() => {});
-        secureStorage.setItem(PENDING_INVITE_ROLE_KEY, targetRole).catch(() => {});
-        setStep((currentStep) => (currentStep === 'SPLASH' || currentStep === 'WELCOME' ? 'PHONE' : currentStep));
-        if (upper.length === 6) {
-          const { accessToken } = useSession.getState();
-          if (accessToken) {
-            api.inviteJoin({ inviteCode: upper, role: targetRole })
-              .then(data => {
-                setSession(data);
-                router.replace('/');
-              })
-              .catch(err => {
-                console.error("Auto join error:", err);
-                resolveInviteMutation.mutate(upper);
-              });
-          } else {
-            resolveInviteMutation.mutate(upper);
-          }
-        }
-      }
+      const qs = [];
+      if (params.inviteCode) qs.push(`inviteCode=${params.inviteCode}`);
+      if (params.role) qs.push(`role=${params.role}`);
+      handleDeepLink(`whiteroom://auth?${qs.join('&')}`);
     } else {
       Linking.getInitialURL().then(handleDeepLink);
     }
@@ -315,8 +270,8 @@ export default function AuthScreen() {
       let currentInviteCode = inviteCode;
       let currentRole = selectedRole;
       if (!currentInviteCode) {
-        const savedCode = await secureStorage.getItem(PENDING_INVITE_CODE_KEY);
-        const savedRole = await secureStorage.getItem(PENDING_INVITE_ROLE_KEY) as Role | null;
+        const savedCode = await tokenStorage.getItem(PENDING_INVITE_CODE_KEY);
+        const savedRole = await tokenStorage.getItem(PENDING_INVITE_ROLE_KEY) as Role | null;
         if (savedCode && savedCode.length === 6) {
           currentInviteCode = savedCode;
           if (savedRole) currentRole = savedRole;
@@ -341,7 +296,7 @@ export default function AuthScreen() {
         setRegistrationToken(response.registrationToken);
         setStep('CONSENT');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : 'WhatsApp verification failed. Please try again.');
       await clearPendingSession();
       setStep('PHONE');
@@ -459,16 +414,19 @@ export default function AuthScreen() {
 
       // Persist pending session & invite context
       await Promise.all([
-        secureStorage.setItem(PENDING_WHATSAPP_SESSION_ID_KEY, session.id),
-        secureStorage.setItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY, session.token),
-        secureStorage.setItem(PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY, expiresAt.toString()),
-        inviteCode ? secureStorage.setItem(PENDING_INVITE_CODE_KEY, inviteCode) : Promise.resolve(),
-        inviteCode ? secureStorage.setItem(PENDING_INVITE_ROLE_KEY, selectedRole) : Promise.resolve(),
-        resolvedTenant ? secureStorage.setItem(PENDING_INVITE_TENANT_KEY, resolvedTenant) : Promise.resolve(),
+        tokenStorage.setItem(PENDING_WHATSAPP_SESSION_ID_KEY, session.id),
+        tokenStorage.setItem(PENDING_WHATSAPP_SESSION_TOKEN_KEY, session.token),
+        tokenStorage.setItem(PENDING_WHATSAPP_SESSION_EXPIRES_AT_KEY, expiresAt.toString()),
+        inviteCode ? tokenStorage.setItem(PENDING_INVITE_CODE_KEY, inviteCode) : Promise.resolve(),
+        inviteCode ? tokenStorage.setItem(PENDING_INVITE_ROLE_KEY, selectedRole) : Promise.resolve(),
+        resolvedTenant ? tokenStorage.setItem(PENDING_INVITE_TENANT_KEY, resolvedTenant) : Promise.resolve(),
       ]).catch(err => console.error("Failed to save pending WhatsApp session:", err));
 
-      // Redirect to WhatsApp bot (with hardcoded fallback to prevent build-time inlining issues)
-      const botNumber = process.env.EXPO_PUBLIC_WHATSAPP_BOT_NUMBER || '+917667217247';
+      // Redirect to WhatsApp bot using the configured env variable
+      const botNumber = process.env.EXPO_PUBLIC_WHATSAPP_BOT_NUMBER;
+      if (!botNumber) {
+        throw new Error("WHATSAPP_BOT_NUMBER is not configured in environment.");
+      }
       const cleanBotNumber = botNumber.replace(/\D/g, '');
       const verificationMessage = `Verify ${session.id}`;
       const whatsappUrl = `whatsapp://send?phone=${cleanBotNumber}&text=${encodeURIComponent(verificationMessage)}`;
@@ -480,27 +438,29 @@ export default function AuthScreen() {
         console.warn("[WHATSAPP REDIRECT] Failed to open native app protocol, attempting web fallback:", err);
         await Linking.openURL(fallbackUrl).catch((webErr) => {
           console.error("[WHATSAPP REDIRECT] Failed to open fallback link:", webErr);
+          setError(`Could not open WhatsApp. Please save the bot number ${cleanBotNumber} and send 'Verify ${session.id}' manually.`);
         });
       });
 
       setStep('WHATSAPP_POLL');
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const wErr = err as Error & { name?: string, code?: string, status?: number, stack?: string };
       console.error('[WHATSAPP FLOW ERROR]', {
-        name: err?.name,
-        message: err?.message,
-        code: err?.code,
-        status: err?.status,
-        stack: err?.stack?.substring(0, 300),
+        name: wErr?.name,
+        message: wErr?.message,
+        code: wErr?.code,
+        status: wErr?.status,
+        stack: wErr?.stack?.substring(0, 300),
       });
 
       if (err instanceof ApiError) {
         setError(err.message);
-      } else if (err?.message?.includes('Network request failed') || err?.message?.includes('Failed to fetch')) {
+      } else if (wErr?.message?.includes('Network request failed') || wErr?.message?.includes('Failed to fetch')) {
         setError('Network error — check your internet connection and try again.');
-      } else if (err?.message?.includes('timeout') || err?.message?.includes('Timeout')) {
+      } else if (wErr?.message?.includes('timeout') || wErr?.message?.includes('Timeout')) {
         setError('Server is taking too long to respond. Please try again in a moment.');
       } else {
-        setError(`Failed to start WhatsApp verification: ${err?.message || 'Unknown error'}`);
+        setError(`Failed to start WhatsApp verification: ${wErr?.message || 'Unknown error'}`);
       }
     } finally {
       setLoading(false);
@@ -532,7 +492,7 @@ export default function AuthScreen() {
   };
 
   const handleFinalSubmit = () => {
-    if (registrationToken === 'dev-bypass-token') {
+    if (__DEV__ && process.env.NODE_ENV !== 'production' && registrationToken === 'dev-bypass-token') {
       const mockSession: OTPVerifyResponse = {
         accessToken: 'mock-access-token',
         refreshToken: 'mock-refresh-token',
@@ -683,6 +643,7 @@ export default function AuthScreen() {
                   if (inviteCode && inviteCode.length === 6) {
                     router.replace('/');
                   } else {
+                    setCurrentSlide(0);
                     setStep('WELCOME');
                   }
                 }
@@ -941,8 +902,8 @@ export default function AuthScreen() {
                   let currentInviteCode = inviteCode;
                   let currentRole = selectedRole;
                   if (!currentInviteCode) {
-                    const savedCode = await secureStorage.getItem(PENDING_INVITE_CODE_KEY);
-                    const savedRole = await secureStorage.getItem(PENDING_INVITE_ROLE_KEY) as Role | null;
+                    const savedCode = await tokenStorage.getItem(PENDING_INVITE_CODE_KEY);
+                    const savedRole = await tokenStorage.getItem(PENDING_INVITE_ROLE_KEY) as Role | null;
                     if (savedCode && savedCode.length === 6) {
                       currentInviteCode = savedCode;
                       if (savedRole) currentRole = savedRole;

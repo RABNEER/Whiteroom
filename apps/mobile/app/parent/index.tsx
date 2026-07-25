@@ -1,4 +1,4 @@
-import { platformAlert } from "@/src/utils/alert";
+import { platformAlert } from "@/utils/alert";
 import { BulletinResponse } from '@whiteroom/shared';
 import { useMemo, useState } from 'react';
 import {

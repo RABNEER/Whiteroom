@@ -1,4 +1,4 @@
-import { platformAlert } from "@/src/utils/alert";
+import { platformAlert } from "@/utils/alert";
 import { useState, useEffect, useRef, useMemo, memo } from "react";
 import {
   View,

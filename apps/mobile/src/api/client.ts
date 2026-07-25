@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { router } from "expo-router";
 import type {
   ApiResponse,
   AttendanceBatchRequest,
@@ -89,14 +90,12 @@ async function doRefresh(): Promise<boolean> {
     );
     await setTokens(refreshed.accessToken, refreshed.refreshToken || refreshToken);
     return true;
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Only clear session if backend explicitly rejected with 401/403 (invalid refresh token)
     // Never clear session on network errors, timeouts, or server waking up (5xx)!
     if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
       await clear();
-      if (typeof window !== "undefined" && window.location) {
-        window.location.href = "/auth";
-      }
+      router.replace("/auth");
     }
     return false;
   }
@@ -132,14 +131,14 @@ async function request<T>(
       headers,
       signal: controller.signal,
     });
-  } catch (fetchErr: any) {
+  } catch (err: unknown) {
     clearTimeout(timeoutId);
-    if (retry && (fetchErr?.name === 'AbortError' || fetchErr?.message?.includes('Network request failed'))) {
-      await new Promise((r) => setTimeout(r, 2000));
-      return request<T>(path, options, false);
-    }
+    const fetchErr = err as Error & { name?: string };
     if (fetchErr?.name === 'AbortError') {
       throw new ApiError('TIMEOUT', 'Request timed out. The server may be waking up — please try again.', 0);
+    }
+    if (fetchErr?.message?.includes('Network request failed')) {
+      throw new ApiError('OFFLINE', 'Network request failed. Please check your internet connection.', 0);
     }
     throw fetchErr;
   }
@@ -515,6 +514,18 @@ export const api = {
       }
 
       xhr.onload = () => {
+        if (xhr.status === 401) {
+          refreshPromise = refreshPromise || doRefresh().finally(() => { refreshPromise = null; });
+          refreshPromise.then((ok) => {
+            if (ok) {
+              api.uploadArchiveFile(classId, file, category, onProgress).then(resolve).catch(reject);
+            } else {
+              reject(new ApiError("AUTH_EXPIRED", "Session expired. Please log in again.", 401));
+            }
+          });
+          return;
+        }
+
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const res = JSON.parse(xhr.responseText);

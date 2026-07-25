@@ -1,4 +1,4 @@
-import { platformAlert } from "@/src/utils/alert";
+import { platformAlert } from "@/utils/alert";
 import type { AnnouncementResponse, BulletinResponse } from '@whiteroom/shared';
 import { useState, useEffect, useMemo } from 'react';
 import {
