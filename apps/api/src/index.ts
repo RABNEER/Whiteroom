@@ -279,11 +279,11 @@ startJobs().catch((err) => {
   console.error("[jobs] Failed to start background workers:", err);
 });
 
-if (process.env.DISABLE_WHATSAPP_BOT !== "true") {
-  console.log("🤖 [WHATSAPP BOT] Starting WhatsApp bot daemon...");
+if (process.env.ENABLE_EMBEDDED_WHATSAPP_BOT === "true") {
+  console.log("🤖 [WHATSAPP BOT] Starting embedded WhatsApp bot daemon...");
   import("./services/whatsapp-bot.js").catch((err) => {
     console.error("💥 [WHATSAPP BOT] Failed to start WhatsApp bot daemon:", err);
   });
 } else {
-  console.log("ℹ️ [WHATSAPP BOT] WhatsApp bot daemon is disabled via DISABLE_WHATSAPP_BOT.");
+  console.log("ℹ️ [WHATSAPP BOT] Embedded Baileys daemon is disabled. Using external Webhook mode.");
 }
