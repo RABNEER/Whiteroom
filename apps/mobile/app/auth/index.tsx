@@ -422,11 +422,8 @@ export default function AuthScreen() {
         resolvedTenant ? tokenStorage.setItem(PENDING_INVITE_TENANT_KEY, resolvedTenant) : Promise.resolve(),
       ]).catch(err => console.error("Failed to save pending WhatsApp session:", err));
 
-      // Redirect to WhatsApp bot using the configured env variable
-      const botNumber = process.env.EXPO_PUBLIC_WHATSAPP_BOT_NUMBER;
-      if (!botNumber) {
-        throw new Error("WHATSAPP_BOT_NUMBER is not configured in environment.");
-      }
+      // Redirect to WhatsApp bot using the configured env variable (default fallback to Whiteroom Bot number)
+      const botNumber = process.env.EXPO_PUBLIC_WHATSAPP_BOT_NUMBER || "919296003226";
       const cleanBotNumber = botNumber.replace(/\D/g, '');
       const verificationMessage = `Verify ${session.id}`;
       const whatsappUrl = `whatsapp://send?phone=${cleanBotNumber}&text=${encodeURIComponent(verificationMessage)}`;
