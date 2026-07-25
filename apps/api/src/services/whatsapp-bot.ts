@@ -88,7 +88,10 @@ const client = new Client({
   },
 });
 
+let isAuthenticated = false;
+
 client.on("qr", (qr) => {
+  if (isAuthenticated) return;
   latestQr = qr;
   (globalThis as any).whatsappLatestQr = qr;
   console.log("\n📱 [WHATSAPP BOT] Scan this QR code using Linked Devices in WhatsApp:");
@@ -103,14 +106,19 @@ client.on("ready", () => {
 });
 
 client.on("authenticated", () => {
+  isAuthenticated = true;
+  latestQr = null;
+  (globalThis as any).whatsappLatestQr = null;
   console.log("🔒 [WHATSAPP BOT] Authenticated successfully.");
 });
 
 client.on("auth_failure", (msg) => {
+  isAuthenticated = false;
   console.error("❌ [WHATSAPP BOT] Auth failure:", msg);
 });
 
 client.on("disconnected", (reason) => {
+  isAuthenticated = false;
   (globalThis as any).whatsappBotConnected = false;
   console.warn("⚠️ [WHATSAPP BOT] Client disconnected:", reason);
 });
