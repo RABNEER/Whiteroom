@@ -90,12 +90,15 @@ const client = new Client({
 
 client.on("qr", (qr) => {
   latestQr = qr;
+  (globalThis as any).whatsappLatestQr = qr;
   console.log("\n📱 [WHATSAPP BOT] Scan this QR code using Linked Devices in WhatsApp:");
   qrcode.generate(qr, { small: true });
 });
 
 client.on("ready", () => {
   latestQr = null;
+  (globalThis as any).whatsappLatestQr = null;
+  (globalThis as any).whatsappBotConnected = true;
   console.log("\n✅ [WHATSAPP BOT] Connected successfully to WhatsApp network via Chromium!");
 });
 
@@ -108,6 +111,7 @@ client.on("auth_failure", (msg) => {
 });
 
 client.on("disconnected", (reason) => {
+  (globalThis as any).whatsappBotConnected = false;
   console.warn("⚠️ [WHATSAPP BOT] Client disconnected:", reason);
 });
 
