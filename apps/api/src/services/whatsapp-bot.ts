@@ -546,17 +546,22 @@ export async function startBot(isReconnect = false) {
           const data = (await response.json().catch(() => ({}))) as any;
 
           if (response.ok && data.success) {
-            console.log(`✅ [WHATSAPP BOT] Verification success for code ${code}! Sending confirmation to ${targetJid}...`);
+            const verifiedPhone = data.data?.phone;
+            const finalJid = verifiedPhone
+              ? `${verifiedPhone.replace(/\D/g, "")}@s.whatsapp.net`
+              : targetJid;
+
+            console.log(`✅ [WHATSAPP BOT] Verification success for code ${code}! Sending confirmation to ${finalJid}...`);
             
             await sock.sendMessage(
-              targetJid,
+              finalJid,
               {
                 text: `✅ *Whiteroom Verification*\n\nDevice verification request for code *${code}* was successful.\n\nYou can now switch back to the Whiteroom application to complete your sign-in.`,
               },
               { quoted: msg }
             );
             
-            console.log(`🚀 [WHATSAPP BOT] Success message sent to ${targetJid}`);
+            console.log(`🚀 [WHATSAPP BOT] Success message sent to ${finalJid}`);
           } else {
             console.warn(`❌ [WHATSAPP BOT] Verification failed for code ${code}:`, data);
             

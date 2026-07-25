@@ -99,10 +99,11 @@ export async function whatsappWebhookHandler(c: Context) {
 
     console.log(`[WHATSAPP WEBHOOK] Session ${code} successfully verified.`);
 
-    const response: ApiResponse<{ verified: boolean }> = {
+    const response: ApiResponse<{ verified: boolean; phone?: string }> = {
       success: true,
       data: {
         verified: true,
+        phone: session.phone || undefined,
       },
     };
 
