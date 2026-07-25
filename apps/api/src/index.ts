@@ -275,8 +275,11 @@ runDbMigrations().catch((err) => {
   console.error("❌ [DB] Migrations failed:", err);
 });
 
-startJobs().catch((err) => {
-  console.error("[jobs] Failed to start background workers:", err);
-});
-
-console.log("ℹ️ [WHATSAPP AUTH] Operating in Webhook mode for external WhatsApp Bot (https://github.com/RABNEER/Whiteroom-BOT).");
+if (process.env.DISABLE_WHATSAPP_BOT !== "true") {
+  console.log("🤖 [WHATSAPP BOT] Starting embedded Baileys WhatsApp bot daemon...");
+  import("./services/whatsapp-bot.js").catch((err) => {
+    console.error("💥 [WHATSAPP BOT] Failed to start WhatsApp bot daemon:", err);
+  });
+} else {
+  console.log("ℹ️ [WHATSAPP BOT] WhatsApp bot daemon is disabled via DISABLE_WHATSAPP_BOT.");
+}
