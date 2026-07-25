@@ -545,9 +545,9 @@ export async function startBot(isReconnect = false) {
             `⚠️ [WHATSAPP BOT] Conflict (440) — another WhatsApp Web session opened. ` +
               `Backing off before retry (Attempt #${reconnectAttempts}) to avoid conflict death-spiral.`
           );
-          if (reconnectAttempts >= 4) {
+          if (reconnectAttempts >= 1) {
             console.warn(
-              "💥 [WHATSAPP BOT] Persistent 440 conflicts detected. Clearing stale session credentials to self-heal..."
+              "💥 [WHATSAPP BOT] Persistent 440 conflict detected. Clearing stale session credentials to self-heal..."
             );
             await logoutBot({ skipRemoteLogout: true });
           } else {

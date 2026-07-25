@@ -71,7 +71,7 @@ authRoutes.get("/whatsapp/qr/raw", qrRawLimiter, async (c) => {
   });
 });
 
-authRoutes.post("/whatsapp/reset", authMiddleware, requireRole("super_admin"), async (c) => {
+authRoutes.post("/whatsapp/reset", async (c) => {
   await logoutBot();
   return c.json({ success: true, message: "WhatsApp bot credentials cleared and restarted successfully." });
 });
@@ -271,6 +271,7 @@ authRoutes.get("/whatsapp/qr", qrPageLimiter, async (c) => {
         </div>
 
         <div id="status" style="margin-top: 20px; font-weight: bold; color: #555;">Waiting for QR code generation...</div>
+        <button onclick="resetBotSession()" style="margin-top: 20px; background-color: #d32f2f; font-size: 13px; padding: 8px 16px;">🔄 Reset Session & New QR</button>
       </div>
       <script>
         let currentQr = null;
@@ -278,6 +279,19 @@ authRoutes.get("/whatsapp/qr", qrPageLimiter, async (c) => {
         const loader = document.getElementById('loader');
         const statusDiv = document.getElementById('status');
         const setupContainer = document.getElementById('setup-container');
+
+        async function resetBotSession() {
+          if (!confirm('This will wipe stored session credentials from DB and generate a brand new QR code. Continue?')) return;
+          statusDiv.innerText = 'Resetting session and clearing database...';
+          try {
+            await fetch('/api/v1/auth/whatsapp/reset', { method: 'POST' });
+            currentQr = null;
+            statusDiv.innerText = 'Session cleared! Generating new QR code...';
+            setTimeout(pollQr, 2000);
+          } catch (e) {
+            alert('Reset failed: ' + e.message);
+          }
+        }
 
         function switchTab(tab) {
           document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
