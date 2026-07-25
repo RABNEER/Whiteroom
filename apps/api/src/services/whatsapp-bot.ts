@@ -336,7 +336,14 @@ export async function startBot(isReconnect = false) {
     console.warn("⚠️ [WHATSAPP BOT] Socket ev error:", err);
   });
 
-  sock.ev.on("creds.update", saveCreds);
+  sock.ev.on("creds.update", async () => {
+    try {
+      await saveCreds();
+      await syncAuthFilesToDb(authFolder);
+    } catch (err) {
+      console.error("❌ [WHATSAPP BOT] Failed to save & sync creds:", err);
+    }
+  });
 
   sock.ev.on("connection.update", async (update) => {
     try {
@@ -358,9 +365,12 @@ export async function startBot(isReconnect = false) {
         (globalThis as any).whatsappBotConnected = false;
         isReconnecting = false;
 
-        if (isLoggedOut || isConflict) {
-          console.warn("⚠️ [WHATSAPP BOT] Session logged out or conflict (440). Purging credentials to self-heal...");
+        if (isLoggedOut) {
+          console.warn("⚠️ [WHATSAPP BOT] Session logged out explicitly. Purging credentials...");
           await logoutBot({ skipRemoteLogout: true });
+        } else if (isConflict) {
+          console.warn("⚠️ [WHATSAPP BOT] Temporary 440 session conflict detected. Reconnecting in 30s...");
+          scheduleReconnect(true);
         } else {
           scheduleReconnect(false);
         }
