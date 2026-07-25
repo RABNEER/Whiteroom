@@ -590,14 +590,19 @@ export async function startBot(isReconnect = false) {
       if (m.type !== "notify" && m.type !== "append") return;
 
       for (const msg of m.messages) {
-        // Skip messages without content
-        if (!msg.message) continue;
+        console.log(`📥 [WHATSAPP BOT] Processing message key:`, JSON.stringify(msg.key));
 
-        // Skip bot's own outgoing messages
-        if (msg.key.fromMe) continue;
+        // Skip messages without content
+        if (!msg.message) {
+          console.log("ℹ️ [WHATSAPP BOT] Message content is empty/undefined, skipping.");
+          continue;
+        }
 
         const from = msg.key.remoteJid;
-        if (!from || (!from.endsWith("@s.whatsapp.net") && !from.endsWith("@lid"))) continue;
+        if (!from || (!from.endsWith("@s.whatsapp.net") && !from.endsWith("@lid"))) {
+          console.log(`ℹ️ [WHATSAPP BOT] Skipping unsupported JID: ${from}`);
+          continue;
+        }
 
         // Unwrap all known Baileys v6 message wrappers
         const innerMsg =
@@ -620,7 +625,16 @@ export async function startBot(isReconnect = false) {
         }
 
         // Skip bot's own reply templates
-        if (text.includes("Whiteroom Verification")) continue;
+        if (
+          text.includes("Whiteroom Verification") ||
+          text.trim().startsWith("🤖 *Whiteroom") ||
+          text.trim().startsWith("❌ *Whiteroom") ||
+          text.trim().startsWith("✅ *Whiteroom") ||
+          text.trim().startsWith("⚠️ *Whiteroom")
+        ) {
+          console.log(`ℹ️ [WHATSAPP BOT] Skipping bot automated reply template.`);
+          continue;
+        }
 
         // Respond to ping/greeting commands
         const cleanText = text.trim().toLowerCase();
