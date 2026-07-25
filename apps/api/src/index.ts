@@ -275,11 +275,11 @@ runDbMigrations().catch((err) => {
   console.error("❌ [DB] Migrations failed:", err);
 });
 
-if (process.env.DISABLE_WHATSAPP_BOT !== "true") {
+if (process.env.ENABLE_WHATSAPP_BOT === "true") {
   console.log("🤖 [WHATSAPP BOT] Starting embedded Baileys WhatsApp bot daemon...");
   import("./services/whatsapp-bot.js").catch((err) => {
     console.error("💥 [WHATSAPP BOT] Failed to start WhatsApp bot daemon:", err);
   });
 } else {
-  console.log("ℹ️ [WHATSAPP BOT] WhatsApp bot daemon is disabled via DISABLE_WHATSAPP_BOT.");
+  console.log("ℹ️ [WHATSAPP BOT] Embedded WhatsApp bot daemon is disabled by default in index.js. Use pnpm whatsapp:bot or set ENABLE_WHATSAPP_BOT=true.");
 }
