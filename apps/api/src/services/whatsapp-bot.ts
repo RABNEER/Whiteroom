@@ -499,7 +499,7 @@ export async function startBot(isReconnect = false) {
   // Listen for incoming messages
   sock.ev.on("messages.upsert", async (m) => {
     console.log(`✉️ [WHATSAPP BOT] Message event: type = ${m.type}, messages = ${m.messages.length}`);
-    if (m.type !== "notify" && m.type !== "append") return;
+    if (m.type !== "notify") return;
 
     for (const msg of m.messages) {
       if (!msg.message) continue;
