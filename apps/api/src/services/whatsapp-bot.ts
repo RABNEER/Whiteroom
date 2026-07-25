@@ -2,6 +2,7 @@ import pkg from "whatsapp-web.js";
 const { Client, LocalAuth } = pkg;
 import qrcode from "qrcode-terminal";
 import path from "node:path";
+import fs from "node:fs";
 import { config } from "dotenv";
 
 // Load environment variables
@@ -43,12 +44,35 @@ export async function logoutBot(options: { skipRemoteLogout?: boolean; restart?:
   }
 }
 
+function findChromeExecutable(): string | undefined {
+  const possiblePaths = [
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+    process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Google\\Chrome\\Application\\chrome.exe") : "",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  ].filter(Boolean);
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      console.log(`🌐 [WHATSAPP BOT] Found system Chrome at: ${p}`);
+      return p;
+    }
+  }
+  return undefined;
+}
+
+const executablePath = findChromeExecutable();
+
 const client = new Client({
   authStrategy: new LocalAuth({
     dataPath: path.resolve(process.cwd(), ".wwebjs_auth"),
   }),
   puppeteer: {
     headless: true,
+    executablePath,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -88,7 +112,7 @@ client.on("message", async (msg) => {
   const text = msg.body || "";
   if (!text.trim()) return;
 
-  const rawFrom = msg.from; // e.g. "919296003226@c.us" or "@lid"
+  const rawFrom = msg.from; // e.g. "919296003226@c.us"
   const cleanPhone = rawFrom.replace(/\D/g, "");
 
   console.log(`✉️ [WHATSAPP BOT] Received message from ${rawFrom} (${cleanPhone}): "${text}"`);
