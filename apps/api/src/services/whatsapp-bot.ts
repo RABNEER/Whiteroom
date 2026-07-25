@@ -504,14 +504,32 @@ export async function startBot(isReconnect = false) {
     for (const msg of m.messages) {
       if (!msg.message) continue;
 
+      // Skip messages sent by us (the bot itself)
+      if (msg.key.fromMe) continue;
+
       const from = msg.key.remoteJid; // JID format: 919999999999@s.whatsapp.net or LID format
       if (!from || (!from.endsWith("@s.whatsapp.net") && !from.endsWith("@lid"))) continue;
 
-      // Extract text content from various message types
+      // Unwrap ephemeral/viewOnce wrappers first
+      const innerMsg =
+        msg.message.ephemeralMessage?.message ||
+        msg.message.viewOnceMessage?.message ||
+        msg.message.viewOnceMessageV2?.message ||
+        msg.message;
+
+      // Extract text content from all known message types
       const text =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
+        innerMsg.conversation ||
+        innerMsg.extendedTextMessage?.text ||
+        innerMsg.imageMessage?.caption ||
+        innerMsg.videoMessage?.caption ||
+        innerMsg.buttonsResponseMessage?.selectedDisplayText ||
+        innerMsg.listResponseMessage?.singleSelectReply?.selectedRowId ||
+        innerMsg.templateButtonReplyMessage?.selectedDisplayText ||
         "";
+
+      // Skip empty messages (history sync noise on first connect)
+      if (!text.trim()) continue;
 
       console.log(`✉️ [WHATSAPP BOT] Received message from ${from}: "${text}"`);
 
