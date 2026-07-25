@@ -58,7 +58,8 @@ export async function whatsappWebhookHandler(c: Context) {
       gte(whatsappSessions.expiresAt, now),
     ];
 
-    const phoneToMatch = parsed.data.phone || (isLid ? undefined : normalizePhone(from));
+    const isRawLid = isLid || from.length > 13 || !from.startsWith("91");
+    const phoneToMatch = parsed.data.phone || (isRawLid ? undefined : normalizePhone(from));
 
     if (phoneToMatch) {
       if (!isValidIndianPhone(phoneToMatch)) {
@@ -69,8 +70,8 @@ export async function whatsappWebhookHandler(c: Context) {
       }
 
       queryConditions.push(eq(whatsappSessions.phone, phoneToMatch));
-    } else if (isLid) {
-      console.warn(`[WHATSAPP WEBHOOK] Warning: Verifying session ${code} for LID without explicit phone parameter.`);
+    } else {
+      console.log(`[WHATSAPP WEBHOOK] Verifying session ${code} via LID match (${from}) based on valid session code.`);
     }
 
     // Find active, unverified session
