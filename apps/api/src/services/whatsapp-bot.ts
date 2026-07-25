@@ -466,12 +466,13 @@ export async function startBot(isReconnect = false) {
         const cleanFrom = from.split("@")[0]?.split(":")[0] || "";
         const registeredDigits = registeredPhone.replace(/^\+/, "");
         const isLid = from.endsWith("@lid");
+        const replyJid = isLid ? `${registeredDigits}@s.whatsapp.net` : from;
 
         if (isLid) {
           // If the sender is using a privacy LID, we bypass the phone number check.
           // Since the code is a secure, short-lived one-time token, possessing it is proof enough.
           isValidSender = true;
-          console.log(`ℹ️ [WHATSAPP BOT] Bypassing phone validation for @lid sender ${from}`);
+          console.log(`ℹ️ [WHATSAPP BOT] Bypassing phone validation for @lid sender ${from}. Replying to ${replyJid}`);
         } else if (cleanFrom === registeredDigits) {
           isValidSender = true;
         }
@@ -479,7 +480,7 @@ export async function startBot(isReconnect = false) {
         if (!isValidSender) {
           console.warn(`⚠️ [WHATSAPP BOT] Sender ${from} mismatch for phone ${registeredPhone}`);
           await sendResponse(
-            from,
+            replyJid,
             `❌ *Whiteroom Verification Failed*\n\nThe phone number associated with your WhatsApp account does not match the number entered in Whiteroom.`
           );
           continue;
@@ -505,19 +506,19 @@ export async function startBot(isReconnect = false) {
           if (webhookRes.ok) {
             console.log(`✅ [WHATSAPP BOT] Webhook verification success for code ${code}`);
             await sendResponse(
-              from,
-              `✅ *Whiteroom Verification*\n\nDevice verification request for code *${code}* was successful.\n\nYou can now return to the Whiteroom application.`
+              replyJid,
+              `✅ *Whiteroom Verification*\n\nDevice verification was successful.\n\nYou can now return to the Whiteroom application.`
             );
           } else {
             await sendResponse(
-              from,
+              replyJid,
               `❌ *Whiteroom Verification Failed*\n\nThe code *${code}* could not be verified. Please try again.`
             );
           }
         } catch (err) {
           console.error(`❌ [WHATSAPP BOT] Webhook call error:`, err);
           await sendResponse(
-            from,
+            replyJid,
             `⚠️ *Whiteroom Verification Error*\n\nServer error. Please try again in a few minutes.`
           );
         }
