@@ -25,7 +25,7 @@ if (webhookUrl.includes("localhost") || webhookUrl.includes("127.0.0.1")) {
     console.error("Failed to parse webhookUrl:", err);
   }
 }
-const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET;
+const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET || "whiteroom-whatsapp-bot-internal-secret";
 
 console.log("🤖 [WHATSAPP BOT] Target Webhook URL:", webhookUrl);
 
@@ -115,7 +115,7 @@ client.on("disconnected", (reason) => {
   console.warn("⚠️ [WHATSAPP BOT] Client disconnected:", reason);
 });
 
-client.on("message", async (msg) => {
+client.on("message_create", async (msg) => {
   const text = msg.body || "";
   if (!text.trim()) return;
 
