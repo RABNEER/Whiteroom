@@ -47,14 +47,15 @@ export async function logoutBot(options: { skipRemoteLogout?: boolean; restart?:
 function findChromeExecutable(): string | undefined {
   const possiblePaths = [
     process.env.PUPPETEER_EXECUTABLE_PATH,
+    "/root/.nix-profile/bin/chromium",
+    "/nix/var/nix/profiles/default/bin/chromium",
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
     process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Google\\Chrome\\Application\\chrome.exe") : "",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium-browser",
     "/usr/bin/chromium",
-    "/root/.nix-profile/bin/chromium",
+    "/usr/bin/google-chrome",
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/usr/bin/chromium-browser",
   ].filter(Boolean) as string[];
 
   for (const p of possiblePaths) {

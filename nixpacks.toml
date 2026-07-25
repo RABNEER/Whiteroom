@@ -1,2 +1,5 @@
 [phases.setup]
 nixPkgs = ["...", "chromium"]
+
+[variables]
+PUPPETEER_EXECUTABLE_PATH = "/root/.nix-profile/bin/chromium"
