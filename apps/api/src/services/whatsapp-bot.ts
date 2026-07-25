@@ -804,7 +804,6 @@ export async function startBot(isReconnect = false) {
             });
           }
         }
-      }
     } catch (err) {
       console.error("❌ [WHATSAPP BOT] Unhandled error in messages.upsert:", err);
       Sentry.captureException(err, { extra: { context: "messages.upsert" } });
