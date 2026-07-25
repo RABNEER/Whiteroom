@@ -39,8 +39,8 @@ export async function whatsappSessionCreateHandler(c: Context) {
     const token = crypto.randomBytes(32).toString("hex");
     const expiresIn = 5 * 60;
     
-    // Auto-verify enabled as fail-safe to guarantee 100% instant student login for launch
-    const autoVerify = true;
+    // Real bot verification required
+    const autoVerify = false;
     
     console.log("[WHATSAPP SESSION CREATE] Creating session with auto-verify:", autoVerify);
     
