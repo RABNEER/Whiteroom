@@ -504,23 +504,32 @@ export async function startBot(isReconnect = false) {
     for (const msg of m.messages) {
       if (!msg.message) continue;
 
-      // Skip messages sent by us (the bot itself)
+      // Skip messages sent by us
       if (msg.key.fromMe) continue;
 
-      const from = msg.key.remoteJid;
-      if (!from) continue;
+      const rawFrom = msg.key.remoteJid;
+      if (!rawFrom) continue;
 
-      // Direct user messages end with @s.whatsapp.net or @lid
-      if (!from.endsWith("@s.whatsapp.net") && !from.endsWith("@lid")) continue;
+      if (!rawFrom.endsWith("@s.whatsapp.net") && !rawFrom.endsWith("@lid")) continue;
 
-      // Unwrap ephemeral/viewOnce wrappers
+      // 1. RESOLVE REAL PHONE NUMBER JID (Fixes @lid delivery drop)
+      const senderPn = (msg.key as any)?.senderPn || (msg as any)?.senderPn;
+      const remoteJidAlt = (msg.key as any)?.remoteJidAlt;
+      
+      let targetJid = rawFrom;
+      if (senderPn) {
+        targetJid = `${senderPn.replace(/\D/g, "")}@s.whatsapp.net`;
+      } else if (remoteJidAlt && remoteJidAlt.endsWith("@s.whatsapp.net")) {
+        targetJid = remoteJidAlt;
+      }
+
+      // 2. UNWRAP MESSAGE CONTENT
       const innerMsg =
         msg.message.ephemeralMessage?.message ||
         msg.message.viewOnceMessage?.message ||
         msg.message.viewOnceMessageV2?.message ||
         msg.message;
 
-      // Extract text content from all known message types
       const text =
         innerMsg.conversation ||
         innerMsg.extendedTextMessage?.text ||
@@ -533,9 +542,9 @@ export async function startBot(isReconnect = false) {
 
       if (!text.trim()) continue;
 
-      console.log(`✉️ [WHATSAPP BOT] Received message from ${from}: "${text}"`);
+      console.log(`✉️ [WHATSAPP BOT] Received message from ${rawFrom} (Resolved Target: ${targetJid}): "${text}"`);
 
-      // Ignore messages containing our bot's own response template to prevent infinite loops
+      // Prevent infinite loop
       if (text.includes("Whiteroom Verification")) continue;
 
       // Match "Verify <code_or_session>"
@@ -543,14 +552,13 @@ export async function startBot(isReconnect = false) {
 
       if (match) {
         const code = match[1];
-        console.log(`📩 [WHATSAPP BOT] Found verification code ${code} from sender: ${from}`);
+        console.log(`📩 [WHATSAPP BOT] Found verification code ${code} for target: ${targetJid}`);
 
-        const cleanFrom = from.split("@")[0]?.split(":")[0];
-        const isLid = from.endsWith("@lid");
+        const cleanPhone = targetJid.split("@")[0].replace(/\D/g, "");
 
         try {
-          // 1. Verify code/session via backend API
           console.log(`📡 [WHATSAPP BOT] Sending verification request for session ${code} to ${webhookUrl}...`);
+          
           const response = await fetch(webhookUrl, {
             method: "POST",
             headers: {
@@ -558,35 +566,41 @@ export async function startBot(isReconnect = false) {
               "x-webhook-secret": webhookSecret || "",
             },
             body: JSON.stringify({
-              from: cleanFrom,
+              from: cleanPhone,
+              senderJid: targetJid,
               text: text,
               code: code,
-              isLid: isLid,
+              isLid: rawFrom.endsWith("@lid"),
             }),
           });
 
           const data = (await response.json().catch(() => ({}))) as any;
 
           if (response.ok && data.success) {
-            console.log(`✅ [WHATSAPP BOT] Verification success for code ${code}! Sending confirmation to ${from}...`);
-            await sock.sendMessage(from, {
+            console.log(`✅ [WHATSAPP BOT] Verification success for code ${code}! Sending confirmation to ${targetJid}...`);
+            
+            // SEND TO targetJid (@s.whatsapp.net) INSTEAD OF rawFrom (@lid)
+            await sock.sendMessage(targetJid, {
               text: `✅ *Whiteroom Verification*\n\nDevice verification request for code *${code}* was successful.\n\nYou can now switch back to the Whiteroom application to complete your sign-in.`,
             });
-            console.log(`🚀 [WHATSAPP BOT] Success message sent to ${from}`);
+            
+            console.log(`🚀 [WHATSAPP BOT] Success message sent to ${targetJid}`);
           } else {
             console.warn(`❌ [WHATSAPP BOT] Verification failed for code ${code}:`, data);
-            await sock.sendMessage(from, {
+            
+            await sock.sendMessage(targetJid, {
               text: `❌ *Whiteroom Verification Failed*\n\nThe code *${code}* is either expired or invalid.\n\nPlease generate a new verification code from the Whiteroom app and try again.`,
             });
           }
         } catch (err) {
           console.error(`💥 [WHATSAPP BOT] Error during verification execution for code ${code}:`, err);
+          
           try {
-            await sock.sendMessage(from, {
+            await sock.sendMessage(targetJid, {
               text: `⚠️ *Whiteroom Verification Error*\n\nSystem error processing your verification. Please try again in a few minutes.`,
             });
           } catch (sendErr) {
-            console.error("❌ [WHATSAPP BOT] Failed even to send error message:", sendErr);
+            console.error("❌ [WHATSAPP BOT] Failed to send error message:", sendErr);
           }
         }
       }
