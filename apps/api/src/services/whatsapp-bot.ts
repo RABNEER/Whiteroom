@@ -574,13 +574,13 @@ export async function startBot(isReconnect = false) {
         (globalThis as any).whatsappLatestQr = null;
         (globalThis as any).whatsappBotConnected = true;
         isReconnecting = false;
-        // Delay resetting backoff counter so if we get kicked immediately by another session (440),
+        // Delay resetting backoff counter so if we get kicked by another session (440 conflict),
         // we correctly increment attempts instead of ping-ponging at attempt 0
         setTimeout(() => {
           if ((globalThis as any).whatsappBotConnected) {
             reconnectAttempts = 0;
           }
-        }, 30_000);
+        }, 120_000); // 2 minutes to ensure stability before resetting counter
       }
     } catch (err) {
       // Never let connection handler errors take down the whole API process
@@ -601,9 +601,11 @@ export async function startBot(isReconnect = false) {
         const from = msg.key.remoteJid;
         if (!from || (!from.endsWith("@s.whatsapp.net") && !from.endsWith("@lid"))) continue;
 
+        // Unwrap ephemeral and viewOnce messages if user enabled disappearing messages
+        const content = msg.message.ephemeralMessage?.message || msg.message.viewOnceMessage?.message || msg.message;
         const text =
-          msg.message.conversation ||
-          msg.message.extendedTextMessage?.text ||
+          content.conversation ||
+          content.extendedTextMessage?.text ||
           "";
 
         console.log(`✉️ [WHATSAPP BOT] Received message from ${from}: "${text}"`);
@@ -612,9 +614,13 @@ export async function startBot(isReconnect = false) {
 
         const match = text.match(/Verify\s+([A-Za-z0-9_-]+)/i);
 
-        if (match) {
-          const code = match[1];
-          console.log(`📩 [WHATSAPP BOT] Found verification code ${code} from sender: ${from}`);
+        if (!match) {
+          console.log(`ℹ️ [WHATSAPP BOT] Message from ${from} did not match syntax ("Verify <code>"). Ignoring.`);
+          continue;
+        }
+
+        const code = match[1];
+        console.log(`📩 [WHATSAPP BOT] Found verification code ${code} from sender: ${from}`);
 
           let registeredPhone: string | null = null;
           try {
