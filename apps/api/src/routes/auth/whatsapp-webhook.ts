@@ -74,19 +74,50 @@ export async function whatsappWebhookHandler(c: Context) {
       console.log(`[WHATSAPP WEBHOOK] Verifying session ${code} via LID match (${from}) based on valid session code.`);
     }
 
-    // Find active, unverified session
+    // 1. Find session by code or token
     const [session] = await db
       .select()
       .from(whatsappSessions)
-      .where(and(...queryConditions))
+      .where(or(eq(whatsappSessions.token, tokenHash), eq(whatsappSessions.id, code)))
       .limit(1);
 
     if (!session) {
-      console.warn(`[WHATSAPP WEBHOOK] Session code ${code} not active, already verified, expired, or phone mismatch.`);
+      console.warn(`[WHATSAPP WEBHOOK] Session code ${code} not found in database.`);
       return c.json({
         success: false,
-        error: "Verification session not active, already verified, or expired",
+        error: "Verification session not found. Please request a new code.",
       }, 400);
+    }
+
+    const sessionPhone = session.phone || undefined;
+
+    if (session.verified) {
+      console.warn(`[WHATSAPP WEBHOOK] Session code ${code} is already verified.`);
+      return c.json({
+        success: false,
+        error: "Session already verified. You can proceed to log in.",
+        data: { phone: sessionPhone },
+      }, 400);
+    }
+
+    if (now > session.expiresAt) {
+      console.warn(`[WHATSAPP WEBHOOK] Session code ${code} is expired.`);
+      return c.json({
+        success: false,
+        error: "Verification session expired. Please request a new code.",
+        data: { phone: sessionPhone },
+      }, 400);
+    }
+
+    if (phoneToMatch && session.phone) {
+      if (normalizePhone(session.phone) !== normalizePhone(phoneToMatch)) {
+        console.warn(`[WHATSAPP WEBHOOK] Phone mismatch for session ${code}. DB: ${session.phone}, Msg: ${phoneToMatch}`);
+        return c.json({
+          success: false,
+          error: "Phone number mismatch.",
+          data: { phone: sessionPhone },
+        }, 400);
+      }
     }
 
     // Update session to verified

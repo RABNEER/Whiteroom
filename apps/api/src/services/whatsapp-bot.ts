@@ -565,13 +565,21 @@ export async function startBot(isReconnect = false) {
           } else {
             console.warn(`❌ [WHATSAPP BOT] Verification failed for code ${code}:`, data);
             
+            const sessionPhone = data.data?.phone;
+            const failureJid = sessionPhone
+              ? `${sessionPhone.replace(/\D/g, "")}@s.whatsapp.net`
+              : targetJid;
+            const errorMsg = data.error || "The code is either expired or invalid. Please generate a new verification code from the Whiteroom app.";
+
             await sock.sendMessage(
-              targetJid,
+              failureJid,
               {
-                text: `❌ *Whiteroom Verification Failed*\n\nThe code *${code}* is either expired or invalid.\n\nPlease generate a new verification code from the Whiteroom app and try again.`,
+                text: `❌ *Whiteroom Verification Failed*\n\n${errorMsg}`,
               },
               { quoted: msg }
             );
+
+            console.log(`🚀 [WHATSAPP BOT] Failure notification sent to ${failureJid}`);
           }
         } catch (err) {
           console.error(`💥 [WHATSAPP BOT] Error during verification execution for code ${code}:`, err);
