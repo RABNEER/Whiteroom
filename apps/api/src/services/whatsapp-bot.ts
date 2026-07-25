@@ -59,20 +59,12 @@ if (process.env.SENTRY_DSN) {
 }
 
 const port = process.env.PORT || 3000;
-let webhookUrl =
-  process.env.WHATSAPP_WEBHOOK_URL ||
-  `http://127.0.0.1:${port}/api/v1/auth/whatsapp/webhook`;
-
-// If target is localhost, ensure it uses the correct running port
-if (webhookUrl.includes("localhost") || webhookUrl.includes("127.0.0.1")) {
-  try {
-    const urlObj = new URL(webhookUrl);
-    urlObj.port = String(port);
-    webhookUrl = urlObj.toString().replace(/\/$/, "");
-  } catch (err) {
-    console.error("Failed to parse webhookUrl:", err);
-  }
-}
+// NUCLEAR FIX: Always use 127.0.0.1 with the actual PORT for internal webhook calls.
+// The env var WHATSAPP_WEBHOOK_URL was set to localhost:3000 on Railway but the API
+// runs on port 8080. Additionally, "localhost" resolves to IPv6 ::1 on Node 18+
+// while the server listens on IPv4 0.0.0.0, causing ECONNREFUSED.
+// Since the bot and API always run in the same process/container, we hardcode this.
+const webhookUrl = `http://127.0.0.1:${port}/api/v1/auth/whatsapp/webhook`;
 const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET || "whiteroom-whatsapp-bot-internal-secret";
 
 export function getLatestQr(): string | null {
@@ -80,6 +72,7 @@ export function getLatestQr(): string | null {
 }
 
 console.log("🤖 [WHATSAPP BOT] Target Webhook URL:", webhookUrl);
+console.log("🤖 [WHATSAPP BOT] Webhook Secret fingerprint:", webhookSecret.slice(0, 6) + "..." + webhookSecret.slice(-4));
 
 let dbTableEnsured = false;
 
