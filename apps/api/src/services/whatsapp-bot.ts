@@ -6,6 +6,13 @@ import { config } from "dotenv";
 import { db } from "../lib/db.js";
 import { sql } from "drizzle-orm";
 import * as Sentry from "@sentry/node";
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+  getBinaryNodeChild,
+  getBinaryNodeChildren,
+} from "@whiskeysockets/baileys";
 
 // Load environment variables from root and app directory
 config({ path: path.resolve(process.cwd(), ".env") });
@@ -284,13 +291,6 @@ export async function startBot(isReconnect = false) {
 
   console.log("🤖 [WHATSAPP BOT] Initializing Baileys WhatsApp daemon...");
 
-  const baileys = await import("@whiskeysockets/baileys");
-  const makeWASocket = baileys.default || baileys.makeWASocket;
-  const useMultiFileAuthState = baileys.useMultiFileAuthState;
-  const DisconnectReason = baileys.DisconnectReason;
-  const getBinaryNodeChild = baileys.getBinaryNodeChild;
-  const getBinaryNodeChildren = baileys.getBinaryNodeChildren;
-
   const authFolder = path.resolve(process.cwd(), "auth_info_baileys");
   await fs.mkdir(authFolder, { recursive: true });
 
@@ -311,8 +311,8 @@ export async function startBot(isReconnect = false) {
 
   let version: [number, number, number] = [2, 3000, 1015978430];
   try {
-    if (baileys.fetchLatestBaileysVersion) {
-      const fetched = await baileys.fetchLatestBaileysVersion();
+    if (fetchLatestBaileysVersion) {
+      const fetched = await fetchLatestBaileysVersion();
       version = fetched.version as [number, number, number];
       console.log(`ℹ️ [WHATSAPP BOT] WhatsApp Web version: ${version.join(".")}`);
     }
