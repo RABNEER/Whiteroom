@@ -412,6 +412,9 @@ export async function initWhatsAppBot(): Promise<void> {
         "--disable-extensions",
         "--disable-ipc-flooding-protection",
         "--disable-notifications",
+        "--disable-background-timer-throttling",
+        "--disable-backgrounding-occluded-windows",
+        "--disable-renderer-backgrounding",
         "--blink-settings=imagesEnabled=false",
         "--disable-remote-fonts",
         "--disable-component-update",
@@ -450,20 +453,27 @@ export async function initWhatsAppBot(): Promise<void> {
     // Immediate sync
     await saveAuthToDb(authDataPath);
 
+    // Active CDP keep-alive ping every 10 seconds to keep Chromium main thread & WebSocket socket polling 100% active
+    setInterval(async () => {
+      if (botConnected && client?.pupPage) {
+        await client.pupPage.evaluate(() => Date.now()).catch(() => {});
+      }
+    }, 10_000);
+
     // Delayed sync (15 seconds later) after Chromium flushes tokens to IndexedDB/LocalStorage
     setTimeout(async () => {
       console.log("⏰ [WHATSAPP BOT DB] Running post-auth delayed session sync...");
       await saveAuthToDb(authDataPath);
     }, 15_000);
 
-    // Periodic sync & connection heartbeat every 1 minute
+    // Periodic sync & connection heartbeat every 2 minutes
     setInterval(async () => {
       if (botConnected && client) {
         const state = await client.getState().catch(() => "UNKNOWN");
         console.log(`💓 [WHATSAPP BOT] Heartbeat: Connected (State: ${state}) — Active and listening for messages...`);
         await saveAuthToDb(authDataPath).catch(() => {});
       }
-    }, 60 * 1000);
+    }, 2 * 60 * 1000);
   });
 
   // ─── Authenticated event ───
