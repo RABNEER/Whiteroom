@@ -388,9 +388,7 @@ export async function initWhatsAppBot(): Promise<void> {
       dataPath: authDataPath,
     }),
     webVersionCache: {
-      type: "remote",
-      remotePath:
-        "https://raw.githubusercontent.com/AliMortazavi83/test/refs/heads/main/AliMortazavi83/test/WWebJS/wwebjs-version/",
+      type: "local",
     },
     puppeteer: {
       headless: true,
@@ -412,6 +410,9 @@ export async function initWhatsAppBot(): Promise<void> {
         "--disable-extensions",
         "--disable-ipc-flooding-protection",
         "--disable-notifications",
+        "--blink-settings=imagesEnabled=false",
+        "--disable-remote-fonts",
+        "--disable-component-update",
         "--metrics-recording-only",
         "--no-default-browser-check",
         "--no-pings",
