@@ -359,7 +359,6 @@ export async function initWhatsAppBot(): Promise<void> {
         "--disable-accelerated-2d-canvas",
         "--no-first-run",
         "--no-zygote",
-        "--single-process",
         "--disable-gpu",
         "--disable-audio-output",
         "--disable-background-networking",
@@ -413,12 +412,14 @@ export async function initWhatsAppBot(): Promise<void> {
       await saveAuthToDb(authDataPath);
     }, 15_000);
 
-    // Periodic sync every 2 minutes to keep keys fresh
+    // Periodic sync & connection heartbeat every 1 minute
     setInterval(async () => {
-      if (botConnected) {
+      if (botConnected && client) {
+        const state = await client.getState().catch(() => "UNKNOWN");
+        console.log(`💓 [WHATSAPP BOT] Heartbeat: Connected (State: ${state}) — Active and listening for messages...`);
         await saveAuthToDb(authDataPath).catch(() => {});
       }
-    }, 2 * 60 * 1000);
+    }, 60 * 1000);
   });
 
   // ─── Authenticated event ───
