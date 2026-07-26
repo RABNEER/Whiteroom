@@ -224,6 +224,22 @@ async function restoreAuthFromDb(authDir: string): Promise<boolean> {
       fs.mkdirSync(dirName, { recursive: true });
       fs.writeFileSync(filePath, Buffer.from(row.value, "base64"));
     }
+
+    // Remove any stale lock files restored from disk that might block Chromium
+    function removeLockFiles(dir: string) {
+      if (!fs.existsSync(dir)) return;
+      const list = fs.readdirSync(dir);
+      for (const item of list) {
+        const full = path.join(dir, item);
+        if (fs.statSync(full).isDirectory()) {
+          removeLockFiles(full);
+        } else if (item === "LOCK" || item.endsWith(".lock")) {
+          try { fs.unlinkSync(full); } catch {}
+        }
+      }
+    }
+    removeLockFiles(authDir);
+
     console.log(`✅ [WHATSAPP BOT DB] Restored ${rows.length} session files from PostgreSQL database!`);
     return true;
   } catch (err) {
@@ -251,13 +267,17 @@ async function saveAuthToDb(authDir: string): Promise<void> {
       if (!fs.existsSync(dir)) return results;
       const list = fs.readdirSync(dir);
       for (const file of list) {
+        // Skip active lock files
+        if (file === "LOCK" || file.endsWith(".lock") || file === "SingletonLock") continue;
         const fullPath = path.join(dir, file);
-        const stat = fs.statSync(fullPath);
-        if (stat && stat.isDirectory()) {
-          results = results.concat(getFiles(fullPath));
-        } else {
-          results.push(fullPath);
-        }
+        try {
+          const stat = fs.statSync(fullPath);
+          if (stat && stat.isDirectory()) {
+            results = results.concat(getFiles(fullPath));
+          } else {
+            results.push(fullPath);
+          }
+        } catch {}
       }
       return results;
     }
@@ -266,23 +286,27 @@ async function saveAuthToDb(authDir: string): Promise<void> {
     let count = 0;
     for (const file of files) {
       const relPath = path.relative(authDir, file).replace(/\\/g, "/");
-      const content = fs.readFileSync(file).toString("base64");
+      try {
+        const content = fs.readFileSync(file).toString("base64");
 
-      await db
-        .insert(whatsappBotStore)
-        .values({
-          key: relPath,
-          value: content,
-          updatedAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: whatsappBotStore.key,
-          set: {
+        await db
+          .insert(whatsappBotStore)
+          .values({
+            key: relPath,
             value: content,
             updatedAt: new Date(),
-          },
-        });
-      count++;
+          })
+          .onConflictDoUpdate({
+            target: whatsappBotStore.key,
+            set: {
+              value: content,
+              updatedAt: new Date(),
+            },
+          });
+        count++;
+      } catch (fileErr) {
+        // Ignore temporary locked files
+      }
     }
     console.log(`✅ [WHATSAPP BOT DB] Successfully saved ${count} session files to PostgreSQL database!`);
   } catch (err) {
@@ -380,7 +404,21 @@ export async function initWhatsAppBot(): Promise<void> {
     console.log(
       "\n✅ [WHATSAPP BOT] Connected successfully to WhatsApp network via Chromium!"
     );
+    // Immediate sync
     await saveAuthToDb(authDataPath);
+
+    // Delayed sync (15 seconds later) after Chromium flushes tokens to IndexedDB/LocalStorage
+    setTimeout(async () => {
+      console.log("⏰ [WHATSAPP BOT DB] Running post-auth delayed session sync...");
+      await saveAuthToDb(authDataPath);
+    }, 15_000);
+
+    // Periodic sync every 2 minutes to keep keys fresh
+    setInterval(async () => {
+      if (botConnected) {
+        await saveAuthToDb(authDataPath).catch(() => {});
+      }
+    }, 2 * 60 * 1000);
   });
 
   // ─── Authenticated event ───
@@ -390,6 +428,14 @@ export async function initWhatsAppBot(): Promise<void> {
     console.log("🔒 [WHATSAPP BOT] Authenticated successfully.");
     await saveAuthToDb(authDataPath);
   });
+
+  // Graceful shutdown sync when Railway stops or redeploys container
+  const handleShutdown = async (signal: string) => {
+    console.log(`🛑 [WHATSAPP BOT] Received ${signal}, saving auth session before exit...`);
+    await saveAuthToDb(authDataPath).catch(() => {});
+  };
+  process.on("SIGTERM", () => handleShutdown("SIGTERM"));
+  process.on("SIGINT", () => handleShutdown("SIGINT"));
 
   // ─── Auth failure ───
   client.on("auth_failure", (msg: string) => {
