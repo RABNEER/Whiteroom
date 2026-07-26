@@ -185,13 +185,18 @@ async function handleIncomingMessage(
         ? `✅ *Whiteroom Verification*\n\nDevice verification request for code *${code}* was successful.\n\nYou can now switch back to the Whiteroom application to complete your sign-in.`
         : `❌ *Whiteroom Verification Failed*\n\n${data.error || "The code is either expired or invalid. Please generate a new verification code from the Whiteroom app."}`;
 
-    // Send reply via fast non-blocking WebSocket store write (sendSeen: false skips chat window DOM opening)
-    if (client) {
-      client.sendMessage(rawFrom, replyText, { sendSeen: false }).then(() => {
-        console.log(`🚀 [WHATSAPP BOT] Reply successfully sent to ${rawFrom}!`);
-      }).catch((sendErr) => {
-        console.warn(`⚠️ [WHATSAPP BOT] Reply send non-fatal warning:`, sendErr?.message || sendErr);
-      });
+    // Deliver reply text by resolving the @lid identity to active contact chat via msg.getChat()
+    try {
+      const chat = await msg.getChat().catch(() => null);
+      if (chat) {
+        await chat.sendMessage(replyText).catch(() => msg.reply(replyText).catch(() => {}));
+        console.log(`🚀 [WHATSAPP BOT] Reply successfully delivered to chat (${rawFrom})!`);
+      } else {
+        await msg.reply(replyText).catch(() => {});
+        console.log(`🚀 [WHATSAPP BOT] Fallback reply sent to ${rawFrom}!`);
+      }
+    } catch (replyErr: any) {
+      console.warn(`⚠️ [WHATSAPP BOT] Non-fatal notice sending text reply:`, replyErr?.message || replyErr);
     }
   } catch (err) {
     console.error(
