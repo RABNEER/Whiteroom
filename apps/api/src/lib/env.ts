@@ -6,15 +6,19 @@ import { z } from "zod";
 config({ path: resolve(process.cwd(), ".env") });
 config({ path: resolve(process.cwd(), "../../.env") });
 
+const isBotProcess =
+  process.env.WHATSAPP_BOT_ONLY === "true" ||
+  process.argv[1]?.includes("whatsapp-bot");
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   DIRECT_URL: z.string().min(1).optional(),
-  JWT_ACCESS_SECRET: z.string().min(32),
-  JWT_REFRESH_SECRET: z.string().min(32),
+  JWT_ACCESS_SECRET: z.string().default(isBotProcess ? "whiteroom-whatsapp-bot-dummy-access-secret-32chars" : ""),
+  JWT_REFRESH_SECRET: z.string().default(isBotProcess ? "whiteroom-whatsapp-bot-dummy-refresh-secret-32chars" : ""),
   JWT_PRIVATE_KEY: z.string().optional(),
   JWT_PUBLIC_KEY: z.string().optional(),
-  DM_ENCRYPTION_SECRET: z.string().min(32),
-  NODE_ENV: z.enum(["development", "production", "test"]),
+  DM_ENCRYPTION_SECRET: z.string().default(isBotProcess ? "whiteroom-whatsapp-bot-dummy-dm-secret-32chars" : ""),
+  NODE_ENV: z.enum(["development", "production", "test"]).default("production"),
   PORT: z.coerce.number().default(3000),
 
   // ─── MSG91 (OTP Provider) ───
@@ -58,7 +62,7 @@ const envSchema = z.object({
   APK_DOWNLOAD_URL: z.string().optional(),
   FORCE_UPDATE_REQUIRED: z.string().optional(),
 }).superRefine((value, ctx) => {
-  if (value.NODE_ENV === "production") {
+  if (value.NODE_ENV === "production" && !isBotProcess) {
     if (!value.JWT_PRIVATE_KEY) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
