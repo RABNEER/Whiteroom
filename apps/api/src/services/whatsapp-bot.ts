@@ -9,6 +9,16 @@ import { config } from "dotenv";
 config({ path: path.resolve(process.cwd(), ".env") });
 config({ path: path.resolve(process.cwd(), "../../.env") });
 
+// Catch unhandled promise rejections (e.g. internal whatsapp-web.js Client.inject timeouts)
+process.on("unhandledRejection", (reason: any) => {
+  const reasonMsg = reason?.message || String(reason);
+  if (reasonMsg.includes("ProtocolError") || reasonMsg.includes("timed out")) {
+    console.warn("⚠️ [WHATSAPP BOT] Caught non-fatal Puppeteer ProtocolError timeout:", reasonMsg);
+    return;
+  }
+  console.error("🛑 [PROCESS] Unhandled Rejection:", reason);
+});
+
 // ─── Shared state (exported for route handlers) ───
 export const inMemoryLogs: string[] = [];
 let latestQr: string | null = null;
@@ -365,7 +375,7 @@ export async function initWhatsAppBot(): Promise<void> {
     puppeteer: {
       headless: true,
       executablePath,
-      protocolTimeout: 60000,
+      protocolTimeout: 120000,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
