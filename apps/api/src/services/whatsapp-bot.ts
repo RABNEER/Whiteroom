@@ -69,9 +69,15 @@ function findChromeExecutable(): string | undefined {
 
 const executablePath = findChromeExecutable();
 
+const authDataPath =
+  process.env.WHATSAPP_AUTH_DATA_PATH ||
+  path.resolve(process.cwd(), ".wwebjs_auth");
+
+console.log("💾 [WHATSAPP BOT] Auth session path:", authDataPath);
+
 const client = new Client({
   authStrategy: new LocalAuth({
-    dataPath: path.resolve(process.cwd(), ".wwebjs_auth"),
+    dataPath: authDataPath,
   }),
   puppeteer: {
     headless: true,
@@ -127,19 +133,16 @@ client.on("message_create", async (msg) => {
   // ✅ Guard 1: Skip messages sent BY the bot itself (prevents reply loops)
   if (msg.fromMe) return;
 
+  const rawFrom = msg.from; // e.g. "919296003226@c.us"
+
+  // ✅ Guard 2: Only handle direct personal chats — no async getChat() needed
+  // WhatsApp JID suffixes: @c.us = personal, @g.us = group, @broadcast = status
+  if (!rawFrom.endsWith("@c.us")) return;
+
   const text = msg.body || "";
   if (!text.trim()) return;
 
-  // ✅ Guard 2: Only handle direct (personal) chats — skip groups & broadcasts
-  const chat = await msg.getChat();
-  if (!chat.isGroup && msg.from !== "status@broadcast") {
-    // personal chat — proceed
-  } else {
-    return;
-  }
-
-  const rawFrom = msg.from; // e.g. "919296003226@c.us"
-  // ✅ Fix 3: Strip JID suffix before extracting digits
+  // ✅ Strip JID suffix before extracting digits
   const jidNumber = rawFrom.split("@")[0]; // "919296003226"
   const cleanPhone = jidNumber.replace(/\D/g, "");
 
