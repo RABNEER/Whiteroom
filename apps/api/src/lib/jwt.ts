@@ -19,10 +19,14 @@ function validatePayload(payload: any): JWTPayload {
 let privateKey: crypto.KeyObject;
 let publicKey: crypto.KeyObject;
 
+const isBotProcess =
+  process.env.WHATSAPP_BOT_ONLY === "true" ||
+  process.argv[1]?.includes("whatsapp-bot");
+
 if (env.JWT_PRIVATE_KEY && env.JWT_PUBLIC_KEY) {
   privateKey = crypto.createPrivateKey(env.JWT_PRIVATE_KEY);
   publicKey = crypto.createPublicKey(env.JWT_PUBLIC_KEY);
-} else if (env.NODE_ENV === "production") {
+} else if (env.NODE_ENV === "production" && !isBotProcess) {
   throw new Error("FATAL: JWT_PRIVATE_KEY and JWT_PUBLIC_KEY environment variables must be set in production");
 } else {
   const { privateKey: genPrivate, publicKey: genPublic } = crypto.generateKeyPairSync("ec", {
