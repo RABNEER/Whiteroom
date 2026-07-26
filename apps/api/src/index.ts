@@ -275,13 +275,17 @@ runDbMigrations().catch((err) => {
   console.error("❌ [DB] Migrations failed:", err);
 });
 
-// ─── Start WhatsApp Bot (lazy init — only spawns Chromium when called) ───
-import("./services/whatsapp-bot.js")
-  .then(({ initWhatsAppBot }) => {
-    console.log("🤖 [WHATSAPP BOT] Starting WhatsApp bot daemon...");
-    return initWhatsAppBot();
-  })
-  .catch((err) => {
-    console.error("💥 [WHATSAPP BOT] Failed to start WhatsApp bot daemon:", err);
-  });
+// ─── Start WhatsApp Bot (lazy init — optional in-process daemon) ───
+if (process.env.DISABLE_WHATSAPP_BOT !== "true") {
+  import("./services/whatsapp-bot.js")
+    .then(({ initWhatsAppBot }) => {
+      console.log("🤖 [WHATSAPP BOT] Starting WhatsApp bot daemon...");
+      return initWhatsAppBot();
+    })
+    .catch((err) => {
+      console.error("💥 [WHATSAPP BOT] Failed to start WhatsApp bot daemon:", err);
+    });
+} else {
+  console.log("ℹ️ [WHATSAPP BOT] In-process bot disabled via DISABLE_WHATSAPP_BOT=true (running via dedicated service).");
+}
 
