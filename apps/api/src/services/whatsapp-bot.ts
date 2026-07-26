@@ -444,14 +444,6 @@ export async function initWhatsAppBot(): Promise<void> {
       "\n✅ [WHATSAPP BOT] Connected successfully to WhatsApp network via Chromium!"
     );
 
-    // Re-inject WWebJS internal listeners into Chromium DOM to guarantee message binding
-    try {
-      await (client as any).inject();
-      console.log("💉 [WHATSAPP BOT] Verified DOM message event listeners are active.");
-    } catch (injectErr: any) {
-      console.warn("⚠️ [WHATSAPP BOT] DOM listener check:", injectErr?.message || injectErr);
-    }
-
     // Immediate sync
     await saveAuthToDb(authDataPath);
 
