@@ -39,6 +39,7 @@ export { classPromotions } from "./schema/class-promotions.js";
 export { fileUploadSessions } from "./schema/file-upload-sessions.js";
 export { fileUploadChunks } from "./schema/file-upload-chunks.js";
 export { whatsappSessions } from "./schema/whatsapp-sessions.js";
+export { whatsappBotStore } from "./schema/whatsapp-bot-store.js";
 export { rateLimits } from "./schema/rate-limits.js";
 export { securityAuditLogs } from "./schema/security-audit-logs.js";
 export { breachNotifications } from "./schema/breach-notifications.js";

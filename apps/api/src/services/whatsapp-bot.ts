@@ -32,6 +32,10 @@ export async function logoutBot(
       await client.logout().catch(() => {});
     }
     latestQr = null;
+    botConnected = false;
+    (globalThis as any).whatsappBotConnected = false;
+    await db.delete(whatsappBotStore).catch(() => {});
+    console.log("🗑️ [WHATSAPP BOT DB] Cleared auth session from PostgreSQL database.");
   } catch (err) {
     console.error("Failed to logout client:", err);
   }
@@ -191,6 +195,101 @@ async function handleIncomingMessage(
   }
 }
 
+import { db } from "../lib/db.js";
+import { whatsappBotStore, eq } from "@whiteroom/db";
+
+// ─── Database Auth Sync Helpers ───
+async function restoreAuthFromDb(authDir: string): Promise<boolean> {
+  try {
+    console.log("💾 [WHATSAPP BOT DB] Checking for saved auth session in PostgreSQL database...");
+    
+    // Ensure table exists
+    await db.execute(
+      `CREATE TABLE IF NOT EXISTS whatsapp_bot_store (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+      );`
+    ).catch(() => {});
+
+    const rows = await db.select().from(whatsappBotStore);
+    if (!rows || rows.length === 0) {
+      console.log("ℹ️ [WHATSAPP BOT DB] No saved auth session found in database.");
+      return false;
+    }
+
+    for (const row of rows) {
+      const filePath = path.join(authDir, row.key);
+      const dirName = path.dirname(filePath);
+      fs.mkdirSync(dirName, { recursive: true });
+      fs.writeFileSync(filePath, Buffer.from(row.value, "base64"));
+    }
+    console.log(`✅ [WHATSAPP BOT DB] Restored ${rows.length} session files from PostgreSQL database!`);
+    return true;
+  } catch (err) {
+    console.error("❌ [WHATSAPP BOT DB] Error restoring session from DB:", err);
+    return false;
+  }
+}
+
+async function saveAuthToDb(authDir: string): Promise<void> {
+  try {
+    if (!fs.existsSync(authDir)) return;
+    console.log("💾 [WHATSAPP BOT DB] Syncing auth session files to PostgreSQL database...");
+
+    // Ensure table exists
+    await db.execute(
+      `CREATE TABLE IF NOT EXISTS whatsapp_bot_store (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+      );`
+    ).catch(() => {});
+
+    function getFiles(dir: string): string[] {
+      let results: string[] = [];
+      if (!fs.existsSync(dir)) return results;
+      const list = fs.readdirSync(dir);
+      for (const file of list) {
+        const fullPath = path.join(dir, file);
+        const stat = fs.statSync(fullPath);
+        if (stat && stat.isDirectory()) {
+          results = results.concat(getFiles(fullPath));
+        } else {
+          results.push(fullPath);
+        }
+      }
+      return results;
+    }
+
+    const files = getFiles(authDir);
+    let count = 0;
+    for (const file of files) {
+      const relPath = path.relative(authDir, file).replace(/\\/g, "/");
+      const content = fs.readFileSync(file).toString("base64");
+
+      await db
+        .insert(whatsappBotStore)
+        .values({
+          key: relPath,
+          value: content,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: whatsappBotStore.key,
+          set: {
+            value: content,
+            updatedAt: new Date(),
+          },
+        });
+      count++;
+    }
+    console.log(`✅ [WHATSAPP BOT DB] Successfully saved ${count} session files to PostgreSQL database!`);
+  } catch (err) {
+    console.error("❌ [WHATSAPP BOT DB] Error saving session to DB:", err);
+  }
+}
+
 // ─── Lazy initialization (called ONCE from index.ts) ───
 export async function initWhatsAppBot(): Promise<void> {
   if (botInitialized) {
@@ -213,6 +312,9 @@ export async function initWhatsAppBot(): Promise<void> {
 
   console.log("🤖 [WHATSAPP BOT] Target Webhook URL:", webhookUrl);
   console.log("💾 [WHATSAPP BOT] Auth session path:", authDataPath);
+
+  // Restore session from DB before starting Chromium
+  await restoreAuthFromDb(authDataPath);
 
   client = new Client({
     authStrategy: new LocalAuth({
@@ -249,7 +351,7 @@ export async function initWhatsAppBot(): Promise<void> {
   });
 
   // ─── Ready event ───
-  client.on("ready", () => {
+  client.on("ready", async () => {
     latestQr = null;
     botConnected = true;
     (globalThis as any).whatsappLatestQr = null;
@@ -257,13 +359,15 @@ export async function initWhatsAppBot(): Promise<void> {
     console.log(
       "\n✅ [WHATSAPP BOT] Connected successfully to WhatsApp network via Chromium!"
     );
+    await saveAuthToDb(authDataPath);
   });
 
   // ─── Authenticated event ───
-  client.on("authenticated", () => {
+  client.on("authenticated", async () => {
     latestQr = null;
     (globalThis as any).whatsappLatestQr = null;
     console.log("🔒 [WHATSAPP BOT] Authenticated successfully.");
+    await saveAuthToDb(authDataPath);
   });
 
   // ─── Auth failure ───
