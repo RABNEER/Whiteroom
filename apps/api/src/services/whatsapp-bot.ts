@@ -209,12 +209,27 @@ async function handleIncomingMessage(
 import { db } from "../lib/db.js";
 import { whatsappBotStore, eq } from "@whiteroom/db";
 
+// ─── Junk Cache Exclusions (Keeps auth session under 2MB and <120MB RAM) ───
+function isJunkCacheFile(relPath: string): boolean {
+  const norm = relPath.toLowerCase().replace(/\\/g, "/");
+  return (
+    norm.includes("/cache/") ||
+    norm.includes("/code cache/") ||
+    norm.includes("/gpucache/") ||
+    norm.includes("/service worker/") ||
+    norm.includes("/blob storage/") ||
+    norm.includes("/crashpad/") ||
+    norm.includes("/webrtc") ||
+    norm.endsWith("lock") ||
+    norm.endsWith("singletonlock")
+  );
+}
+
 // ─── Database Auth Sync Helpers ───
 async function restoreAuthFromDb(authDir: string): Promise<boolean> {
   try {
     console.log("💾 [WHATSAPP BOT DB] Checking for saved auth session in PostgreSQL database...");
     
-    // Ensure table exists
     await db.execute(
       `CREATE TABLE IF NOT EXISTS whatsapp_bot_store (
         key TEXT PRIMARY KEY,
@@ -229,30 +244,30 @@ async function restoreAuthFromDb(authDir: string): Promise<boolean> {
       return false;
     }
 
+    let restoredCount = 0;
+    const junkKeysToDelete: string[] = [];
+
     for (const row of rows) {
+      if (isJunkCacheFile(row.key)) {
+        junkKeysToDelete.push(row.key);
+        continue;
+      }
       const filePath = path.join(authDir, row.key);
       const dirName = path.dirname(filePath);
       fs.mkdirSync(dirName, { recursive: true });
       fs.writeFileSync(filePath, Buffer.from(row.value, "base64"));
+      restoredCount++;
     }
 
-    // Remove any stale lock files restored from disk that might block Chromium
-    function removeLockFiles(dir: string) {
-      if (!fs.existsSync(dir)) return;
-      const list = fs.readdirSync(dir);
-      for (const item of list) {
-        const full = path.join(dir, item);
-        if (fs.statSync(full).isDirectory()) {
-          removeLockFiles(full);
-        } else if (item === "LOCK" || item.endsWith(".lock")) {
-          try { fs.unlinkSync(full); } catch {}
-        }
-      }
+    // Clean up junk cache entries from PostgreSQL in background
+    if (junkKeysToDelete.length > 0) {
+      db.execute(
+        `DELETE FROM whatsapp_bot_store WHERE key IN (${junkKeysToDelete.map((k) => `'${k.replace(/'/g, "''")}'`).join(",")});`
+      ).catch(() => {});
     }
-    removeLockFiles(authDir);
 
-    console.log(`✅ [WHATSAPP BOT DB] Restored ${rows.length} session files from PostgreSQL database!`);
-    return true;
+    console.log(`✅ [WHATSAPP BOT DB] Restored ${restoredCount} essential auth session files (purged ${junkKeysToDelete.length} junk cache files)!`);
+    return restoredCount > 0;
   } catch (err) {
     console.error("❌ [WHATSAPP BOT DB] Error restoring session from DB:", err);
     return false;
@@ -286,8 +301,6 @@ async function saveAuthToDb(authDir: string): Promise<void> {
       if (!fs.existsSync(dir)) return results;
       const list = fs.readdirSync(dir);
       for (const file of list) {
-        // Skip active lock files
-        if (file === "LOCK" || file.endsWith(".lock") || file === "SingletonLock") continue;
         const fullPath = path.join(dir, file);
         try {
           const stat = fs.statSync(fullPath);
@@ -305,6 +318,8 @@ async function saveAuthToDb(authDir: string): Promise<void> {
     let count = 0;
     for (const file of files) {
       const relPath = path.relative(authDir, file).replace(/\\/g, "/");
+      if (isJunkCacheFile(relPath)) continue;
+
       try {
         const stat = fs.statSync(file);
         const lastMtime = fileMtimeCache.get(relPath);
@@ -335,7 +350,7 @@ async function saveAuthToDb(authDir: string): Promise<void> {
       }
     }
     if (count > 0) {
-      console.log(`✅ [WHATSAPP BOT DB] Synced ${count} modified session files to PostgreSQL database.`);
+      console.log(`✅ [WHATSAPP BOT DB] Synced ${count} essential auth session files to PostgreSQL database.`);
     }
   } catch (err) {
     console.error("❌ [WHATSAPP BOT DB] Error saving session to DB:", err);
@@ -402,6 +417,8 @@ export async function initWhatsAppBot(): Promise<void> {
         "--no-pings",
         "--password-store=basic",
         "--use-mock-keychain",
+        "--disk-cache-size=1",
+        "--media-cache-size=1",
         "--js-flags=--max-old-space-size=256",
       ],
     },
