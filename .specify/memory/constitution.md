@@ -1,16 +1,15 @@
 <!--
   Sync Impact Report
   ============================================================================
-  Version change: 1.1.0 → 1.2.0 (Native Chat & School Admin Amendment)
+  Version change: 1.2.0 → 1.3.0 (WhatsApp Bot Auth Architectural Lock)
   Modified principles:
-    - Added SCHOOL_ADMIN role to Section III and Section II.
-    - Extended Section VI (No PII / GDPR / FERPA compliance) to include mandatory onboarding consent disclosures for Admin chat audit visibility.
-    - Locked Native AES-256-GCM database encryption-at-rest for Direct Messages.
-    - Expressly prohibited external WhatsApp group invite links or Baileys integrations.
-  Added sections: None
+    - Added Section VIII (WhatsApp Auth Daemon & Session Persistence Rules).
+    - Locked PostgreSQL session store (`whatsapp_bot_store`) for `.wwebjs_auth` sync.
+    - Mandatory `@lid` (Linked Identity Device) and `@c.us` message support.
+    - Locked low-memory Puppeteer flags (`--single-process`, `--js-flags=--max-old-space-size=256`).
+    - Prohibited top-level auto-spawning Chromium imports (lazy `initWhatsAppBot()` lock).
+  Added sections: VIII. WhatsApp Bot Auth Principles
   Removed sections: None
-  Templates requiring updates: None
-  Follow-up TODOs: None
   ============================================================================
 -->
 
@@ -126,6 +125,16 @@ begin until the previous phase's success criteria are fully met.
   schema exists.
 - The mobile app team may begin building screens for Phase N as
   soon as backend Phase N is verified and deployed.
+
+### VIII. WhatsApp Auth Daemon & Session Persistence
+
+The WhatsApp authentication bot is a critical security daemon. All AI agents and developers MUST strictly preserve the following architectural locks:
+
+1. **Lazy Initialization Lock**: The bot module MUST NOT auto-initialize Chromium at top-level import. Initialization MUST be lazy via `initWhatsAppBot()`, preventing duplicate Chromium process spawns when imported by route modules.
+2. **PostgreSQL Session Store (`whatsapp_bot_store`)**: Authentication credentials in `.wwebjs_auth` MUST be synced to/from the PostgreSQL database (`whatsapp_bot_store` table) using `saveAuthToDb` and `restoreAuthFromDb`. AI agents MUST NOT remove database session sync or lockfile cleanup (`LOCK`, `SingletonLock`).
+3. **Mandatory `@lid` and `@c.us` JID Support**: WhatsApp routes messages via both `@c.us` (standard phone JIDs) and `@lid` (Linked Identity Device JIDs). Filtering logic MUST process both `@c.us` and `@lid` direct messages. Agents MUST NEVER add restrictive `endsWith("@c.us")` guards that drop multi-device WhatsApp messages.
+4. **Low-Memory Puppeteer Flags**: Chromium container instances MUST include `--single-process`, `--disable-gpu`, `--disable-dev-shm-usage`, and `--js-flags=--max-old-space-size=256` to prevent Out-Of-Memory container kills on Railway/Docker deployments.
+5. **Periodic & Delayed Session Sync**: Session files MUST be synced to PostgreSQL on `authenticated`, `ready`, 15-second post-auth delay, 2-minute periodic interval, and `SIGTERM`/`SIGINT` container shutdown signals.
 
 ## Technology Stack
 
