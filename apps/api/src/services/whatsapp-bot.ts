@@ -116,8 +116,12 @@ async function handleIncomingMessage(
 
     const rawFrom = msg.from || ""; // e.g. "919296003226@c.us"
 
-    // Only handle direct personal chats (not groups or broadcasts)
-    if (!rawFrom.endsWith("@c.us")) {
+    // Skip groups, newsletters, and status broadcasts
+    if (
+      rawFrom.endsWith("@g.us") ||
+      rawFrom.endsWith("@newsletter") ||
+      rawFrom === "status@broadcast"
+    ) {
       return;
     }
 
@@ -156,6 +160,7 @@ async function handleIncomingMessage(
         rawJid: rawFrom,
         text: text,
         code: code,
+        isLid: rawFrom.endsWith("@lid"),
       }),
     });
 
