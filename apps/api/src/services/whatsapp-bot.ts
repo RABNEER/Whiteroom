@@ -175,23 +175,19 @@ async function handleIncomingMessage(
         ? `✅ *Whiteroom Verification*\n\nDevice verification request for code *${code}* was successful.\n\nYou can now switch back to the Whiteroom application to complete your sign-in.`
         : `❌ *Whiteroom Verification Failed*\n\n${data.error || "The code is either expired or invalid. Please generate a new verification code from the Whiteroom app."}`;
 
-    await msg.reply(replyText);
-    console.log(`🚀 [WHATSAPP BOT] Reply successfully sent to ${rawFrom}!`);
+    // Send reply via fast non-blocking WebSocket store write (bypasses slow DOM queries)
+    if (client) {
+      client.sendMessage(rawFrom, replyText).then(() => {
+        console.log(`🚀 [WHATSAPP BOT] Reply successfully sent to ${rawFrom}!`);
+      }).catch((sendErr) => {
+        console.warn(`⚠️ [WHATSAPP BOT] Reply send non-fatal warning:`, sendErr?.message || sendErr);
+      });
+    }
   } catch (err) {
     console.error(
-      `💥 [WHATSAPP BOT] Error processing message:`,
+      `💥 [WHATSAPP BOT] Error processing verification request:`,
       err
     );
-    try {
-      await msg.reply(
-        `⚠️ *Whiteroom Verification Error*\n\nSystem error processing your verification. Please try again.`
-      );
-    } catch (replyErr) {
-      console.error(
-        "❌ [WHATSAPP BOT] Failed to send fallback error reply:",
-        replyErr
-      );
-    }
   }
 }
 
@@ -369,6 +365,7 @@ export async function initWhatsAppBot(): Promise<void> {
     puppeteer: {
       headless: true,
       executablePath,
+      protocolTimeout: 60000,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
