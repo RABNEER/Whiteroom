@@ -12,7 +12,7 @@ import { whatsappWebhookHandler } from "./whatsapp-webhook.js";
 import { whatsappVerifyHandler } from "./whatsapp-verify.js";
 import { authMiddleware, requireRole } from "../../middleware/auth.js";
 import { rateLimitMiddleware } from "../../middleware/rate-limit.js";
-import { getLatestQr, logoutBot, inMemoryLogs } from "../../services/whatsapp-bot.js";
+import { getLatestQr, isBotConnected, logoutBot, inMemoryLogs } from "../../services/whatsapp-bot.js";
 
 const authRoutes = new Hono();
 
@@ -67,7 +67,7 @@ authRoutes.get("/whatsapp/session/:id/phone", whatsappSessionPhoneHandler);
 authRoutes.get("/whatsapp/qr/raw", qrRawLimiter, async (c) => {
   return c.json({
     qr: getLatestQr(),
-    connected: !!(globalThis as any).whatsappBotConnected,
+    connected: isBotConnected(),
   });
 });
 
