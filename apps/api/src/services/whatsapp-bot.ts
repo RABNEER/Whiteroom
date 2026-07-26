@@ -124,16 +124,26 @@ client.on("disconnected", (reason) => {
 });
 
 client.on("message_create", async (msg) => {
+  // ✅ Guard 1: Skip messages sent BY the bot itself (prevents reply loops)
+  if (msg.fromMe) return;
+
   const text = msg.body || "";
   if (!text.trim()) return;
 
+  // ✅ Guard 2: Only handle direct (personal) chats — skip groups & broadcasts
+  const chat = await msg.getChat();
+  if (!chat.isGroup && msg.from !== "status@broadcast") {
+    // personal chat — proceed
+  } else {
+    return;
+  }
+
   const rawFrom = msg.from; // e.g. "919296003226@c.us"
-  const cleanPhone = rawFrom.replace(/\D/g, "");
+  // ✅ Fix 3: Strip JID suffix before extracting digits
+  const jidNumber = rawFrom.split("@")[0]; // "919296003226"
+  const cleanPhone = jidNumber.replace(/\D/g, "");
 
   console.log(`✉️ [WHATSAPP BOT] Received message from ${rawFrom} (${cleanPhone}): "${text}"`);
-
-  // Prevent loops
-  if (text.includes("Whiteroom Verification")) return;
 
   const match = text.match(/Verify\s+([A-Za-z0-9_-]+)/i);
   if (!match) return;
