@@ -260,7 +260,7 @@ process.on("uncaughtException", (error) => {
 });
 
 // ─── Start Server Immediately to prevent Railway 502 Bad Gateway during cold starts ───
-serve({ fetch: app.fetch, port: env.PORT }, (info) => {
+serve({ fetch: app.fetch, port: env.PORT, hostname: "0.0.0.0" }, (info) => {
   console.log(`
     ╦ ╦┬ ┬┬┌┬┐┌─┐┬─┐┌─┐┌─┐┌┬┐
     ║║║├─┤│ │ ├┤ ├┬┘│ ││ ││││
