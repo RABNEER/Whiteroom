@@ -481,15 +481,39 @@ export async function initWhatsAppBot(): Promise<void> {
     console.log(`🔀 [WHATSAPP BOT] State changed: ${state}`);
   });
 
-  // ─── Initialize ───
+  // ─── Initialize with Self-Healing Fallback ───
   console.log("🚀 [WHATSAPP BOT] Initializing Chromium client...");
   try {
     await client.initialize();
-  } catch (err) {
+  } catch (err: any) {
     console.error(
-      "💥 [WHATSAPP BOT] Failed to initialize Chromium client:",
-      err
+      "💥 [WHATSAPP BOT] Failed to initialize Chromium client (corrupt session or protocol error):",
+      err?.message || err
     );
+
+    console.log("🧹 [WHATSAPP BOT] Wiping corrupted session from local disk & PostgreSQL database...");
+    try {
+      if (fs.existsSync(authDataPath)) {
+        fs.rmSync(authDataPath, { recursive: true, force: true });
+      }
+      await db.delete(whatsappBotStore).catch(() => {});
+    } catch (cleanupErr) {
+      console.error("⚠️ [WHATSAPP BOT] Cleanup error:", cleanupErr);
+    }
+
+    console.log("🔄 [WHATSAPP BOT] Re-launching fresh Chromium client for QR pairing...");
+    botInitialized = false;
+    botConnected = false;
+    latestQr = null;
+    (globalThis as any).whatsappLatestQr = null;
+    (globalThis as any).whatsappBotConnected = false;
+
+    // Small 2-second delay before fresh start
+    setTimeout(() => {
+      initWhatsAppBot().catch((retryErr) => {
+        console.error("💥 [WHATSAPP BOT] Fresh initialization retry failed:", retryErr);
+      });
+    }, 2000);
   }
 }
 
