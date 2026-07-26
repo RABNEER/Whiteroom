@@ -71,7 +71,7 @@
       "eas": {
         "projectId": "d36b65b1-6d4c-473b-baef-40fa93ef821c"
       },
-      "apiBaseUrl": "https://apps.whiteroom.co.in/api/v1"
+      "apiBaseUrl": "http://66.42.90.144:8080/api/v1"
     }
   }
 }

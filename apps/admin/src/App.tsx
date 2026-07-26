@@ -17,7 +17,7 @@ export default function App() {
 
   // API base URL configuration (Production Cloud or Local Dev)
   const [apiBaseUrl, setApiBaseUrl] = useState<string>(
-    localStorage.getItem("admin_api_url") || "https://apps.whiteroom.co.in/api/v1"
+    localStorage.getItem("admin_api_url") || "http://66.42.90.144:8080/api/v1"
   );
 
   const handleApiChange = (url: string) => {
