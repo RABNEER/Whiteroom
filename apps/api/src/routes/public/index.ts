@@ -1,4 +1,4 @@
-﻿import { Hono } from "hono";
+import { Hono } from "hono";
 import { html } from "hono/html";
 import { db } from "../../lib/db.js";
 import { tenants, eq, and } from "@whiteroom/db";
@@ -131,7 +131,9 @@ publicRoutes.get("/invite/:code", async (c) => {
   }
 
   const brandColor = tenant.brandColor || "#4F46E5";
-  const apkUrl = "https://apps.whiteroom.co.in/api/v1/storage/files/whiteroom-latest.apk";
+  const apkUrl =
+    env.APK_DOWNLOAD_URL ||
+    "https://drive.google.com/file/d/1CAhf64411jMG0LwZWWpziFZxs1Fhmj98/view?usp=drive_link";
   // NOTE: This page is the Universal Link fallback.
   // Android App Links intercepts the URL at OS level if app is installed -> opens app directly.
   // This page ONLY loads when the app is NOT installed.
