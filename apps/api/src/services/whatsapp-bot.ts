@@ -175,9 +175,9 @@ async function handleIncomingMessage(
         ? `✅ *Whiteroom Verification*\n\nDevice verification request for code *${code}* was successful.\n\nYou can now switch back to the Whiteroom application to complete your sign-in.`
         : `❌ *Whiteroom Verification Failed*\n\n${data.error || "The code is either expired or invalid. Please generate a new verification code from the Whiteroom app."}`;
 
-    // Send reply via fast non-blocking WebSocket store write (bypasses slow DOM queries)
+    // Send reply via fast non-blocking WebSocket store write (sendSeen: false skips chat window DOM opening)
     if (client) {
-      client.sendMessage(rawFrom, replyText).then(() => {
+      client.sendMessage(rawFrom, replyText, { sendSeen: false }).then(() => {
         console.log(`🚀 [WHATSAPP BOT] Reply successfully sent to ${rawFrom}!`);
       }).catch((sendErr) => {
         console.warn(`⚠️ [WHATSAPP BOT] Reply send non-fatal warning:`, sendErr?.message || sendErr);
