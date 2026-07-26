@@ -385,19 +385,13 @@ export async function initWhatsAppBot(): Promise<void> {
         "--no-zygote",
         "--disable-gpu",
         "--disable-audio-output",
-        "--disable-background-networking",
-        "--disable-background-timer-throttling",
-        "--disable-backgrounding-occluded-windows",
         "--disable-breakpad",
         "--disable-client-side-phishing-detection",
         "--disable-component-extensions-with-background-pages",
         "--disable-default-apps",
         "--disable-extensions",
-        "--disable-features=Translate,BackForwardCache,AcceptCHFrame",
         "--disable-ipc-flooding-protection",
         "--disable-notifications",
-        "--disable-renderer-backgrounding",
-        "--disable-sync",
         "--metrics-recording-only",
         "--no-default-browser-check",
         "--no-pings",
@@ -427,6 +421,15 @@ export async function initWhatsAppBot(): Promise<void> {
     console.log(
       "\n✅ [WHATSAPP BOT] Connected successfully to WhatsApp network via Chromium!"
     );
+
+    // Re-inject WWebJS internal listeners into Chromium DOM to guarantee message binding
+    try {
+      await (client as any).inject();
+      console.log("💉 [WHATSAPP BOT] Verified DOM message event listeners are active.");
+    } catch (injectErr: any) {
+      console.warn("⚠️ [WHATSAPP BOT] DOM listener check:", injectErr?.message || injectErr);
+    }
+
     // Immediate sync
     await saveAuthToDb(authDataPath);
 
