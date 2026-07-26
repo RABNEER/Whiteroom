@@ -248,19 +248,27 @@ async function restoreAuthFromDb(authDir: string): Promise<boolean> {
   }
 }
 
-async function saveAuthToDb(authDir: string): Promise<void> {
-  try {
-    if (!fs.existsSync(authDir)) return;
-    console.log("💾 [WHATSAPP BOT DB] Syncing auth session files to PostgreSQL database...");
+const fileMtimeCache = new Map<string, number>();
+let tableCreated = false;
 
-    // Ensure table exists
+async function ensureTableCreated(): Promise<void> {
+  if (tableCreated) return;
+  try {
     await db.execute(
       `CREATE TABLE IF NOT EXISTS whatsapp_bot_store (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
         updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
       );`
-    ).catch(() => {});
+    );
+    tableCreated = true;
+  } catch {}
+}
+
+async function saveAuthToDb(authDir: string): Promise<void> {
+  try {
+    if (!fs.existsSync(authDir)) return;
+    await ensureTableCreated();
 
     function getFiles(dir: string): string[] {
       let results: string[] = [];
@@ -287,6 +295,12 @@ async function saveAuthToDb(authDir: string): Promise<void> {
     for (const file of files) {
       const relPath = path.relative(authDir, file).replace(/\\/g, "/");
       try {
+        const stat = fs.statSync(file);
+        const lastMtime = fileMtimeCache.get(relPath);
+        if (lastMtime && lastMtime === stat.mtimeMs) {
+          continue; // Skip unchanged file
+        }
+
         const content = fs.readFileSync(file).toString("base64");
 
         await db
@@ -303,12 +317,15 @@ async function saveAuthToDb(authDir: string): Promise<void> {
               updatedAt: new Date(),
             },
           });
+        fileMtimeCache.set(relPath, stat.mtimeMs);
         count++;
       } catch (fileErr) {
         // Ignore temporary locked files
       }
     }
-    console.log(`✅ [WHATSAPP BOT DB] Successfully saved ${count} session files to PostgreSQL database!`);
+    if (count > 0) {
+      console.log(`✅ [WHATSAPP BOT DB] Synced ${count} modified session files to PostgreSQL database.`);
+    }
   } catch (err) {
     console.error("❌ [WHATSAPP BOT DB] Error saving session to DB:", err);
   }
