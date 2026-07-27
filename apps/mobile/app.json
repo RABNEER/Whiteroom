@@ -21,6 +21,7 @@
       "bundleIdentifier": "app.whiteroom.mobile"
     },
     "android": {
+      "usesCleartextTraffic": true,
       "package": "app.whiteroom.mobile",
       "intentFilters": [
         {
