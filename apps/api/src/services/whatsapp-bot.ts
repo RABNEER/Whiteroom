@@ -496,10 +496,22 @@ export async function initWhatsAppBot(): Promise<void> {
   });
 
   // ─── Disconnected ───
-  client.on("disconnected", (reason: string) => {
+  client.on("disconnected", async (reason: string) => {
     botConnected = false;
     (globalThis as any).whatsappBotConnected = false;
     console.warn("⚠️ [WHATSAPP BOT] Client disconnected:", reason);
+
+    if (reason === "LOGOUT" || String(reason).toUpperCase().includes("LOGOUT")) {
+      console.log("🧹 [WHATSAPP BOT] Session logged out. Wiping local & DB session for fresh pairing...");
+      try {
+        if (fs.existsSync(authDataPath)) {
+          fs.rmSync(authDataPath, { recursive: true, force: true });
+        }
+        await db.delete(whatsappBotStore).catch(() => {});
+      } catch (e) {
+        console.warn("Notice wiping session after LOGOUT:", e);
+      }
+    }
 
     // Auto-reconnect after 10 seconds
     console.log("🔄 [WHATSAPP BOT] Will attempt reconnect in 10 seconds...");
