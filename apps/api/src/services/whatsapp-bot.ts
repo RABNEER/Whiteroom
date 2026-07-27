@@ -4,6 +4,7 @@ import qrcode from "qrcode-terminal";
 import path from "node:path";
 import fs from "node:fs";
 import { config } from "dotenv";
+import { env } from "../lib/env.js";
 
 // Load environment variables
 config({ path: path.resolve(process.cwd(), ".env") });
@@ -84,7 +85,7 @@ function findChromeExecutable(): string | undefined {
 const processedMessageIds = new Set<string>();
 
 function buildWebhookUrl(): string {
-  const port = process.env.PORT || 8080;
+  const port = env.PORT || 3000;
   if (process.env.WHATSAPP_WEBHOOK_URL) {
     return process.env.WHATSAPP_WEBHOOK_URL.replace("localhost", "127.0.0.1");
   }
