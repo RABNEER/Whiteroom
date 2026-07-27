@@ -85,24 +85,10 @@ const processedMessageIds = new Set<string>();
 
 function buildWebhookUrl(): string {
   const port = process.env.PORT || 8080;
-  let url =
-    process.env.WHATSAPP_WEBHOOK_URL ||
-    `http://127.0.0.1:${port}/api/v1/auth/whatsapp/webhook`;
-
-  if (url.includes("localhost")) {
-    url = url.replace("localhost", "127.0.0.1");
+  if (process.env.WHATSAPP_WEBHOOK_URL) {
+    return process.env.WHATSAPP_WEBHOOK_URL.replace("localhost", "127.0.0.1");
   }
-
-  if (url.includes("127.0.0.1")) {
-    try {
-      const urlObj = new URL(url);
-      urlObj.port = String(port);
-      url = urlObj.toString().replace(/\/$/, "");
-    } catch (err) {
-      console.error("Failed to parse webhookUrl:", err);
-    }
-  }
-  return url;
+  return `http://127.0.0.1:${port}/api/v1/auth/whatsapp/webhook`;
 }
 
 async function handleIncomingMessage(
