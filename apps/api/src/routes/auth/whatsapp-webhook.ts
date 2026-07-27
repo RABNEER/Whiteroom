@@ -109,12 +109,16 @@ export async function whatsappWebhookHandler(c: Context) {
       }, 400);
     }
 
-    if (phoneToMatch && session.phone) {
-      if (normalizePhone(session.phone) !== normalizePhone(phoneToMatch)) {
-        console.warn(`[WHATSAPP WEBHOOK] Phone mismatch for session ${code}. DB: ${session.phone}, Msg: ${phoneToMatch}`);
+    if (session.phone) {
+      const normalizedSessionPhone = normalizePhone(session.phone);
+      const rawSenderPhone = parsed.data.phone || (from && from.startsWith("91") ? from : undefined);
+      const senderPhone = rawSenderPhone ? normalizePhone(rawSenderPhone) : null;
+
+      if (senderPhone && senderPhone !== normalizedSessionPhone) {
+        console.warn(`[WHATSAPP WEBHOOK] Phone mismatch for session ${code}. Entered in App: ${session.phone}, Sent from WhatsApp: ${senderPhone}`);
         return c.json({
           success: false,
-          error: "Phone number mismatch.",
+          error: `Phone number mismatch. You entered ${session.phone} in the app, but sent the verification from ${senderPhone}. Please use the matching WhatsApp account.`,
           data: { phone: sessionPhone },
         }, 400);
       }

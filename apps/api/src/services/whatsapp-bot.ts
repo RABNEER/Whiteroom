@@ -137,16 +137,24 @@ async function handleIncomingMessage(
     const jidNumber = rawFrom.split("@")[0];
     const cleanPhone = jidNumber.replace(/\D/g, "");
 
-    console.log(
-      `✉️ [WHATSAPP BOT] Received message from ${rawFrom} (${cleanPhone}): "${text}"`
-    );
-
     const match = text.match(/Verify\s+([A-Za-z0-9_-]+)/i);
     if (!match) return;
 
     const code = match[1];
+
+    // Extract phone from contact info (handles both @c.us and @lid JIDs accurately)
+    let realPhone = cleanPhone;
+    try {
+      const contact = await msg.getContact().catch(() => null);
+      if (contact && contact.number) {
+        realPhone = contact.number.replace(/\D/g, "");
+      }
+    } catch (e) {
+      // Fallback to cleanPhone
+    }
+
     console.log(
-      `📩 [WHATSAPP BOT] Found verification code ${code} for phone: ${cleanPhone}`
+      `📩 [WHATSAPP BOT] Found verification code ${code} for sender phone: ${realPhone} (JID: ${rawFrom})`
     );
 
     console.log(
@@ -161,7 +169,8 @@ async function handleIncomingMessage(
         "x-webhook-secret": webhookSecret || "",
       },
       body: JSON.stringify({
-        from: cleanPhone,
+        from: realPhone,
+        phone: realPhone,
         senderJid: rawFrom,
         rawJid: rawFrom,
         text: text,
