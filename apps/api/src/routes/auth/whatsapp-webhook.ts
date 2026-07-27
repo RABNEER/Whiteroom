@@ -58,17 +58,11 @@ export async function whatsappWebhookHandler(c: Context) {
       gte(whatsappSessions.expiresAt, now),
     ];
 
-    const isRawLid = isLid || from.length > 13 || !from.startsWith("91");
-    const phoneToMatch = parsed.data.phone || (isRawLid ? undefined : normalizePhone(from));
+    const rawSenderPhone = parsed.data.phone || from;
+    const normalizedSenderPhone = rawSenderPhone ? normalizePhone(rawSenderPhone) : undefined;
+    const phoneToMatch = (normalizedSenderPhone && isValidIndianPhone(normalizedSenderPhone)) ? normalizedSenderPhone : undefined;
 
     if (phoneToMatch) {
-      if (!isValidIndianPhone(phoneToMatch)) {
-        return c.json({
-          success: false,
-          error: "Invalid phone number format. Only Indian numbers (+91) are supported.",
-        }, 400);
-      }
-
       queryConditions.push(eq(whatsappSessions.phone, phoneToMatch));
     } else {
       console.log(`[WHATSAPP WEBHOOK] Verifying session ${code} via LID match (${from}) based on valid session code.`);
@@ -109,16 +103,13 @@ export async function whatsappWebhookHandler(c: Context) {
       }, 400);
     }
 
-    if (session.phone) {
+    if (session.phone && phoneToMatch) {
       const normalizedSessionPhone = normalizePhone(session.phone);
-      const rawSenderPhone = parsed.data.phone || (from && from.startsWith("91") ? from : undefined);
-      const senderPhone = rawSenderPhone ? normalizePhone(rawSenderPhone) : null;
-
-      if (senderPhone && senderPhone !== normalizedSessionPhone) {
-        console.warn(`[WHATSAPP WEBHOOK] Phone mismatch for session ${code}. Entered in App: ${session.phone}, Sent from WhatsApp: ${senderPhone}`);
+      if (phoneToMatch !== normalizedSessionPhone) {
+        console.warn(`[WHATSAPP WEBHOOK] Phone mismatch for session ${code}. Entered in App: ${session.phone}, Sent from WhatsApp: ${phoneToMatch}`);
         return c.json({
           success: false,
-          error: `Phone number mismatch. You entered ${session.phone} in the app, but sent the verification from ${senderPhone}. Please use the matching WhatsApp account.`,
+          error: `Phone number mismatch. You entered ${session.phone} in the app, but sent the verification from ${phoneToMatch}. Please use the matching WhatsApp account.`,
           data: { phone: sessionPhone },
         }, 400);
       }
