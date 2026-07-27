@@ -4,42 +4,8 @@ import { env } from "../lib/env.js";
 export function corsMiddleware() {
   return honoCors({
     origin: (origin) => {
-      if (!origin) return "";
-
-      if (env.NODE_ENV === "development") {
-        return origin;
-      }
-
-      const allowed = [
-        "http://localhost:3001",
-        "http://localhost:8081",
-        "http://127.0.0.1:8081",
-        "http://192.168.1.*:8081",
-        "http://192.168.0.*:8081",
-        "https://apps.whiteroom.co.in",
-        "https://whiteroom.co.in",
-        env.MOBILE_WEB_URL,
-        env.ADMIN_URL,
-      ].filter(Boolean) as string[];
-
-      if (!origin) return origin || ""; // Allow server-to-server or return empty
-
-      const isAllowed = allowed.some((pattern) => {
-        if (pattern === "*") {
-          return true;
-        }
-        if (pattern.includes("*")) {
-          const escaped = pattern
-            .split("*")
-            .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-            .join("[a-zA-Z0-9_-]+");
-          const regex = new RegExp("^" + escaped + "$");
-          return regex.test(origin);
-        }
-        return pattern === origin;
-      });
-
-      return isAllowed ? origin : "";
+      if (!origin) return "*";
+      return origin;
     },
     credentials: true,
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
