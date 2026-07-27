@@ -1,5 +1,4 @@
 import { platformAlert } from "@/utils/alert";
-import 'react-native-reanimated';
 import { useEffect } from "react";
 import { Linking } from "react-native";
 import Constants from "expo-constants";
