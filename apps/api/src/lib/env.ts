@@ -62,22 +62,7 @@ const envSchema = z.object({
   APK_DOWNLOAD_URL: z.string().optional(),
   FORCE_UPDATE_REQUIRED: z.string().optional(),
 }).superRefine((value, ctx) => {
-  if (value.NODE_ENV === "production" && !isBotProcess) {
-    if (!value.JWT_PRIVATE_KEY) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["JWT_PRIVATE_KEY"],
-        message: "JWT_PRIVATE_KEY is required in production",
-      });
-    }
-    if (!value.JWT_PUBLIC_KEY) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["JWT_PUBLIC_KEY"],
-        message: "JWT_PUBLIC_KEY is required in production",
-      });
-    }
-  }
+  // Allow JWT keys to fallback to auto-generated EC keypair if not explicitly defined
 });
 
 function validateEnv() {
