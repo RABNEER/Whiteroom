@@ -91,7 +91,7 @@ export default function AuthScreen({
           <div style={{ display: 'flex', gap: 6, background: "rgba(0,0,0,0.2)", padding: 4, borderRadius: 8, border: "1px solid var(--border-color)" }}>
             <button 
               type="button"
-              onClick={() => handleApiChange("https://whiteroomapi-production-7011.up.railway.app/api/v1")}
+              onClick={() => handleApiChange("http://66.42.90.144:3000/api/v1")}
               style={{
                 flex: 1,
                 padding: "8px",

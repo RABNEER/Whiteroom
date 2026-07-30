@@ -50,7 +50,7 @@ export default function TopNavbar({
       <div style={{ marginRight: 20, display: "flex", flexDirection: "column", gap: 4 }}>
         <div style={{ display: 'flex', gap: 4, background: "rgba(0,0,0,0.25)", padding: 4, borderRadius: 8, border: "1px solid var(--border-color)" }}>
           <button 
-            onClick={() => handleApiChange("https://whiteroomapi-production-7011.up.railway.app/api/v1")}
+            onClick={() => handleApiChange("http://66.42.90.144:3000/api/v1")}
             style={{
               padding: "6px 12px",
               fontSize: 11,
