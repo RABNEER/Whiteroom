@@ -82,6 +82,10 @@ export default function ParentScreen() {
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [selectedClassName, setSelectedClassName] = useState<string | null>(null);
   const [isSiblingDrawerOpen, setIsSiblingDrawerOpen] = useState(false);
+  const [showAddSiblingModal, setShowAddSiblingModal] = useState(false);
+  const [newSiblingName, setNewSiblingName] = useState('');
+  const [newSiblingRoll, setNewSiblingRoll] = useState('');
+  const [isSubmittingSibling, setIsSubmittingSibling] = useState(false);
 
   const clear = useSession((s) => s.clear);
   const setSession = useSession((s) => s.setSession);
@@ -326,7 +330,123 @@ export default function ParentScreen() {
             );
           })
         )}
+
+        <Pressable
+          accessibilityRole="button"
+          style={{
+            marginTop: 16,
+            paddingVertical: 14,
+            paddingHorizontal: 16,
+            borderRadius: radius.md,
+            backgroundColor: colors.navy,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          }}
+          onPress={() => {
+            setIsSiblingDrawerOpen(false);
+            setShowAddSiblingModal(true);
+          }}
+        >
+          <Text style={{ color: colors.white, fontWeight: '700', fontSize: 14 }}>
+            + Add Sibling / Link Child
+          </Text>
+        </Pressable>
       </SiblingDrawer>
+
+      {/* Modal to add sibling / child */}
+      <Modal
+        visible={showAddSiblingModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddSiblingModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: colors.white, borderRadius: radius.lg, padding: 24, width: '100%', maxWidth: 400 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: colors.navy, marginBottom: 4 }}>Add Sibling / Child</Text>
+            <Text style={{ fontSize: 13, color: colors.teal, marginBottom: 16 }}>Enter your child's full name to link them to your account.</Text>
+
+            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.navy, marginBottom: 4 }}>CHILD FULL NAME</Text>
+            <TextInput
+              style={{
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
+                borderRadius: radius.md,
+                padding: 12,
+                fontSize: 14,
+                color: colors.navy,
+                marginBottom: 12,
+              }}
+              placeholder="e.g. Aarav Sharma"
+              placeholderTextColor="#94A3B8"
+              value={newSiblingName}
+              onChangeText={setNewSiblingName}
+            />
+
+            <Text style={{ fontSize: 12, fontWeight: '600', color: colors.navy, marginBottom: 4 }}>ROLL NUMBER (OPTIONAL)</Text>
+            <TextInput
+              style={{
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
+                borderRadius: radius.md,
+                padding: 12,
+                fontSize: 14,
+                color: colors.navy,
+                marginBottom: 20,
+              }}
+              placeholder="e.g. 102"
+              placeholderTextColor="#94A3B8"
+              value={newSiblingRoll}
+              onChangeText={setNewSiblingRoll}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Pressable
+                accessibilityRole="button"
+                style={{ flex: 1, paddingVertical: 12, borderRadius: radius.md, borderWidth: 1, borderColor: '#CBD5E1', alignItems: 'center' }}
+                onPress={() => setShowAddSiblingModal(false)}
+              >
+                <Text style={{ fontWeight: '600', color: colors.navy }}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                style={{ flex: 1, paddingVertical: 12, borderRadius: radius.md, backgroundColor: colors.navy, alignItems: 'center', opacity: (!newSiblingName.trim() || isSubmittingSibling) ? 0.5 : 1 }}
+                disabled={!newSiblingName.trim() || isSubmittingSibling}
+                onPress={async () => {
+                  try {
+                    setIsSubmittingSibling(true);
+                    const tenantInfo = tenant.data;
+                    if (tenantInfo && tenantInfo.inviteCode) {
+                      await api.inviteJoin({
+                        inviteCode: tenantInfo.inviteCode,
+                        role: 'parent',
+                        studentName: newSiblingName.trim(),
+                        rollNumber: newSiblingRoll.trim() || undefined,
+                      });
+                      await queryClient.invalidateQueries({ queryKey: ['children'] });
+                      await queryClient.invalidateQueries({ queryKey: ['parentFeed'] });
+                      setNewSiblingName('');
+                      setNewSiblingRoll('');
+                      setShowAddSiblingModal(false);
+                      platformAlert('Success', 'Sibling linked successfully!');
+                    } else {
+                      platformAlert('Notice', 'Please contact school teacher to obtain active invite code.');
+                    }
+                  } catch (err: unknown) {
+                    platformAlert('Error', err instanceof ApiError ? err.message : 'Failed to add sibling.');
+                  } finally {
+                    setIsSubmittingSibling(false);
+                  }
+                }}
+              >
+                <Text style={{ fontWeight: '700', color: colors.white }}>{isSubmittingSibling ? 'Adding...' : 'Link Child'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

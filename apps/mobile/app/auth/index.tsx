@@ -868,6 +868,30 @@ export default function AuthScreen() {
                 </Text>
               </View>
 
+              <View style={{ marginBottom: spacing.md, marginTop: spacing.md }}>
+                <Text style={styles.fieldLabel}>YOUR FULL NAME</Text>
+                <TextInput
+                  style={[styles.phoneInput, { flex: 0, width: '100%', marginBottom: spacing.sm }]}
+                  placeholder="e.g. Rajesh Sharma"
+                  placeholderTextColor={colors.teal}
+                  value={name}
+                  onChangeText={setName}
+                />
+
+                {selectedRole === 'parent' && (
+                  <>
+                    <Text style={styles.fieldLabel}>CHILD / STUDENT FULL NAME</Text>
+                    <TextInput
+                      style={[styles.phoneInput, { flex: 0, width: '100%' }]}
+                      placeholder="e.g. Aarav Sharma"
+                      placeholderTextColor={colors.teal}
+                      value={studentName}
+                      onChangeText={setStudentName}
+                    />
+                  </>
+                )}
+              </View>
+
               <View style={styles.consentDivider} />
 
               <Pressable
@@ -893,8 +917,8 @@ export default function AuthScreen() {
 
               <Pressable
                 accessibilityRole="button"
-                style={[styles.primaryButton, !agreed && { opacity: 0.4 }]}
-                disabled={!agreed}
+                style={[styles.primaryButton, (!agreed || !name.trim()) && { opacity: 0.4 }]}
+                disabled={!agreed || !name.trim() || loading}
                 onPress={async () => {
                   let currentInviteCode = inviteCode;
                   let currentRole = selectedRole;
@@ -913,6 +937,8 @@ export default function AuthScreen() {
                       role: currentRole,
                       consentAccepted: true,
                       inviteCode: currentInviteCode,
+                      name: name.trim(),
+                      studentName: studentName.trim() || undefined,
                     });
                   } else {
                     setStep('ROLE_SELECT');
