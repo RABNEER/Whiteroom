@@ -318,57 +318,56 @@ export async function registerHandler(c: Context) {
         userAgent: c.req.header("user-agent") ?? null,
       });
 
-      if (studentName) {
-        const [existingStudent] = await tx
-          .select()
-          .from(students)
-          .where(
-            and(
-              eq(students.tenantId, tenant.id),
-              isNull(students.parentId),
-              isNull(students.deletedAt),
-              eq(students.name, studentName)
-            )
+      const effectiveStudentName = studentName || name || "Student";
+      const [existingStudent] = await tx
+        .select()
+        .from(students)
+        .where(
+          and(
+            eq(students.tenantId, tenant.id),
+            isNull(students.parentId),
+            isNull(students.deletedAt),
+            eq(students.name, effectiveStudentName)
           )
-          .limit(1);
+        )
+        .limit(1);
 
-        let linkedStudentId: string;
-        if (existingStudent) {
-          await tx
-            .update(students)
-            .set({ parentId: newParentProfile!.id })
-            .where(eq(students.id, existingStudent.id));
-          linkedStudentId = existingStudent.id;
-        } else {
-          const [createdStudent] = await tx
-            .insert(students)
-            .values({
-              tenantId: tenant.id,
-              name: studentName,
-              rollNumber: rollNumber || null,
-              phone: phoneLookup,
-              parentId: newParentProfile!.id,
-            })
-            .returning();
-          linkedStudentId = createdStudent!.id;
-        }
+      let linkedStudentId: string;
+      if (existingStudent) {
+        await tx
+          .update(students)
+          .set({ parentId: newParentProfile!.id })
+          .where(eq(students.id, existingStudent.id));
+        linkedStudentId = existingStudent.id;
+      } else {
+        const [createdStudent] = await tx
+          .insert(students)
+          .values({
+            tenantId: tenant.id,
+            name: effectiveStudentName,
+            rollNumber: rollNumber || null,
+            phone: phoneLookup,
+            parentId: newParentProfile!.id,
+          })
+          .returning();
+        linkedStudentId = createdStudent!.id;
+      }
 
-        const activeSchoolClasses = await tx
-          .select({ id: classes.id })
-          .from(classes)
-          .where(and(eq(classes.tenantId, tenant.id), isNull(classes.deletedAt)));
+      const activeSchoolClasses = await tx
+        .select({ id: classes.id })
+        .from(classes)
+        .where(and(eq(classes.tenantId, tenant.id), isNull(classes.deletedAt)));
 
-        if (activeSchoolClasses.length > 0) {
-          await tx
-            .insert(classEnrollments)
-            .values(
-              activeSchoolClasses.map((cls) => ({
-                classId: cls.id,
-                studentId: linkedStudentId,
-              }))
-            )
-            .onConflictDoNothing();
-        }
+      if (activeSchoolClasses.length > 0) {
+        await tx
+          .insert(classEnrollments)
+          .values(
+            activeSchoolClasses.map((cls) => ({
+              classId: cls.id,
+              studentId: linkedStudentId,
+            }))
+          )
+          .onConflictDoNothing();
       }
 
       return { user: newUser!, tenantId: tenant.id };

@@ -9,6 +9,8 @@ import {
   parentProfiles,
   consentLogs,
   students,
+  classes,
+  classEnrollments,
 } from "@whiteroom/db";
 import { signAccessToken, signRefreshToken } from "../../lib/jwt.js";
 import { getTenantPlanTier } from "../../lib/subscription.js";
@@ -102,33 +104,61 @@ export async function joinInviteHandler(c: Context) {
           parentProfileId = createdParent!.id;
         }
 
-        if (studentName && parentProfileId) {
-          const [existingStudent] = await tx
-            .select()
-            .from(students)
-            .where(
-              and(
-                eq(students.tenantId, tenant.id),
-                isNull(students.parentId),
-                isNull(students.deletedAt),
-                eq(students.name, studentName)
-              )
-            )
-            .limit(1);
+        const [currentUser] = await tx
+          .select({ name: users.name })
+          .from(users)
+          .where(eq(users.id, user.userId))
+          .limit(1);
 
-          if (existingStudent) {
-            await tx
-              .update(students)
-              .set({ parentId: parentProfileId })
-              .where(eq(students.id, existingStudent.id));
-          } else {
-            await tx.insert(students).values({
+        const effectiveStudentName = studentName || currentUser?.name || "Student";
+        const [existingStudent] = await tx
+          .select()
+          .from(students)
+          .where(
+            and(
+              eq(students.tenantId, tenant.id),
+              isNull(students.parentId),
+              isNull(students.deletedAt),
+              eq(students.name, effectiveStudentName)
+            )
+          )
+          .limit(1);
+
+        let linkedStudentId: string;
+        if (existingStudent) {
+          await tx
+            .update(students)
+            .set({ parentId: parentProfileId })
+            .where(eq(students.id, existingStudent.id));
+          linkedStudentId = existingStudent.id;
+        } else {
+          const [createdStudent] = await tx
+            .insert(students)
+            .values({
               tenantId: tenant.id,
-              name: studentName,
+              name: effectiveStudentName,
               rollNumber: rollNumber || null,
               parentId: parentProfileId,
-            });
-          }
+            })
+            .returning();
+          linkedStudentId = createdStudent!.id;
+        }
+
+        const activeSchoolClasses = await tx
+          .select({ id: classes.id })
+          .from(classes)
+          .where(and(eq(classes.tenantId, tenant.id), isNull(classes.deletedAt)));
+
+        if (activeSchoolClasses.length > 0) {
+          await tx
+            .insert(classEnrollments)
+            .values(
+              activeSchoolClasses.map((cls) => ({
+                classId: cls.id,
+                studentId: linkedStudentId,
+              }))
+            )
+            .onConflictDoNothing();
         }
       }
 
