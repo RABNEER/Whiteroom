@@ -85,27 +85,24 @@ export async function registerHandler(c: Context) {
     throw Errors.validation("Consent is required to complete registration.");
   }
 
-  // Cloudflare Turnstile Verification (Bug 13)
-  // Enforce CAPTCHA for all clients.
+  // Cloudflare Turnstile Verification (Web clients with Turnstile secret configured)
   const turnstileSecret = env.TURNSTILE_SECRET_KEY;
-  if (env.NODE_ENV === "production" || turnstileSecret) {
+  if (turnstileSecret && turnstileSecret.trim() !== "") {
     if (!turnstileToken) {
       throw Errors.validation("CAPTCHA token is required to register.");
     }
-    if (turnstileSecret) {
-      const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          secret: turnstileSecret,
-          response: turnstileToken,
-          remoteip: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "",
-        }),
-      });
-      const data = (await response.json()) as { success: boolean };
-      if (!data.success) {
-        throw Errors.validation("CAPTCHA verification failed. Please try again.");
-      }
+    const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        secret: turnstileSecret,
+        response: turnstileToken,
+        remoteip: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "",
+      }),
+    });
+    const data = (await response.json()) as { success: boolean };
+    if (!data.success) {
+      throw Errors.validation("CAPTCHA verification failed. Please try again.");
     }
   }
 
