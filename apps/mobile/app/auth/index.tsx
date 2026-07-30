@@ -34,7 +34,7 @@ import { useSession, tokenStorage } from '@/auth/session-store';
 import { colors, spacing } from '@/theme/tokens';
 import LogoImage from '../../src/assets/logo.png';
 
-type Step = 'SPLASH' | 'WELCOME' | 'PHONE' | 'CONSENT' | 'ROLE_SELECT' | 'WHATSAPP_POLL';
+type Step = 'SPLASH' | 'WELCOME' | 'PHONE' | 'CONSENT' | 'ROLE_SELECT' | 'WHATSAPP_POLL' | 'INVITE_PROFILE';
 type Role = 'school_admin' | 'teacher' | 'parent';
 
 export default function AuthScreen() {
@@ -294,7 +294,15 @@ export default function AuthScreen() {
         router.replace('/');
       } else if (response.type === 'new_user') {
         setRegistrationToken(response.registrationToken);
-        setStep('CONSENT');
+        let activeCode = currentInviteCode;
+        if (!activeCode) {
+          activeCode = (await tokenStorage.getItem(PENDING_INVITE_CODE_KEY)) || '';
+        }
+        if (activeCode && activeCode.length === 6) {
+          setStep('INVITE_PROFILE');
+        } else {
+          setStep('CONSENT');
+        }
       }
     } catch (err: unknown) {
       setError(err instanceof ApiError ? err.message : 'WhatsApp verification failed. Please try again.');
@@ -946,6 +954,117 @@ export default function AuthScreen() {
                 }}
               >
                 <Text style={styles.buttonText}>I AGREE & CONTINUE</Text>
+              </Pressable>
+            </>
+          )}
+
+          {/* S7: Invite Profile (Dedicated for Invited Members) */}
+          {step === 'INVITE_PROFILE' && (
+            <>
+              <View style={styles.consentIconBox}>
+                <School color={colors.navy} size={28} />
+              </View>
+
+              <Text style={styles.consentEyebrow}>INVITATION</Text>
+              <Text style={styles.consentTitle}>
+                Welcome to {resolvedTenant || 'School Workspace'}
+              </Text>
+              <Text style={styles.consentSub}>
+                You are joining as {selectedRole === 'teacher' ? 'Teacher' : 'Parent'}. Please enter your details below to complete your profile.
+              </Text>
+
+              <View style={{ marginBottom: spacing.md, marginTop: spacing.md }}>
+                <Text style={styles.fieldLabel}>YOUR FULL NAME *</Text>
+                <TextInput
+                  style={[styles.phoneInput, { flex: 0, width: '100%', marginBottom: spacing.md }]}
+                  placeholder="e.g. Rajesh Sharma"
+                  placeholderTextColor={colors.teal}
+                  value={name}
+                  onChangeText={setName}
+                />
+
+                {selectedRole === 'parent' && (
+                  <>
+                    <Text style={styles.fieldLabel}>CHILD / STUDENT FULL NAME *</Text>
+                    <TextInput
+                      style={[styles.phoneInput, { flex: 0, width: '100%', marginBottom: spacing.md }]}
+                      placeholder="e.g. Aarav Sharma"
+                      placeholderTextColor={colors.teal}
+                      value={studentName}
+                      onChangeText={setStudentName}
+                    />
+
+                    <Text style={styles.fieldLabel}>ROLL NUMBER (OPTIONAL)</Text>
+                    <TextInput
+                      style={[styles.phoneInput, { flex: 0, width: '100%' }]}
+                      placeholder="e.g. 102"
+                      placeholderTextColor={colors.teal}
+                      value={rollNumber}
+                      onChangeText={setRollNumber}
+                    />
+                  </>
+                )}
+              </View>
+
+              <View style={styles.consentDivider} />
+
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: agreed }}
+                style={styles.checkboxRow}
+                onPress={() => setAgreed((a) => !a)}
+              >
+                <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
+                  {agreed && <Check color="#FFF" size={12} strokeWidth={3} />}
+                </View>
+                <Text style={styles.checkboxLabel}>
+                  I understand and agree to Whiteroom's data practices under the DPDP Act 2023.
+                </Text>
+              </Pressable>
+
+              {error && (
+                <View style={styles.errorStrip}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              )}
+
+              <Pressable
+                accessibilityRole="button"
+                style={[
+                  styles.primaryButton,
+                  (!agreed || !name.trim() || (selectedRole === 'parent' && !studentName.trim()) || registerMutation.isPending) && { opacity: 0.4 }
+                ]}
+                disabled={!agreed || !name.trim() || (selectedRole === 'parent' && !studentName.trim()) || registerMutation.isPending}
+                onPress={async () => {
+                  let currentInviteCode = inviteCode;
+                  let currentRole = selectedRole;
+                  if (!currentInviteCode) {
+                    const savedCode = await tokenStorage.getItem(PENDING_INVITE_CODE_KEY);
+                    const savedRole = await tokenStorage.getItem(PENDING_INVITE_ROLE_KEY) as Role | null;
+                    if (savedCode && savedCode.length === 6) {
+                      currentInviteCode = savedCode;
+                      if (savedRole) currentRole = savedRole;
+                    }
+                  }
+
+                  if (registrationToken && currentInviteCode) {
+                    registerMutation.mutate({
+                      registrationToken,
+                      role: currentRole,
+                      consentAccepted: true,
+                      inviteCode: currentInviteCode,
+                      name: name.trim(),
+                      studentName: studentName.trim() || undefined,
+                      rollNumber: rollNumber.trim() || undefined,
+                    });
+                  }
+                }}
+              >
+                {registerMutation.isPending ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.buttonText}>JOIN SCHOOL WORKSPACE</Text>
+                )}
               </Pressable>
             </>
           )}
