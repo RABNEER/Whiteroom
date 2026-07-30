@@ -186,22 +186,34 @@ publicRoutes.get("/invite/:code", async (c) => {
               Download Whiteroom to accept this invite.
             </p>
 
-            <a class="dl-btn" href="${apkUrl}" download="whiteroom.apk">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Download Whiteroom
+            <a class="dl-btn" href="whiteroom://invite/${code}?role=${role}">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Open in Whiteroom App
+            </a>
+
+            <a class="secondary-btn" href="${apkUrl}" download="whiteroom.apk" style="display:inline-block; margin-top: 1rem; color: #94a3b8; text-decoration: underline; font-size: 0.9rem; font-weight: 600;">
+              Don't have the app? Download Whiteroom APK
             </a>
 
             <div class="steps">
-              <p class="steps-label">After installing:</p>
-              <div class="step"><div class="step-num">1</div><span>Install the downloaded APK on your device</span></div>
-              <div class="step"><div class="step-num">2</div><span>Open this invite link again</span></div>
-              <div class="step"><div class="step-num">3</div><span>The app will open and your invite to <strong style="color:#e2e8f0;">${tenant.name}</strong> will be ready</span></div>
+              <p class="steps-label">How to join:</p>
+              <div class="step"><div class="step-num">1</div><span>Tap <strong>Open in Whiteroom App</strong> above</span></div>
+              <div class="step"><div class="step-num">2</div><span>If not installed, download and install the APK first</span></div>
+              <div class="step"><div class="step-num">3</div><span>Your invite to <strong style="color:#e2e8f0;">${tenant.name}</strong> will automatically load</span></div>
             </div>
           </div>
         </div>
         <footer>
           <p>Powered by <a href="https://whiteroom.co.in" style="color:#e2e8f0;text-decoration:none;font-weight:600;">Whiteroom</a></p>
         </footer>
+        <script>
+          // Auto-trigger deep link redirect for mobile devices
+          if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            setTimeout(function() {
+              window.location.href = "whiteroom://invite/${code}?role=${role}";
+            }, 300);
+          }
+        </script>
       </body>
       </html>
     `
