@@ -87,17 +87,16 @@ export async function assembleChunks(
   contentType: string,
   chunkPaths: string[]
 ): Promise<{ url: string; size: number }> {
-  const buffers: Buffer[] = [];
-
-  // 1. Read all local chunks in sequence
-  for (const chunkPath of chunkPaths) {
-    try {
-      const bytes = await fs.readFile(chunkPath);
-      buffers.push(bytes);
-    } catch (err) {
-      throw new Error(`Failed to read chunk at ${chunkPath}: ${(err as Error).message}`);
-    }
-  }
+  // 1. Read all local chunks in parallel
+  const buffers = await Promise.all(
+    chunkPaths.map(async (chunkPath) => {
+      try {
+        return await fs.readFile(chunkPath);
+      } catch (err) {
+        throw new Error(`Failed to read chunk at ${chunkPath}: ${(err as Error).message}`);
+      }
+    })
+  );
 
   // 2. Concatenate chunk buffers
   const finalBuffer = Buffer.concat(buffers);

@@ -15,11 +15,9 @@ export async function whatsappSessionPhoneHandler(c: Context) {
     const secret = c.req.header("x-webhook-secret");
     const configSecret = env.WHATSAPP_WEBHOOK_SECRET || "whiteroom-whatsapp-bot-internal-secret";
     const defaultSecret = "whiteroom-whatsapp-bot-internal-secret";
-    const clientIp = c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || "";
-    const isLoopback = clientIp === "" || clientIp === "127.0.0.1" || clientIp === "::1" || clientIp.startsWith("::ffff:127.");
 
-    if (!isLoopback && secret && secret !== configSecret && secret !== defaultSecret) {
-      console.error("❌ [WHATSAPP] Webhook secret mismatch. IP:", clientIp);
+    if (!secret || (secret !== configSecret && secret !== defaultSecret)) {
+      console.error("❌ [WHATSAPP] Webhook secret mismatch.");
       throw Errors.unauthorized("Invalid webhook secret");
     }
 

@@ -319,18 +319,28 @@ export async function registerHandler(c: Context) {
       });
 
       const effectiveStudentName = studentName || name || "Student";
-      const [existingStudent] = await tx
-        .select()
-        .from(students)
-        .where(
-          and(
-            eq(students.tenantId, tenant.id),
-            isNull(students.parentId),
-            isNull(students.deletedAt),
-            eq(students.name, effectiveStudentName)
-          )
-        )
-        .limit(1);
+      let existingStudent: any = null;
+
+      if (rollNumber || phoneLookup) {
+        const conditions = [
+          eq(students.tenantId, tenant.id),
+          isNull(students.parentId),
+          isNull(students.deletedAt),
+        ];
+
+        if (rollNumber) {
+          conditions.push(eq(students.rollNumber, rollNumber));
+        } else if (phoneLookup) {
+          conditions.push(eq(students.phone, phoneLookup));
+        }
+
+        const [found] = await tx
+          .select()
+          .from(students)
+          .where(and(...conditions))
+          .limit(1);
+        existingStudent = found;
+      }
 
       let linkedStudentId: string;
       if (existingStudent) {

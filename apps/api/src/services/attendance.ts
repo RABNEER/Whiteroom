@@ -261,28 +261,25 @@ export async function markAttendanceBatch(
       throw Errors.validation("All attendance records must belong to enrolled students in this class.");
     }
 
-    const upserted: any[] = [];
-    for (const record of records) {
-      const [row] = await tx
-        .insert(attendanceRecords)
-        .values({
-          sessionId,
-          studentId: record.studentId,
-          status: record.status,
-          markedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: [attendanceRecords.sessionId, attendanceRecords.studentId],
-          set: {
-            status: sql`excluded.status`,
-            updatedAt: new Date(),
-          },
-        })
-        .returning();
+    const valuesToInsert = records.map((record) => ({
+      sessionId,
+      studentId: record.studentId,
+      status: record.status,
+      markedAt: new Date(),
+      updatedAt: new Date(),
+    }));
 
-      if (row) upserted.push(row);
-    }
+    const upserted = await tx
+      .insert(attendanceRecords)
+      .values(valuesToInsert)
+      .onConflictDoUpdate({
+        target: [attendanceRecords.sessionId, attendanceRecords.studentId],
+        set: {
+          status: sql`excluded.status`,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
 
     // Secure aggregate counts query inside transaction to prevent TOCTOU race conditions (Finding 2)
     const [counts] = await tx

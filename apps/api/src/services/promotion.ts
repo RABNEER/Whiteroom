@@ -90,58 +90,72 @@ export async function promoteAllStudents(
 
   // Execute database transactions to promote/graduate all in one block
   const result = await db.transaction(async (tx) => {
-    // A. Handle graduating classes
-    for (const graduatingClassId of graduatingClassIds) {
-      const activeEnrollments = await tx
+    // A. Handle graduating classes (Batched single query)
+    if (graduatingClassIds.length > 0) {
+      const activeGraduatingEnrollments = await tx
         .select()
         .from(classEnrollments)
         .where(
           and(
-            eq(classEnrollments.classId, graduatingClassId),
+            inArray(classEnrollments.classId, graduatingClassIds),
             eq(classEnrollments.status, "active")
           )
         );
 
-      if (activeEnrollments.length > 0) {
-        const studentIds = activeEnrollments.map((e) => e.studentId);
-        
-        // Update old enrollments status to 'graduated'
-        await tx
-          .update(classEnrollments)
-          .set({
-            status: "graduated",
-            promotedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(classEnrollments.classId, graduatingClassId),
-              inArray(classEnrollments.studentId, studentIds)
-            )
-          );
+      const enrollmentsByClass = new Map<string, string[]>();
+      for (const e of activeGraduatingEnrollments) {
+        const list = enrollmentsByClass.get(e.classId) || [];
+        list.push(e.studentId);
+        enrollmentsByClass.set(e.classId, list);
+      }
 
-        totalGraduated += studentIds.length;
-        
-        const className = classMap.get(graduatingClassId)!.name;
-        for (const sId of studentIds) {
-          graduationsToSend.push({ studentId: sId, className });
+      for (const graduatingClassId of graduatingClassIds) {
+        const studentIds = enrollmentsByClass.get(graduatingClassId) || [];
+        if (studentIds.length > 0) {
+          await tx
+            .update(classEnrollments)
+            .set({
+              status: "graduated",
+              promotedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(classEnrollments.classId, graduatingClassId),
+                inArray(classEnrollments.studentId, studentIds)
+              )
+            );
+
+          totalGraduated += studentIds.length;
+          const className = classMap.get(graduatingClassId)!.name;
+          for (const sId of studentIds) {
+            graduationsToSend.push({ studentId: sId, className });
+          }
         }
       }
     }
 
-    // B. Handle promotions
-    for (const rule of promotionRules) {
-      const activeEnrollments = await tx
+    // B. Handle promotions (Batched single query)
+    const fromClassIds = promotionRules.map((r) => r.fromClassId);
+    if (fromClassIds.length > 0) {
+      const activePromotionEnrollments = await tx
         .select()
         .from(classEnrollments)
         .where(
           and(
-            eq(classEnrollments.classId, rule.fromClassId),
+            inArray(classEnrollments.classId, fromClassIds),
             eq(classEnrollments.status, "active")
           )
         );
 
-      if (activeEnrollments.length > 0) {
-        const studentIds = activeEnrollments.map((e) => e.studentId);
+      const promoByClass = new Map<string, string[]>();
+      for (const e of activePromotionEnrollments) {
+        const list = promoByClass.get(e.classId) || [];
+        list.push(e.studentId);
+        promoByClass.set(e.classId, list);
+      }
+
+      for (const rule of promotionRules) {
+        const studentIds = promoByClass.get(rule.fromClassId) || [];
 
         // Update old enrollments to 'promoted'
         await tx
@@ -215,16 +229,16 @@ export async function promoteAllStudents(
         for (const sId of studentIds) {
           promotionsToSend.push({ studentId: sId, newClassName: toClassName });
         }
-      }
 
-      // Update academicYear of target class
-      await tx
-        .update(classes)
-        .set({
-          academicYear,
-          updatedAt: new Date(),
-        })
-        .where(eq(classes.id, rule.toClassId));
+        // Update academicYear of target class
+        await tx
+          .update(classes)
+          .set({
+            academicYear,
+            updatedAt: new Date(),
+          })
+          .where(eq(classes.id, rule.toClassId));
+      }
     }
 
     // C. Write audit record

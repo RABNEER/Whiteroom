@@ -66,13 +66,21 @@ export async function uploadToStorage(
 
   const localStoragePath = env.LOCAL_STORAGE_PATH || process.env.LOCAL_STORAGE_PATH || "G:\\My Drive\\Whiteroom";
   if (localStoragePath) {
-    console.log("[STORAGE] Saving directly to local disk:", localStoragePath, path);
-    const fullPath = nodePath.join(localStoragePath, path);
-    await fs.mkdir(nodePath.dirname(fullPath), { recursive: true });
-    await fs.writeFile(fullPath, buffer);
+    const sanitizedPath = path.replace(/^(\.\.[\/\\])+/, '').replace(/[\/\\]\.\.[\/\\]/g, '/');
+    const fullPath = nodePath.join(localStoragePath, sanitizedPath);
+    const resolvedLocal = nodePath.resolve(localStoragePath);
+    const resolvedFull = nodePath.resolve(fullPath);
+
+    if (!resolvedFull.startsWith(resolvedLocal)) {
+      throw new Error("Invalid storage path traversal detected");
+    }
+
+    console.log("[STORAGE] Saving directly to local disk:", localStoragePath, sanitizedPath);
+    await fs.mkdir(nodePath.dirname(resolvedFull), { recursive: true });
+    await fs.writeFile(resolvedFull, buffer);
 
     const baseUrl = env.ADMIN_URL || process.env.ADMIN_URL || "http://localhost:3000";
-    const publicUrl = `${baseUrl.replace(/\/$/, "")}/api/v1/storage/files/${path}`;
+    const publicUrl = `${baseUrl.replace(/\/$/, "")}/api/v1/storage/files/${sanitizedPath}`;
 
     return {
       url: publicUrl,
