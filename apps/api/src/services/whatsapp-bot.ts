@@ -40,12 +40,12 @@ export async function logoutBot(
 ) {
   try {
     if (client) {
-      await client.logout().catch(() => {});
+      await client.logout().catch(() => { });
     }
     latestQr = null;
     botConnected = false;
     (globalThis as any).whatsappBotConnected = false;
-    await db.delete(whatsappBotStore).catch(() => {});
+    await db.delete(whatsappBotStore).catch(() => { });
     console.log("🗑️ [WHATSAPP BOT DB] Cleared auth session from PostgreSQL database.");
   } catch (err) {
     console.error("Failed to logout client:", err);
@@ -62,9 +62,9 @@ function findChromeExecutable(): string | undefined {
     "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
     process.env.LOCALAPPDATA
       ? path.join(
-          process.env.LOCALAPPDATA,
-          "Google\\Chrome\\Application\\chrome.exe"
-        )
+        process.env.LOCALAPPDATA,
+        "Google\\Chrome\\Application\\chrome.exe"
+      )
       : "",
     "/usr/bin/chromium",
     "/usr/bin/google-chrome",
@@ -191,10 +191,10 @@ async function handleIncomingMessage(
     try {
       const chat = await msg.getChat().catch(() => null);
       if (chat) {
-        await chat.sendMessage(replyText).catch(() => msg.reply(replyText).catch(() => {}));
+        await chat.sendMessage(replyText).catch(() => msg.reply(replyText).catch(() => { }));
         console.log(`🚀 [WHATSAPP BOT] Reply successfully delivered to chat (${rawFrom})!`);
       } else {
-        await msg.reply(replyText).catch(() => {});
+        await msg.reply(replyText).catch(() => { });
         console.log(`🚀 [WHATSAPP BOT] Fallback reply sent to ${rawFrom}!`);
       }
     } catch (replyErr: any) {
@@ -231,14 +231,14 @@ function isJunkCacheFile(relPath: string): boolean {
 async function restoreAuthFromDb(authDir: string): Promise<boolean> {
   try {
     console.log("💾 [WHATSAPP BOT DB] Checking for saved auth session in PostgreSQL database...");
-    
+
     await db.execute(
       `CREATE TABLE IF NOT EXISTS whatsapp_bot_store (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
         updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
       );`
-    ).catch(() => {});
+    ).catch(() => { });
 
     const rows = await db.select().from(whatsappBotStore);
     if (!rows || rows.length === 0) {
@@ -265,7 +265,7 @@ async function restoreAuthFromDb(authDir: string): Promise<boolean> {
     if (junkKeysToDelete.length > 0) {
       db.execute(
         `DELETE FROM whatsapp_bot_store WHERE key IN (${junkKeysToDelete.map((k) => `'${k.replace(/'/g, "''")}'`).join(",")});`
-      ).catch(() => {});
+      ).catch(() => { });
     }
 
     console.log(`✅ [WHATSAPP BOT DB] Restored ${restoredCount} essential auth session files (purged ${junkKeysToDelete.length} junk cache files)!`);
@@ -290,7 +290,7 @@ async function ensureTableCreated(): Promise<void> {
       );`
     );
     tableCreated = true;
-  } catch {}
+  } catch { }
 }
 
 async function saveAuthToDb(authDir: string): Promise<void> {
@@ -311,7 +311,7 @@ async function saveAuthToDb(authDir: string): Promise<void> {
           } else {
             results.push(fullPath);
           }
-        } catch {}
+        } catch { }
       }
       return results;
     }
@@ -464,7 +464,7 @@ export async function initWhatsAppBot(): Promise<void> {
     // Active CDP keep-alive ping every 10 seconds to keep Chromium main thread & WebSocket socket polling 100% active
     setInterval(async () => {
       if (botConnected && client?.pupPage) {
-        await client.pupPage.evaluate(() => Date.now()).catch(() => {});
+        await client.pupPage.evaluate(() => Date.now()).catch(() => { });
       }
     }, 10_000);
 
@@ -479,7 +479,7 @@ export async function initWhatsAppBot(): Promise<void> {
       if (botConnected && client) {
         const state = await client.getState().catch(() => "UNKNOWN");
         console.log(`💓 [WHATSAPP BOT] Heartbeat: Connected (State: ${state}) — Active and listening for messages...`);
-        await saveAuthToDb(authDataPath).catch(() => {});
+        await saveAuthToDb(authDataPath).catch(() => { });
       }
     }, 2 * 60 * 1000);
   });
@@ -495,7 +495,7 @@ export async function initWhatsAppBot(): Promise<void> {
   // Graceful shutdown sync when Railway stops or redeploys container
   const handleShutdown = async (signal: string) => {
     console.log(`🛑 [WHATSAPP BOT] Received ${signal}, saving auth session before exit...`);
-    await saveAuthToDb(authDataPath).catch(() => {});
+    await saveAuthToDb(authDataPath).catch(() => { });
   };
   process.on("SIGTERM", () => handleShutdown("SIGTERM"));
   process.on("SIGINT", () => handleShutdown("SIGINT"));
@@ -517,7 +517,7 @@ export async function initWhatsAppBot(): Promise<void> {
         if (fs.existsSync(authDataPath)) {
           fs.rmSync(authDataPath, { recursive: true, force: true });
         }
-        await db.delete(whatsappBotStore).catch(() => {});
+        await db.delete(whatsappBotStore).catch(() => { });
       } catch (e) {
         console.warn("Notice wiping session after LOGOUT:", e);
       }
@@ -566,6 +566,13 @@ export async function initWhatsAppBot(): Promise<void> {
       err?.message || err
     );
 
+    try {
+      if (client) {
+        await client.destroy().catch(() => {});
+        client = null;
+      }
+    } catch {}
+
     console.log("🧹 [WHATSAPP BOT] Wiping corrupted session from local disk & PostgreSQL database...");
     try {
       if (fs.existsSync(authDataPath)) {
@@ -576,19 +583,13 @@ export async function initWhatsAppBot(): Promise<void> {
       console.error("⚠️ [WHATSAPP BOT] Cleanup error:", cleanupErr);
     }
 
-    console.log("🔄 [WHATSAPP BOT] Re-launching fresh Chromium client for QR pairing...");
     botInitialized = false;
     botConnected = false;
     latestQr = null;
     (globalThis as any).whatsappLatestQr = null;
     (globalThis as any).whatsappBotConnected = false;
 
-    // Small 2-second delay before fresh start
-    setTimeout(() => {
-      initWhatsAppBot().catch((retryErr) => {
-        console.error("💥 [WHATSAPP BOT] Fresh initialization retry failed:", retryErr);
-      });
-    }, 2000);
+    console.log("🛑 [WHATSAPP BOT] Cleaned up failed session. Re-run or scan fresh QR.");
   }
 }
 
