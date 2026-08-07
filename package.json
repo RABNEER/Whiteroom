@@ -13,7 +13,8 @@
     "db:studio": "turbo run db:studio --filter=@whiteroom/db",
     "android": "pnpm --filter @whiteroom/mobile android",
     "ios": "pnpm --filter @whiteroom/mobile ios",
-    "whatsapp:bot": "pnpm --filter @whiteroom/api whatsapp:bot"
+    "whatsapp:bot": "pnpm --filter @whiteroom/api whatsapp:bot",
+    "deploy:vps": "python scratch/deploy.py"
   },
   "devDependencies": {
     "turbo": "^2.5.0",
