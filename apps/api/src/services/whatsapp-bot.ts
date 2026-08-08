@@ -568,17 +568,17 @@ export async function initWhatsAppBot(): Promise<void> {
 
     try {
       if (client) {
-        await client.destroy().catch(() => {});
+        await client.destroy().catch(() => { });
         client = null;
       }
-    } catch {}
+    } catch { }
 
     console.log("🧹 [WHATSAPP BOT] Wiping corrupted session from local disk & PostgreSQL database...");
     try {
       if (fs.existsSync(authDataPath)) {
         fs.rmSync(authDataPath, { recursive: true, force: true });
       }
-      await db.delete(whatsappBotStore).catch(() => {});
+      await db.delete(whatsappBotStore).catch(() => { });
     } catch (cleanupErr) {
       console.error("⚠️ [WHATSAPP BOT] Cleanup error:", cleanupErr);
     }
