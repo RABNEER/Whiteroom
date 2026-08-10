@@ -109,6 +109,15 @@ export async function registerAttendanceReminderWorker() {
       console.log(`[Auto-Close] Session for class ${classId} on ${date} created as not_taken.`);
     }
   });
+
+  await boss.work("enqueue-attendance-reminders", async () => {
+    await enqueueAttendanceRemindersForNextWeek();
+  });
+}
+
+export async function scheduleAttendanceRemindersCron() {
+  const boss = getBoss();
+  await boss.schedule("enqueue-attendance-reminders", "0 0 * * *"); // run every midnight
 }
 
 // FIX: No T+0/T+5/T+60 attendance reminders

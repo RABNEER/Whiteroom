@@ -1,4 +1,5 @@
 import { Context, Next } from "hono";
+import { getClientIp } from "../lib/network.js";
 import { Errors } from "@whiteroom/shared";
 import { securityAuditLogs } from "@whiteroom/db";
 import { db } from "../lib/db.js";
@@ -147,7 +148,7 @@ export async function contentModerationMiddleware(c: Context, next: Next) {
   const tenantId = c.get("tenantId");
   const user = c.get("user");
   const userId = user?.id || user?.userId;
-  const ipAddress = c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || "unknown";
+  const ipAddress = getClientIp(c);
 
   // Only scan POST/PUT requests with JSON bodies
   if (["POST", "PUT", "PATCH"].includes(c.req.method)) {

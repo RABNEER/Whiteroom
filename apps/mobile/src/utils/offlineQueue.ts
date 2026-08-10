@@ -73,9 +73,20 @@ export const offlineQueue = {
 
       if (existingIndex !== -1) {
         // Update existing entry instead of creating duplicate
+        // Merge records by studentId so we don't overwrite other teachers' offline edits
+        const existingRecords = [...queue[existingIndex].records];
+        for (const newRecord of attendance.records) {
+          const rIndex = existingRecords.findIndex(r => r.studentId === newRecord.studentId);
+          if (rIndex !== -1) {
+            existingRecords[rIndex] = newRecord;
+          } else {
+            existingRecords.push(newRecord);
+          }
+        }
+
         queue[existingIndex] = {
           ...queue[existingIndex],
-          records: attendance.records,
+          records: existingRecords,
           timestamp: Date.now(),
           idempotencyKey: queue[existingIndex].idempotencyKey, // KEEP original key
         };

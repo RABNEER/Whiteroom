@@ -2,6 +2,7 @@ import { getBoss } from "../lib/pgboss.js";
 import {
   enqueueAttendanceRemindersForNextWeek,
   registerAttendanceReminderWorker,
+  scheduleAttendanceRemindersCron,
 } from "./attendance-reminder.job.js";
 import { registerAbsentNotificationWorker } from "./absent-notification.job.js";
 import { registerSubscriptionExpiryWorker } from "./subscription-expiry.job.js";
@@ -58,6 +59,10 @@ export async function startJobs() {
 
   await scheduleCleanupExpiredUploads().catch((err) => {
     console.error("[jobs] Failed to schedule expired uploads cleanup:", err);
+  });
+
+  await scheduleAttendanceRemindersCron().catch((err) => {
+    console.error("[jobs] Failed to schedule attendance reminders cron:", err);
   });
 
   await enqueueAttendanceRemindersForNextWeek();

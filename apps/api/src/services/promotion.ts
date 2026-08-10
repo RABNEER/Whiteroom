@@ -102,34 +102,24 @@ export async function promoteAllStudents(
           )
         );
 
-      const enrollmentsByClass = new Map<string, string[]>();
-      for (const e of activeGraduatingEnrollments) {
-        const list = enrollmentsByClass.get(e.classId) || [];
-        list.push(e.studentId);
-        enrollmentsByClass.set(e.classId, list);
-      }
+      if (activeGraduatingEnrollments.length > 0) {
+        await tx
+          .update(classEnrollments)
+          .set({
+            status: "graduated",
+            promotedAt: new Date(),
+          })
+          .where(
+            and(
+              inArray(classEnrollments.classId, graduatingClassIds),
+              eq(classEnrollments.status, "active")
+            )
+          );
 
-      for (const graduatingClassId of graduatingClassIds) {
-        const studentIds = enrollmentsByClass.get(graduatingClassId) || [];
-        if (studentIds.length > 0) {
-          await tx
-            .update(classEnrollments)
-            .set({
-              status: "graduated",
-              promotedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(classEnrollments.classId, graduatingClassId),
-                inArray(classEnrollments.studentId, studentIds)
-              )
-            );
-
-          totalGraduated += studentIds.length;
-          const className = classMap.get(graduatingClassId)!.name;
-          for (const sId of studentIds) {
-            graduationsToSend.push({ studentId: sId, className });
-          }
+        for (const e of activeGraduatingEnrollments) {
+          totalGraduated++;
+          const className = classMap.get(e.classId)!.name;
+          graduationsToSend.push({ studentId: e.studentId, className });
         }
       }
     }

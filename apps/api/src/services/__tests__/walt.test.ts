@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach, afterAll } from "vitest";
 import { isTeacherRole } from "../walt.js";
 
 vi.hoisted(() => {
@@ -63,6 +63,34 @@ describe("classifyQuestion", () => {
     const result = await walt.classifyQuestion("What is quantum physics?");
     expect(result).toBe("academic");
     expect(global.fetch).toHaveBeenCalled();
+  });
+});
+
+describe("Walt Service - generateCompletion", () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env = { ...originalEnv };
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  it("should handle API error payload parsing fallback (res.text().catch)", async () => {
+    process.env.GROQ_API_KEY = "test_groq_key";
+    process.env.NODE_ENV = "development"; // Bypass the test mock
+
+    // Mock fetch to return a non-ok response where .text() throws an error
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: vi.fn().mockRejectedValue(new Error("Cannot read text body")),
+    });
+
+    // We just want to ensure it doesn't crash on res.text().catch() and moves to Gemini fallback or throws internal error
+    await expect(walt.generateCompletion("test prompt")).rejects.toThrow("AI assistant is temporarily unavailable");
   });
 });
 

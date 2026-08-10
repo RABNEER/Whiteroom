@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { getClientIp } from "./network.js";
 import crypto from "node:crypto";
 import { db } from "./db.js";
 import {
@@ -138,7 +139,7 @@ export async function completeVerifiedPhoneAuth(
         userId,
         tenantId: tenant.id,
         consentType: "data_processing",
-        ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+        ipAddress: getClientIp(c),
         userAgent: c.req.header("user-agent") ?? null,
       });
 

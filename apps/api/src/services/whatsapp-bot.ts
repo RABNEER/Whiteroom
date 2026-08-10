@@ -3,6 +3,7 @@ const { Client, LocalAuth } = pkg;
 import qrcode from "qrcode-terminal";
 import path from "node:path";
 import fs from "node:fs";
+import crypto from "node:crypto";
 import { config } from "dotenv";
 import { env } from "../lib/env.js";
 
@@ -381,9 +382,7 @@ export async function initWhatsAppBot(): Promise<void> {
     path.resolve(process.cwd(), ".wwebjs_auth");
 
   const webhookUrl = buildWebhookUrl();
-  const webhookSecret =
-    process.env.WHATSAPP_WEBHOOK_SECRET ||
-    "whiteroom-whatsapp-bot-internal-secret";
+  const webhookSecret = process.env.WHATSAPP_WEBHOOK_SECRET || crypto.randomBytes(32).toString("hex");
 
   console.log("🤖 [WHATSAPP BOT] Target Webhook URL:", webhookUrl);
   console.log("💾 [WHATSAPP BOT] Auth session path:", authDataPath);

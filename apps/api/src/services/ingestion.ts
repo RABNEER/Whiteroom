@@ -163,17 +163,22 @@ export async function ingestClassroomFile(
     console.log(`🧩 [INGESTION] Generated ${chunks.length} chunks. Generating embeddings...`);
 
     // 5. Generate embeddings and save to DB
+    const insertValues = [];
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       const embedding = await getEmbedding(chunk);
-
-      await db.insert(classroomFileChunks).values({
+      
+      insertValues.push({
         tenantId: fileRecord.tenantId,
         fileId: fileRecord.id,
         content: chunk,
         pageNumber: i + 1, // Treat chunk index as virtual page number
         embedding: embedding,
       });
+    }
+
+    if (insertValues.length > 0) {
+      await db.insert(classroomFileChunks).values(insertValues);
     }
 
     console.log(`✅ [INGESTION] Successfully completed ingestion and vector embedding for ${fileRecord.name}`);

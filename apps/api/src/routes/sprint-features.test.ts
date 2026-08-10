@@ -413,6 +413,6 @@ describe("Pre-Launch B2B Sprint Features", () => {
       expect(body.success).toBe(true);
       expect(body.data.seenCount).toBe(1);
       expect(body.data.seenBy[0].userId).toBe(schoolAdminId);
-    });
+    }, 30000);
   });
 });

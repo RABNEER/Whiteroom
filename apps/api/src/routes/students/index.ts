@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
+import { getClientIp } from "../../lib/network.js";
 import { UserRole } from "@whiteroom/shared";
 import { authMiddleware, requireRole } from "../../middleware/auth.js";
 import { rateLimitMiddleware } from "../../middleware/rate-limit.js";
@@ -15,7 +17,7 @@ studentRoutes.use("*", requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, User
 const studentMutationLimiter = rateLimitMiddleware({
   windowMs: 15 * 60 * 1000,
   max: 300,
-  keyFn: (c) => c.get("user")?.userId || c.req.header("x-forwarded-for") || "unknown",
+  keyFn: (c) => c.get("user")?.userId || getClientIp(c),
   errorCode: "STUDENT_MUTATION_LIMITED",
 });
 

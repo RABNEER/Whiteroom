@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { getClientIp } from "../../lib/network.js";
 import { z } from "zod";
 import { db } from "../../lib/db.js";
 import { env } from "../../lib/env.js";
@@ -18,13 +19,13 @@ const webhookSchema = z.object({
 export async function whatsappWebhookHandler(c: Context) {
   try {
     const secret = c.req.header("x-webhook-secret");
-    const configSecret = env.WHATSAPP_WEBHOOK_SECRET || "whiteroom-whatsapp-bot-internal-secret";
-    const defaultSecret = "whiteroom-whatsapp-bot-internal-secret";
+    const configSecret = env.WHATSAPP_WEBHOOK_SECRET;
+    
     // Allow loopback/internal requests without secret check
-    const clientIp = c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || "";
-    const isLoopback = clientIp === "" || clientIp === "127.0.0.1" || clientIp === "::1" || clientIp.startsWith("::ffff:127.");
+    const clientIp = getClientIp(c);
+    const isLoopback = clientIp === "" || clientIp === "unknown" || clientIp === "127.0.0.1" || clientIp === "::1" || clientIp.startsWith("::ffff:127.");
 
-    if (!isLoopback && secret && secret !== configSecret && secret !== defaultSecret) {
+    if (!isLoopback && secret !== configSecret) {
       console.error("❌ [WHATSAPP WEBHOOK] Webhook secret mismatch. IP:", clientIp);
       throw Errors.unauthorized("Invalid webhook secret");
     }

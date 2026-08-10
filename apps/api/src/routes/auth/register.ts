@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { getClientIp } from "../../lib/network.js";
 import { z } from "zod";
 import { db } from "../../lib/db.js";
 import { env } from "../../lib/env.js";
@@ -97,7 +98,7 @@ export async function registerHandler(c: Context) {
       body: new URLSearchParams({
         secret: turnstileSecret,
         response: turnstileToken,
-        remoteip: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "",
+        remoteip: getClientIp(c),
       }),
     });
     const data = (await response.json()) as { success: boolean };
@@ -213,7 +214,7 @@ export async function registerHandler(c: Context) {
         userId: newUser!.id,
         tenantId: newTenant!.id,
         consentType: "data_processing",
-        ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+        ipAddress: getClientIp(c),
         userAgent: c.req.header("user-agent") ?? null,
       });
 
@@ -262,7 +263,7 @@ export async function registerHandler(c: Context) {
         userId: newUser!.id,
         tenantId: tenant.id,
         consentType: "data_processing",
-        ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+        ipAddress: getClientIp(c),
         userAgent: c.req.header("user-agent") ?? null,
       });
 
@@ -283,15 +284,46 @@ export async function registerHandler(c: Context) {
         throw Errors.notFound("Invite code");
       }
 
-      const [newUser] = await tx
-        .insert(users)
-        .values({
-          phone: phoneLookup,
-          name: name || null,
-          role: UserRole.PARENT,
-          tenantId: tenant.id,
-        })
-        .returning();
+      let newUser;
+      const [existingUser] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.phone, phoneLookup))
+        .limit(1);
+
+      if (existingUser) {
+        if (existingUser.role !== UserRole.PARENT) {
+          throw Errors.validation("Phone number is already registered with a different role.");
+        }
+        newUser = existingUser;
+      } else {
+        const [insertedUser] = await tx
+          .insert(users)
+          .values({
+            phone: phoneLookup,
+            name: name || null,
+            role: UserRole.PARENT,
+            tenantId: tenant.id,
+          })
+          .returning();
+        newUser = insertedUser;
+      }
+
+      // Check if already in tenant
+      const [existingProfile] = await tx
+        .select()
+        .from(parentProfiles)
+        .where(
+          and(
+            eq(parentProfiles.userId, newUser!.id),
+            eq(parentProfiles.tenantId, tenant.id)
+          )
+        )
+        .limit(1);
+
+      if (existingProfile) {
+        throw Errors.validation("You are already registered with this school.");
+      }
 
       await tx.insert(userTenants).values({
         userId: newUser!.id,
@@ -314,7 +346,7 @@ export async function registerHandler(c: Context) {
         userId: newUser!.id,
         tenantId: tenant.id,
         consentType: "data_processing",
-        ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+        ipAddress: getClientIp(c),
         userAgent: c.req.header("user-agent") ?? null,
       });
 

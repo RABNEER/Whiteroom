@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { z } from "zod";
 import { db } from "../../lib/db.js";
+import { getClientIp } from "../../lib/network.js";
 import {
   users,
   tenants,
@@ -166,7 +167,7 @@ export async function joinInviteHandler(c: Context) {
         userId: user.userId,
         tenantId: tenant.id,
         consentType: "data_processing",
-        ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+        ipAddress: getClientIp(c),
         userAgent: c.req.header("user-agent") ?? null,
       });
     }

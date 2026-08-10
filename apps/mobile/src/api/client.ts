@@ -12,7 +12,6 @@ import type {
   InviteResolveResponse,
   OTPVerifyResponse,
   OTPVerifyResult,
-  OTPSendResponse,
   ParentFeedResponse,
   RefreshResponse,
   ScheduleResponse,
@@ -162,14 +161,6 @@ async function request<T>(
 }
 
 export const api = {
-  /**
-   * @deprecated — SMS now handled by Firebase client-side. This endpoint is a no-op.
-   */
-  otpSend: (phone: string): Promise<OTPSendResponse> =>
-    request<OTPSendResponse>("/auth/otp/send", {
-      method: "POST",
-      body: JSON.stringify({ phone }),
-    }),
   otpVerify: (input: {
     idToken?: string;
     phone?: string;

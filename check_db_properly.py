@@ -1,5 +1,4 @@
 import os
-import sys
 
 # Load .env
 from dotenv import load_dotenv

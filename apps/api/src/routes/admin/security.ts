@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { getClientIp } from "../../lib/network.js";
 import { z } from "zod";
 import { Errors } from "@whiteroom/shared";
 import type { ApiResponse, JWTPayload } from "@whiteroom/shared";
@@ -97,7 +98,7 @@ export async function sendBreachNotificationHandler(c: Context) {
     userId: user.userId,
     eventType: "MANDATORY_BREACH_NOTIFICATION_SENT",
     severity: "CRITICAL",
-    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip") || "unknown",
+    ipAddress: getClientIp(c),
     metadata: {
       notificationId: record.id,
       affectedUserCount: affectedUserIds.length,

@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { getClientIp } from "../../lib/network.js";
 import { z } from "zod";
 import { db } from "../../lib/db.js";
 import {
@@ -33,18 +34,11 @@ import { eq, and, or, desc } from "@whiteroom/db";
 import { verifyFirebaseIdToken } from "../../lib/firebase.js";
 
 const verifySchema = z.object({
-  idToken: z.string().min(1).optional(),
-  phone: z.string().min(10).max(15).optional(),
-  otp: z.string().min(5).max(6).optional(),
+  idToken: z.string().min(1),
   inviteCode: z.string().length(6).optional(),
   role: z.string().optional(),
   studentName: z.string().trim().min(1).max(120).optional(),
   rollNumber: z.string().trim().min(1).max(40).optional(),
-}).refine(data => {
-  return !!data.idToken || (!!data.phone && !!data.otp);
-}, {
-  message: "Either 'idToken' or both 'phone' and 'otp' must be provided.",
-  path: ["idToken"],
 });
 
 /**
@@ -71,101 +65,21 @@ export async function otpVerifyHandler(c: Context) {
   let firebaseUid = "legacy-otp";
   let phoneHash = "";
 
-  if (parsed.data.idToken) {
-    try {
-      const verified = await verifyFirebaseIdToken(parsed.data.idToken);
-      phone = normalizePhone(verified.phone);
-      phoneHash = hashSHA256(phone);
-      firebaseUid = verified.uid;
-    } catch {
-      throw new AppError(
-        ErrorCode.INVALID_OTP,
-        "Firebase token verification failed.",
-        401
-      );
-    }
-  } else {
-    // ——— Legacy Phone/OTP Fallback Path ———
-    const reqPhone = normalizePhone(parsed.data.phone!);
-    if (!isValidIndianPhone(reqPhone)) {
-      throw Errors.validation("Invalid phone number format.");
-    }
-    phone = reqPhone;
+  if (!parsed.data.idToken) {
+    throw Errors.validation("idToken is required.");
+  }
+
+  try {
+    const verified = await verifyFirebaseIdToken(parsed.data.idToken);
+    phone = normalizePhone(verified.phone);
     phoneHash = hashSHA256(phone);
-
-    // Enforce OTP lockout check (Bug 4)
-    const [lockout] = await db
-      .select()
-      .from(otpLockouts)
-      .where(eq(otpLockouts.phone, phoneHash))
-      .limit(1);
-
-    if (lockout && lockout.lockedUntil && lockout.lockedUntil > new Date()) {
-      throw Errors.unauthorized(`Too many verification attempts. Locked until ${lockout.lockedUntil.toLocaleTimeString()}`);
-    }
-
-    // Verify OTP against otpAttempts (Bug 1)
-    const [latestAttempt] = await db
-      .select()
-      .from(otpAttempts)
-      .where(
-        and(
-          eq(otpAttempts.phoneHash, phoneHash),
-          eq(otpAttempts.verified, false)
-        )
-      )
-      .orderBy(desc(otpAttempts.createdAt))
-      .limit(1);
-
-    const enteredOtpHash = hashSHA256(parsed.data.otp || "");
-    if (!latestAttempt || latestAttempt.expiresAt <= new Date() || latestAttempt.otp !== enteredOtpHash) {
-      // Increment lockout counter
-      const currentAttempts = (lockout?.attempts ?? 0) + 1;
-      const isLockoutThreshold = currentAttempts >= 5;
-      const lockedUntil = isLockoutThreshold ? new Date(Date.now() + 15 * 60 * 1000) : null;
-
-      if (lockout) {
-        await db
-          .update(otpLockouts)
-          .set({
-            attempts: currentAttempts,
-            lockedUntil,
-            updatedAt: new Date()
-          })
-          .where(eq(otpLockouts.phone, phoneHash));
-      } else {
-        await db.insert(otpLockouts).values({
-          phone: phoneHash,
-          attempts: currentAttempts,
-          lockedUntil
-        });
-      }
-
-      if (isLockoutThreshold) {
-        throw Errors.unauthorized("Too many failed OTP verification attempts. Locked for 15 minutes.");
-      }
-      throw new AppError(
-        ErrorCode.INVALID_OTP,
-        "Invalid or expired OTP code.",
-        401
-      );
-    }
-
-    // Successfully verified! Update attempt and reset lockout
-    await db
-      .update(otpAttempts)
-      .set({ verified: true })
-      .where(eq(otpAttempts.id, latestAttempt.id));
-
-    if (lockout) {
-      await db
-        .update(otpLockouts)
-        .set({ attempts: 0, lockedUntil: null, updatedAt: new Date() })
-        .where(eq(otpLockouts.phone, phoneHash));
-    }
-    
-    const maskedPhone = phone.slice(-4).padStart(phone.length, "*");
-    console.log(`[AUTH] Successfully verified OTP for phone: ${maskedPhone}`);
+    firebaseUid = verified.uid;
+  } catch {
+    throw new AppError(
+      ErrorCode.INVALID_OTP,
+      "Firebase token verification failed.",
+      401
+    );
   }
 
   // Ensure phone is valid Indian phone format
@@ -272,7 +186,7 @@ export async function otpVerifyHandler(c: Context) {
             userId,
             tenantId: tenant.id,
             consentType: "data_processing",
-            ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+            ipAddress: getClientIp(c),
             userAgent: c.req.header("user-agent") ?? null,
           });
 
@@ -378,7 +292,7 @@ export async function otpVerifyHandler(c: Context) {
         userId: newUser!.id,
         tenantId: tenant.id,
         consentType: "data_processing",
-        ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
+        ipAddress: getClientIp(c),
         userAgent: c.req.header("user-agent") ?? null,
       });
 

@@ -12,7 +12,8 @@
  * Centralized/Redis-backed rate limiting should be set up when scaling
  * the generic API layer beyond one active server instance.
  */
-import { Context, Next } from "hono";
+import { getClientIp } from "../lib/network.js";
+import { type Next, type Context } from "hono";
 import { db } from "../lib/db.js";
 import { rateLimits, sql } from "@whiteroom/db";
 
@@ -37,7 +38,7 @@ export function rateLimitMiddleware(options: RateLimitOptions) {
 
   return async (c: Context, next: Next) => {
     const user = c.get("user") as { userId?: string } | undefined;
-    const key = keyFn ? keyFn(c) : (user?.userId || c.req.header("x-forwarded-for") || "unknown");
+    const key = keyFn ? keyFn(c) : (user?.userId || getClientIp(c));
     const now = new Date();
     const resetAt = new Date(now.getTime() + windowMs);
 
