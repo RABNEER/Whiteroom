@@ -275,17 +275,17 @@ runDbMigrations().catch((err) => {
   console.error("❌ [DB] Migrations failed:", err);
 });
 
-// ─── Start WhatsApp Bot (lazy init — optional in-process daemon) ───
-if (process.env.DISABLE_WHATSAPP_BOT !== "true") {
+// ─── Start WhatsApp Bot (lazy init — only when explicitly enabled in-process) ───
+if (process.env.ENABLE_INPROCESS_WHATSAPP_BOT === "true") {
   import("./services/whatsapp-bot.js")
     .then(({ initWhatsAppBot }) => {
-      console.log("🤖 [WHATSAPP BOT] Starting WhatsApp bot daemon...");
+      console.log("🤖 [WHATSAPP BOT] Starting in-process WhatsApp bot daemon...");
       return initWhatsAppBot();
     })
     .catch((err) => {
-      console.error("💥 [WHATSAPP BOT] Failed to start WhatsApp bot daemon:", err);
+      console.error("💥 [WHATSAPP BOT] Failed to start in-process WhatsApp bot daemon:", err);
     });
 } else {
-  console.log("ℹ️ [WHATSAPP BOT] In-process bot disabled via DISABLE_WHATSAPP_BOT=true (running via dedicated service).");
+  console.log("ℹ️ [WHATSAPP BOT] In-process bot disabled (running via dedicated PM2 service).");
 }
 

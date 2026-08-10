@@ -163,7 +163,13 @@ export async function ingestClassroomFile(
     console.log(`🧩 [INGESTION] Generated ${chunks.length} chunks. Generating embeddings...`);
 
     // 5. Generate embeddings and save to DB
-    const insertValues = [];
+    const insertValues: Array<{
+      tenantId: string;
+      fileId: string;
+      content: string;
+      pageNumber: number;
+      embedding: number[];
+    }> = [];
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       const embedding = await getEmbedding(chunk);

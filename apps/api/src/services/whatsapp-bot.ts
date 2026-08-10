@@ -572,6 +572,12 @@ export async function initWhatsAppBot(): Promise<void> {
       }
     } catch { }
 
+    const isBrowserConflict = err?.message?.includes("The browser is already running") || err?.message?.includes("userDataDir");
+    if (isBrowserConflict) {
+      console.warn("⚠️ [WHATSAPP BOT] Chromium is already being used by another process. Skipping session wipe.");
+      return;
+    }
+
     console.log("🧹 [WHATSAPP BOT] Wiping corrupted session from local disk & PostgreSQL database...");
     try {
       if (fs.existsSync(authDataPath)) {
