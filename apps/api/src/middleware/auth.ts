@@ -12,6 +12,17 @@ import { users, eq } from "@whiteroom/db";
  * Usage: app.use("/api/v1/*", authMiddleware)
  * Access claims via: c.get("user") as JWTPayload
  */
+// In-memory cache for user active status to avoid hitting the DB on every single HTTP request
+const userActiveCache = new Map<string, { isDeactivated: boolean; expiresAt: number }>();
+
+export function invalidateUserAuthCache(userId?: string) {
+  if (userId) {
+    userActiveCache.delete(userId);
+  } else {
+    userActiveCache.clear();
+  }
+}
+
 export async function authMiddleware(c: Context, next: Next) {
   const authHeader = c.req.header("Authorization");
 
@@ -31,13 +42,35 @@ export async function authMiddleware(c: Context, next: Next) {
     throw Errors.unauthorized("Invalid token");
   }
 
-  const [user] = await db
-    .select({ deletedAt: users.deletedAt })
-    .from(users)
-    .where(eq(users.id, claims.userId))
-    .limit(1);
+  const now = Date.now();
+  const cached = userActiveCache.get(claims.userId);
+  let isDeactivated = false;
 
-  if (!user || user.deletedAt) {
+  if (cached && cached.expiresAt > now) {
+    isDeactivated = cached.isDeactivated;
+  } else {
+    const [user] = await db
+      .select({ deletedAt: users.deletedAt })
+      .from(users)
+      .where(eq(users.id, claims.userId))
+      .limit(1);
+
+    isDeactivated = !user || !!user.deletedAt;
+    userActiveCache.set(claims.userId, {
+      isDeactivated,
+      expiresAt: now + (isDeactivated ? 10_000 : 60_000),
+    });
+
+    if (userActiveCache.size > 10_000) {
+      for (const [key, val] of userActiveCache) {
+        if (val.expiresAt < now) {
+          userActiveCache.delete(key);
+        }
+      }
+    }
+  }
+
+  if (isDeactivated) {
     throw Errors.unauthorized("Account has been deactivated");
   }
 

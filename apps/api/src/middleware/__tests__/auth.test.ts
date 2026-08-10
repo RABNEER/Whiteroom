@@ -28,7 +28,7 @@ vi.mock("../../lib/db.js", () => ({
 
 import { errorHandler } from "../error.js";
 
-const { authMiddleware, requireRole } = await import("../auth.js");
+const { authMiddleware, requireRole, invalidateUserAuthCache } = await import("../auth.js");
 
 function buildTestApp(): Hono {
   const app = new Hono();
@@ -58,6 +58,7 @@ describe("authMiddleware", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLimit.mockReset();
+    invalidateUserAuthCache();
   });
 
   it("passes with valid token and active user", async () => {
@@ -149,6 +150,7 @@ describe("requireRole", () => {
     vi.clearAllMocks();
     mockVerifyAccessToken.mockResolvedValue(validClaims);
     mockLimit.mockResolvedValue([{ deletedAt: null }]);
+    invalidateUserAuthCache();
   });
 
   it("allows user with the required role", async () => {

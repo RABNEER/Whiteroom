@@ -1,3 +1,4 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { logAuditEvent } from "../audit.js";
 import { db } from "../../lib/db.js";
 import { auditLogs } from "@whiteroom/db";

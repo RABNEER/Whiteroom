@@ -34,7 +34,9 @@ import { eq, and, or, desc } from "@whiteroom/db";
 import { verifyFirebaseIdToken } from "../../lib/firebase.js";
 
 const verifySchema = z.object({
-  idToken: z.string().min(1),
+  idToken: z.string().min(1).optional(),
+  phone: z.string().optional(),
+  otp: z.string().optional(),
   inviteCode: z.string().length(6).optional(),
   role: z.string().optional(),
   studentName: z.string().trim().min(1).max(120).optional(),
@@ -44,7 +46,7 @@ const verifySchema = z.object({
 /**
  * POST /api/v1/auth/otp/verify
  *
- * 1. Validate & normalize phone
+ * 1. Validate & normalize phone (or verify via Firebase ID token)
  * 2. Find matching unexpired, unverified OTP
  * 3. Mark OTP as verified
  * 4. If new user: create user + tenant + profile in transaction
@@ -65,21 +67,48 @@ export async function otpVerifyHandler(c: Context) {
   let firebaseUid = "legacy-otp";
   let phoneHash = "";
 
-  if (!parsed.data.idToken) {
-    throw Errors.validation("idToken is required.");
-  }
-
-  try {
-    const verified = await verifyFirebaseIdToken(parsed.data.idToken);
-    phone = normalizePhone(verified.phone);
+  if (parsed.data.idToken) {
+    try {
+      const verified = await verifyFirebaseIdToken(parsed.data.idToken);
+      phone = normalizePhone(verified.phone);
+      phoneHash = hashSHA256(phone);
+      firebaseUid = verified.uid;
+    } catch {
+      throw new AppError(
+        ErrorCode.INVALID_OTP,
+        "Firebase token verification failed.",
+        401
+      );
+    }
+  } else if (parsed.data.phone && parsed.data.otp) {
+    phone = normalizePhone(parsed.data.phone);
     phoneHash = hashSHA256(phone);
-    firebaseUid = verified.uid;
-  } catch {
-    throw new AppError(
-      ErrorCode.INVALID_OTP,
-      "Firebase token verification failed.",
-      401
-    );
+    const otpHash = hashSHA256(parsed.data.otp);
+
+    // Verify OTP record in DB
+    const [attempt] = await db
+      .select()
+      .from(otpAttempts)
+      .where(
+        and(
+          eq(otpAttempts.phoneHash, phoneHash),
+          eq(otpAttempts.otp, otpHash),
+          eq(otpAttempts.verified, false)
+        )
+      )
+      .orderBy(desc(otpAttempts.createdAt))
+      .limit(1);
+
+    if (!attempt || attempt.expiresAt < new Date()) {
+      throw new AppError(ErrorCode.INVALID_OTP, "Invalid or expired OTP.", 401);
+    }
+
+    await db
+      .update(otpAttempts)
+      .set({ verified: true })
+      .where(eq(otpAttempts.id, attempt.id));
+  } else {
+    throw Errors.validation("Either idToken or phone and otp is required.");
   }
 
   // Ensure phone is valid Indian phone format

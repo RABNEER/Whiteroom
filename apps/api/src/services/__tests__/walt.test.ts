@@ -79,8 +79,8 @@ describe("Walt Service - generateCompletion", () => {
   });
 
   it("should handle API error payload parsing fallback (res.text().catch)", async () => {
-    process.env.GROQ_API_KEY = "test_groq_key";
-    process.env.NODE_ENV = "development"; // Bypass the test mock
+    env.GROQ_API_KEY = "test_groq_key";
+    env.NODE_ENV = "development" as any;
 
     // Mock fetch to return a non-ok response where .text() throws an error
     global.fetch = vi.fn().mockResolvedValue({
@@ -89,7 +89,7 @@ describe("Walt Service - generateCompletion", () => {
       text: vi.fn().mockRejectedValue(new Error("Cannot read text body")),
     });
 
-    // We just want to ensure it doesn't crash on res.text().catch() and moves to Gemini fallback or throws internal error
+    // We just want to ensure it doesn't crash on res.text().catch() and throws internal error
     await expect(walt.generateCompletion("test prompt")).rejects.toThrow("AI assistant is temporarily unavailable");
   });
 });

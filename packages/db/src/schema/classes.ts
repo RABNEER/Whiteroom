@@ -1,24 +1,31 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, index } from "drizzle-orm/pg-core";
 import { createId } from "../utils.js";
 import { tenants } from "./tenants.js";
 import { users } from "./users.js";
 
-export const classes = pgTable("classes", {
-  id: text("id").primaryKey().$defaultFn(createId),
-  tenantId: text("tenant_id")
-    .notNull()
-    .references(() => tenants.id),
-  name: text("name").notNull(), // e.g. "Class 10 — Section A"
-  subject: text("subject"),
-  teacherId: text("teacher_id").references(() => users.id),
-  teacherName: text("teacher_name"),
-  chatMode: text("chat_mode").default("announcement").notNull(), // 'announcement' | 'open'
-  academicYear: text("academic_year"), // e.g. "2025-2026"
-  deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const classes = pgTable(
+  "classes",
+  {
+    id: text("id").primaryKey().$defaultFn(createId),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    name: text("name").notNull(), // e.g. "Class 10 — Section A"
+    subject: text("subject"),
+    teacherId: text("teacher_id").references(() => users.id),
+    teacherName: text("teacher_name"),
+    chatMode: text("chat_mode").default("announcement").notNull(), // 'announcement' | 'open'
+    academicYear: text("academic_year"), // e.g. "2025-2026"
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("classes_tenant_deleted_idx").on(table.tenantId, table.deletedAt),
+    index("classes_teacher_idx").on(table.teacherId),
+  ]
+);

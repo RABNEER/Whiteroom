@@ -41,18 +41,19 @@ export async function listStudents(
   const limit = Math.min(100, Math.max(1, options?.limit ?? 50));
   const offset = (page - 1) * limit;
 
-  const [totalResult] = await db
-    .select({ total: count() })
-    .from(students)
-    .where(and(eq(students.tenantId, tenantId), isNull(students.deletedAt)));
-
-  const data = await db
-    .select()
-    .from(students)
-    .where(and(eq(students.tenantId, tenantId), isNull(students.deletedAt)))
-    .orderBy(students.name)
-    .limit(limit)
-    .offset(offset);
+  const [[totalResult], data] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(students)
+      .where(and(eq(students.tenantId, tenantId), isNull(students.deletedAt))),
+    db
+      .select()
+      .from(students)
+      .where(and(eq(students.tenantId, tenantId), isNull(students.deletedAt)))
+      .orderBy(students.name)
+      .limit(limit)
+      .offset(offset),
+  ]);
 
   return {
     data,

@@ -43,19 +43,20 @@ export async function listClasses(
   const limit = Math.min(100, Math.max(1, options?.limit ?? 20));
   const offset = (page - 1) * limit;
 
-  const [totalResult] = await db
-    .select({ total: count() })
-    .from(classes)
-    .where(and(eq(classes.tenantId, tenantId), isNull(classes.deletedAt)));
+  const [[totalResult], data] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(classes)
+      .where(and(eq(classes.tenantId, tenantId), isNull(classes.deletedAt))),
+    db
+      .select()
+      .from(classes)
+      .where(and(eq(classes.tenantId, tenantId), isNull(classes.deletedAt)))
+      .limit(limit)
+      .offset(offset),
+  ]);
 
   const total = totalResult?.total ?? 0;
-
-  const data = await db
-    .select()
-    .from(classes)
-    .where(and(eq(classes.tenantId, tenantId), isNull(classes.deletedAt)))
-    .limit(limit)
-    .offset(offset);
 
   return {
     data,
