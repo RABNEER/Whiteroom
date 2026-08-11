@@ -1,0 +1,4 @@
+## 2024-05-18 - Fix Raw SQL Delete in WhatsApp Bot Service
+**Vulnerability:** A `DELETE FROM whatsapp_bot_store WHERE key IN (...)` query used string interpolation mapped from an array rather than a parameterized execution. While the data was extracted from database row objects internally making it low-risk, constructing SQL queries with interpolated strings is an anti-pattern that can lead to SQL injection vulnerabilities if inputs become user-controlled.
+**Learning:** Raw `db.execute()` queries, especially with array mappings mapping to strings `junkKeysToDelete.map((k) => ...).join(",")` should be completely avoided in favor of ORM-native abstraction (e.g., Drizzle ORM's `inArray()`) to securely parameterize data passed to the SQL driver.
+**Prevention:** Replace raw `db.execute(sql)` query strings handling arrays with Drizzle ORM query builders (e.g., `db.delete(table).where(inArray(column, keys))`) to prevent accidental SQL injection risks.
