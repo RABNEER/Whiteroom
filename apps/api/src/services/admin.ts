@@ -36,19 +36,20 @@ export async function getPlatformMetrics() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const [userCount] = await db.select({ value: count() }).from(users);
-  const [activeTenantCount] = await db
-    .select({ value: count() })
-    .from(tenants)
-    .where(eq(tenants.isActive, true));
-  const [proTenantCount] = await db
-    .select({ value: count() })
-    .from(subscriptions)
-    .where(eq(subscriptions.plan, "pro"));
-  const [dailyActiveUsers] = await db
-    .select({ value: count() })
-    .from(users)
-    .where(and(gte(users.updatedAt, today), sql`${users.refreshToken} is not null`));
+  // ⚡ Bolt: Parallelize independent aggregate queries to reduce database latency.
+  // Instead of waiting for 4 sequential queries, they execute concurrently,
+  // reducing total wait time to the slowest query's duration.
+  const [
+    [userCount],
+    [activeTenantCount],
+    [proTenantCount],
+    [dailyActiveUsers],
+  ] = await Promise.all([
+    db.select({ value: count() }).from(users),
+    db.select({ value: count() }).from(tenants).where(eq(tenants.isActive, true)),
+    db.select({ value: count() }).from(subscriptions).where(eq(subscriptions.plan, "pro")),
+    db.select({ value: count() }).from(users).where(and(gte(users.updatedAt, today), sql`${users.refreshToken} is not null`)),
+  ]);
 
   return {
     totalUsers: userCount?.value ?? 0,
