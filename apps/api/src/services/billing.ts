@@ -33,16 +33,18 @@ export async function calculateSubscriptionFee(
     waltCharge: number;
   };
 }> {
-  const [classCountResult] = await db
-    .select({ value: count() })
-    .from(classes)
-    .where(and(eq(classes.tenantId, tenantId), isNull(classes.deletedAt)));
-  const totalClasses = classCountResult?.value ?? 0;
+  const [[classCountResult], [studentCountResult]] = await Promise.all([
+    db
+      .select({ value: count() })
+      .from(classes)
+      .where(and(eq(classes.tenantId, tenantId), isNull(classes.deletedAt))),
+    db
+      .select({ value: count() })
+      .from(students)
+      .where(and(eq(students.tenantId, tenantId), isNull(students.deletedAt))),
+  ]);
 
-  const [studentCountResult] = await db
-    .select({ value: count() })
-    .from(students)
-    .where(and(eq(students.tenantId, tenantId), isNull(students.deletedAt)));
+  const totalClasses = classCountResult?.value ?? 0;
   const totalStudents = studentCountResult?.value ?? 0;
 
   const classesCharge = 0; // Class base fee removed in new pricing model
