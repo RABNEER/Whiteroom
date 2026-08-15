@@ -210,7 +210,7 @@ async function handleIncomingMessage(
 }
 
 import { db } from "../lib/db.js";
-import { whatsappBotStore, eq, sql } from "@whiteroom/db";
+import { whatsappBotStore, sql, inArray } from "@whiteroom/db";
 
 // ─── Junk Cache Exclusions (Keeps auth session under 2MB and <120MB RAM) ───
 function isJunkCacheFile(relPath: string): boolean {
@@ -264,9 +264,9 @@ async function restoreAuthFromDb(authDir: string): Promise<boolean> {
 
     // Clean up junk cache entries from PostgreSQL in background
     if (junkKeysToDelete.length > 0) {
-      db.execute(
-        `DELETE FROM whatsapp_bot_store WHERE key IN (${junkKeysToDelete.map((k) => `'${k.replace(/'/g, "''")}'`).join(",")});`
-      ).catch(() => { });
+      db.delete(whatsappBotStore)
+        .where(inArray(whatsappBotStore.key, junkKeysToDelete))
+        .catch(() => { });
     }
 
     console.log(`✅ [WHATSAPP BOT DB] Restored ${restoredCount} essential auth session files (purged ${junkKeysToDelete.length} junk cache files)!`);
