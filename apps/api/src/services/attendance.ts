@@ -118,20 +118,23 @@ export async function listAttendanceSessions(
     conditions.push(eq(attendanceSessions.date, filters.date));
   }
 
-  const [totalResult] = await db
-    .select({ total: count() })
-    .from(attendanceSessions)
-    .where(and(...conditions));
+  // ⚡ Bolt: Execute total count and data selection concurrently using Promise.all
+  // to reduce overall database latency for listAttendanceSessions
+  const [[totalResult], data] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(attendanceSessions)
+      .where(and(...conditions)),
+    db
+      .select()
+      .from(attendanceSessions)
+      .where(and(...conditions))
+      .orderBy(desc(attendanceSessions.createdAt))
+      .limit(limit)
+      .offset(offset)
+  ]);
 
   const total = totalResult?.total ?? 0;
-
-  const data = await db
-    .select()
-    .from(attendanceSessions)
-    .where(and(...conditions))
-    .orderBy(desc(attendanceSessions.createdAt))
-    .limit(limit)
-    .offset(offset);
 
   return {
     data,
@@ -528,35 +531,38 @@ export async function getStudentAttendanceHistory(
     conditions.push(eq(attendanceSessions.classId, filters.classId));
   }
 
-  const [totalResult] = await db
-    .select({ total: count() })
-    .from(attendanceRecords)
-    .innerJoin(
-      attendanceSessions,
-      eq(attendanceRecords.sessionId, attendanceSessions.id)
-    )
-    .where(and(...conditions));
+  // ⚡ Bolt: Execute total count and data selection concurrently using Promise.all
+  // to reduce overall database latency for getStudentAttendanceHistory
+  const [[totalResult], data] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(attendanceRecords)
+      .innerJoin(
+        attendanceSessions,
+        eq(attendanceRecords.sessionId, attendanceSessions.id)
+      )
+      .where(and(...conditions)),
+    db
+      .select({
+        id: attendanceRecords.id,
+        sessionId: attendanceRecords.sessionId,
+        classId: attendanceSessions.classId,
+        date: attendanceSessions.date,
+        status: attendanceRecords.status,
+        markedAt: attendanceRecords.markedAt,
+      })
+      .from(attendanceRecords)
+      .innerJoin(
+        attendanceSessions,
+        eq(attendanceRecords.sessionId, attendanceSessions.id)
+      )
+      .where(and(...conditions))
+      .orderBy(desc(attendanceSessions.date))
+      .limit(limit)
+      .offset(offset)
+  ]);
 
   const total = totalResult?.total ?? 0;
-
-  const data = await db
-    .select({
-      id: attendanceRecords.id,
-      sessionId: attendanceRecords.sessionId,
-      classId: attendanceSessions.classId,
-      date: attendanceSessions.date,
-      status: attendanceRecords.status,
-      markedAt: attendanceRecords.markedAt,
-    })
-    .from(attendanceRecords)
-    .innerJoin(
-      attendanceSessions,
-      eq(attendanceRecords.sessionId, attendanceSessions.id)
-    )
-    .where(and(...conditions))
-    .orderBy(desc(attendanceSessions.date))
-    .limit(limit)
-    .offset(offset);
 
   return {
     data,
