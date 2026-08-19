@@ -187,7 +187,9 @@ app.get("/api/v1/storage/files/*", async (c) => {
   const fullPath = path.normalize(path.join(normalizedRoot, relPath));
 
   // Security check against path traversal (e.g., ../../Windows)
-  if (!fullPath.startsWith(normalizedRoot)) {
+  // Ensure we check with path separator to prevent partial path traversal
+  const rootWithSep = normalizedRoot.endsWith(path.sep) ? normalizedRoot : normalizedRoot + path.sep;
+  if (!fullPath.startsWith(rootWithSep) && fullPath !== normalizedRoot) {
     return c.json({ error: "Access denied" }, 403);
   }
 
