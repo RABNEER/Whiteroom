@@ -2,7 +2,7 @@ import { platformAlert } from "@/utils/alert";
 import { useEffect } from "react";
 import { Linking } from "react-native";
 import Constants from "expo-constants";
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "@/auth/AuthProvider";
@@ -98,6 +98,36 @@ function RootLayout() {
     if (!__DEV__ && Updates.isEnabled) {
       onFetchUpdateAsync();
     }
+
+    // ─── Deep Linking on Push Notification Tap ───
+    const notificationSubscription =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        try {
+          const data = response.notification.request.content.data as
+            | Record<string, any>
+            | undefined;
+          if (!data) return;
+
+          if (data.type === "chat" && data.roomId) {
+            router.push({
+              pathname: "/chat",
+              params: { roomId: data.roomId, roomType: data.roomType || "classroom" },
+            } as any);
+          } else if (data.deepLink) {
+            router.push(data.deepLink as any);
+          } else if (data.type === "announcement") {
+            router.push("/announcements" as any);
+          } else if (data.type === "absence" || data.type === "reminder") {
+            router.push("/attendance" as any);
+          }
+        } catch (err) {
+          console.warn("[Notifications] Failed to handle notification response:", err);
+        }
+      });
+
+    return () => {
+      notificationSubscription.remove();
+    };
   }, []);
 
   if (!fontsLoaded) {

@@ -3,10 +3,12 @@ import { deviceTokens, notifications, students } from "@whiteroom/db";
 import { eq, and, inArray } from "@whiteroom/db";
 import { getFirebaseMessaging } from "./firebase.js";
 
-interface PushPayload {
+export interface PushPayload {
   title: string;
   body: string;
-  type: "absence" | "reminder" | "announcement";
+  type: "absence" | "reminder" | "announcement" | "chat" | "promotion" | "broadcast";
+  data?: Record<string, string>;
+  imageUrl?: string;
 }
 
 /**
@@ -51,10 +53,12 @@ export async function sendPushToUser(
       notification: {
         title: payload.title,
         body: payload.body,
+        ...(payload.imageUrl ? { imageUrl: payload.imageUrl } : {}),
       },
       data: {
         type: payload.type,
         tenantId,
+        ...(payload.data || {}),
       },
     });
 
@@ -124,10 +128,12 @@ export async function sendPushToUsers(
         notification: {
           title: payload.title,
           body: payload.body,
+          ...(payload.imageUrl ? { imageUrl: payload.imageUrl } : {}),
         },
         data: {
           type: payload.type,
           tenantId,
+          ...(payload.data || {}),
         },
       });
     }
@@ -205,10 +211,12 @@ export async function sendPushToTenant(
         notification: {
           title: payload.title,
           body: payload.body,
+          ...(payload.imageUrl ? { imageUrl: payload.imageUrl } : {}),
         },
         data: {
           type: payload.type,
           tenantId,
+          ...(payload.data || {}),
         },
       });
     }

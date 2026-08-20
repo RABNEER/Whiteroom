@@ -13,9 +13,11 @@ import {
   classEnrollments,
   students,
   parentProfiles,
+  roomMutes,
 } from "@whiteroom/db";
-import { and, eq, or, isNull, desc, sql } from "@whiteroom/db";
+import { and, eq, or, isNull, desc, inArray, sql } from "@whiteroom/db";
 import { Errors, UserRole } from "@whiteroom/shared";
+import { sendPushToUser, sendPushToUsers } from "../lib/fcm.js";
 
 const ENCRYPTION_ALGORITHM = "aes-256-gcm";
 
@@ -270,7 +272,222 @@ export async function sendMessage(
       },
     });
 
+  // 5. Dispatch instant push notification to recipient(s) (fire-and-forget)
+  dispatchChatMessagePushNotification(
+    tenantId,
+    senderId,
+    roomId,
+    roomType,
+    content,
+    attachments
+  ).catch((err) => {
+    console.error("[chat] Push notification dispatch failed:", err);
+  });
+
   return msg!;
+}
+
+/**
+ * Dispatches FCM push notifications to chat participants, respecting active room mutes.
+ */
+async function dispatchChatMessagePushNotification(
+  tenantId: string,
+  senderId: string,
+  roomId: string,
+  roomType: "classroom" | "teacher_channel" | "direct_message",
+  rawContent: string,
+  attachments?: unknown[] | null
+): Promise<void> {
+  try {
+    // 1. Get sender name
+    const [sender] = await db
+      .select({ id: users.id, name: users.name, phone: users.phone })
+      .from(users)
+      .where(eq(users.id, senderId))
+      .limit(1);
+
+    const senderName = sender?.name || "Someone";
+    let bodyPreview = rawContent ? rawContent.trim() : "";
+    if (!bodyPreview && attachments && attachments.length > 0) {
+      bodyPreview = "📷 Sent an attachment";
+    } else if (!bodyPreview) {
+      bodyPreview = "Sent a message";
+    }
+    if (bodyPreview.length > 90) {
+      bodyPreview = bodyPreview.slice(0, 87) + "...";
+    }
+
+    if (roomType === "direct_message") {
+      // Find recipient
+      const [dmRoom] = await db
+        .select()
+        .from(dmRooms)
+        .where(and(eq(dmRooms.id, roomId), eq(dmRooms.tenantId, tenantId)))
+        .limit(1);
+
+      if (!dmRoom) return;
+
+      const recipientId =
+        dmRoom.participant1Id === senderId ? dmRoom.participant2Id : dmRoom.participant1Id;
+
+      // Check if muted
+      const [mute] = await db
+        .select()
+        .from(roomMutes)
+        .where(
+          and(
+            eq(roomMutes.tenantId, tenantId),
+            eq(roomMutes.userId, recipientId),
+            eq(roomMutes.roomId, roomId)
+          )
+        )
+        .limit(1);
+
+      if (mute && (!mute.mutedUntil || mute.mutedUntil > new Date())) {
+        // Room is muted — skip push
+        return;
+      }
+
+      sendPushToUser(tenantId, recipientId, {
+        title: senderName,
+        body: bodyPreview,
+        type: "chat",
+        data: {
+          roomId,
+          roomType: "direct_message",
+          senderId,
+          type: "chat",
+        },
+      });
+    } else if (roomType === "classroom") {
+      // Find class info
+      const [classRow] = await db
+        .select({ id: classes.id, name: classes.name, teacherId: classes.teacherId })
+        .from(classes)
+        .where(and(eq(classes.id, roomId), eq(classes.tenantId, tenantId)))
+        .limit(1);
+
+      if (!classRow) return;
+
+      // Find parents of students in this class
+      const parentRows = await db
+        .select({ parentId: students.parentId })
+        .from(classEnrollments)
+        .innerJoin(students, eq(classEnrollments.studentId, students.id))
+        .where(
+          and(
+            eq(classEnrollments.classId, roomId),
+            eq(classEnrollments.status, "active"),
+            eq(students.tenantId, tenantId),
+            isNull(students.deletedAt)
+          )
+        );
+
+      const candidateUserIds = new Set<string>();
+      if (classRow.teacherId && classRow.teacherId !== senderId) {
+        candidateUserIds.add(classRow.teacherId);
+      }
+      for (const row of parentRows) {
+        if (row.parentId && row.parentId !== senderId) {
+          candidateUserIds.add(row.parentId);
+        }
+      }
+
+      if (candidateUserIds.size === 0) return;
+
+      // Filter out active room mutes
+      const activeMutes = await db
+        .select({ userId: roomMutes.userId, mutedUntil: roomMutes.mutedUntil })
+        .from(roomMutes)
+        .where(
+          and(
+            eq(roomMutes.tenantId, tenantId),
+            eq(roomMutes.roomId, roomId),
+            inArray(roomMutes.userId, Array.from(candidateUserIds))
+          )
+        );
+
+      const now = new Date();
+      const mutedUserIds = new Set(
+        activeMutes
+          .filter((m) => !m.mutedUntil || m.mutedUntil > now)
+          .map((m) => m.userId)
+      );
+
+      const recipientIds = Array.from(candidateUserIds).filter((id) => !mutedUserIds.has(id));
+      if (recipientIds.length === 0) return;
+
+      sendPushToUsers(tenantId, recipientIds, {
+        title: `${classRow.name} • ${senderName}`,
+        body: bodyPreview,
+        type: "chat",
+        data: {
+          roomId,
+          roomType: "classroom",
+          senderId,
+          type: "chat",
+        },
+      });
+    } else if (roomType === "teacher_channel") {
+      // Find all teachers and admins in this school
+      const staffRows = await db
+        .select({ userId: userTenants.userId })
+        .from(userTenants)
+        .where(
+          and(
+            eq(userTenants.tenantId, tenantId),
+            inArray(userTenants.role, [
+              UserRole.TEACHER,
+              UserRole.SCHOOL_ADMIN,
+              UserRole.SUPER_ADMIN,
+            ]),
+            eq(userTenants.status, "active")
+          )
+        );
+
+      const candidateUserIds = staffRows
+        .map((r) => r.userId)
+        .filter((id) => id !== senderId);
+
+      if (candidateUserIds.length === 0) return;
+
+      // Filter out active mutes
+      const activeMutes = await db
+        .select({ userId: roomMutes.userId, mutedUntil: roomMutes.mutedUntil })
+        .from(roomMutes)
+        .where(
+          and(
+            eq(roomMutes.tenantId, tenantId),
+            eq(roomMutes.roomId, roomId),
+            inArray(roomMutes.userId, candidateUserIds)
+          )
+        );
+
+      const now = new Date();
+      const mutedUserIds = new Set(
+        activeMutes
+          .filter((m) => !m.mutedUntil || m.mutedUntil > now)
+          .map((m) => m.userId)
+      );
+
+      const recipientIds = candidateUserIds.filter((id) => !mutedUserIds.has(id));
+      if (recipientIds.length === 0) return;
+
+      sendPushToUsers(tenantId, recipientIds, {
+        title: `Staff Room • ${senderName}`,
+        body: bodyPreview,
+        type: "chat",
+        data: {
+          roomId,
+          roomType: "teacher_channel",
+          senderId,
+          type: "chat",
+        },
+      });
+    }
+  } catch (err) {
+    console.error("[chat] Failed to dispatch push notification:", err);
+  }
 }
 
 export async function getMessages(

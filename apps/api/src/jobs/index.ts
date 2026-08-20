@@ -16,6 +16,10 @@ import {
   scheduleCleanupExpiredUploads,
 } from "./cleanup-expired-uploads.job.js";
 import { registerBillingCronWorker } from "./billing-cron.job.js";
+import {
+  registerReengagementWorker,
+  scheduleReengagementCron,
+} from "./reengagement.job.js";
 
 let started = false;
 
@@ -37,6 +41,7 @@ export async function startJobs() {
     "assemble-file-upload",
     "cleanup-expired-uploads",
     "subscription-student-invoice",
+    "inactivity-reengagement",
   ];
 
   for (const queue of queues) {
@@ -51,6 +56,7 @@ export async function startJobs() {
     registerAssembleUploadWorker(),
     registerCleanupExpiredUploadsWorker(),
     registerBillingCronWorker(),
+    registerReengagementWorker(),
   ]);
 
   await scheduleRegistrationTokenCleanup().catch((err) => {
@@ -63,6 +69,10 @@ export async function startJobs() {
 
   await scheduleAttendanceRemindersCron().catch((err) => {
     console.error("[jobs] Failed to schedule attendance reminders cron:", err);
+  });
+
+  await scheduleReengagementCron().catch((err) => {
+    console.error("[jobs] Failed to schedule re-engagement cron:", err);
   });
 
   await enqueueAttendanceRemindersForNextWeek();
