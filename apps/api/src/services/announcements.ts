@@ -53,25 +53,27 @@ export async function listAnnouncements(
   const limit = Math.min(100, Math.max(1, options?.limit ?? 20));
   const offset = (page - 1) * limit;
 
-  const [totalResult] = await db
-    .select({ total: count() })
-    .from(announcements)
-    .where(and(eq(announcements.tenantId, tenantId), isNull(announcements.deletedAt)));
+  // ⚡ Bolt: Execute independent queries concurrently using Promise.all to reduce latency
+  const [[totalResult], data] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(announcements)
+      .where(and(eq(announcements.tenantId, tenantId), isNull(announcements.deletedAt))),
+    db
+      .select()
+      .from(announcements)
+      .where(
+        and(
+          eq(announcements.tenantId, tenantId),
+          isNull(announcements.deletedAt)
+        )
+      )
+      .orderBy(desc(announcements.isPinned), desc(announcements.createdAt))
+      .limit(limit)
+      .offset(offset)
+  ]);
 
   const total = totalResult?.total ?? 0;
-
-  const data = await db
-    .select()
-    .from(announcements)
-    .where(
-      and(
-        eq(announcements.tenantId, tenantId),
-        isNull(announcements.deletedAt)
-      )
-    )
-    .orderBy(desc(announcements.isPinned), desc(announcements.createdAt))
-    .limit(limit)
-    .offset(offset);
 
   return {
     data,
@@ -182,30 +184,32 @@ export async function markAnnouncementRead(
 // ─── Unread Count ───
 
 export async function getUnreadCount(tenantId: string, userId: string) {
-  const [totalResult] = await db
-    .select({ value: count() })
-    .from(announcements)
-    .where(
-      and(
-        eq(announcements.tenantId, tenantId),
-        isNull(announcements.deletedAt)
+  // ⚡ Bolt: Execute independent aggregate queries concurrently using Promise.all
+  const [[totalResult], [readResult]] = await Promise.all([
+    db
+      .select({ value: count() })
+      .from(announcements)
+      .where(
+        and(
+          eq(announcements.tenantId, tenantId),
+          isNull(announcements.deletedAt)
+        )
+      ),
+    db
+      .select({ value: count() })
+      .from(announcementReads)
+      .innerJoin(
+        announcements,
+        eq(announcementReads.announcementId, announcements.id)
       )
-    );
-
-  const [readResult] = await db
-    .select({ value: count() })
-    .from(announcementReads)
-    .innerJoin(
-      announcements,
-      eq(announcementReads.announcementId, announcements.id)
-    )
-    .where(
-      and(
-        eq(announcementReads.userId, userId),
-        eq(announcements.tenantId, tenantId),
-        isNull(announcements.deletedAt)
+      .where(
+        and(
+          eq(announcementReads.userId, userId),
+          eq(announcements.tenantId, tenantId),
+          isNull(announcements.deletedAt)
+        )
       )
-    );
+  ]);
 
   const total = totalResult?.value ?? 0;
   const read = readResult?.value ?? 0;
