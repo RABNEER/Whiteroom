@@ -210,7 +210,7 @@ async function handleIncomingMessage(
 }
 
 import { db } from "../lib/db.js";
-import { whatsappBotStore, eq, sql } from "@whiteroom/db";
+import { whatsappBotStore, eq, sql, inArray } from "@whiteroom/db";
 
 // ─── Junk Cache Exclusions (Keeps auth session under 2MB and <120MB RAM) ───
 function isJunkCacheFile(relPath: string): boolean {
@@ -218,34 +218,28 @@ function isJunkCacheFile(relPath: string): boolean {
   return (
     norm.includes("/cache/") ||
     norm.includes("/code cache/") ||
-    norm.includes("/gpucache/") ||
-    norm.includes("/service worker/") ||
-    norm.includes("/blob storage/") ||
+    norm.includes("/gpu_cache/") ||
+    norm.includes("/blob_storage/") ||
+    norm.includes("/video_decode_accelerator/") ||
+    norm.includes("/dawn_webgpu_cache/") ||
+    norm.includes("/grshadercache/") ||
     norm.includes("/crashpad/") ||
-    norm.includes("/webrtc") ||
-    norm.endsWith("lock") ||
-    norm.endsWith("singletonlock")
+    norm.includes("/metrics/") ||
+    norm.includes("/network persistent state") ||
+    norm.includes("/service worker/") ||
+    norm.includes("lock") ||
+    norm.endsWith(".tmp") ||
+    norm.endsWith(".log") ||
+    norm.endsWith(".dmp")
   );
 }
 
 // ─── Database Auth Sync Helpers ───
 async function restoreAuthFromDb(authDir: string): Promise<boolean> {
   try {
-    console.log("💾 [WHATSAPP BOT DB] Checking for saved auth session in PostgreSQL database...");
-
-    await db.execute(
-      `CREATE TABLE IF NOT EXISTS whatsapp_bot_store (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
-      );`
-    ).catch(() => { });
-
+    await ensureTableCreated();
     const rows = await db.select().from(whatsappBotStore);
-    if (!rows || rows.length === 0) {
-      console.log("ℹ️ [WHATSAPP BOT DB] No saved auth session found in database.");
-      return false;
-    }
+    if (!rows || rows.length === 0) return false;
 
     let restoredCount = 0;
     const junkKeysToDelete: string[] = [];
@@ -264,9 +258,9 @@ async function restoreAuthFromDb(authDir: string): Promise<boolean> {
 
     // Clean up junk cache entries from PostgreSQL in background
     if (junkKeysToDelete.length > 0) {
-      db.execute(
-        `DELETE FROM whatsapp_bot_store WHERE key IN (${junkKeysToDelete.map((k) => `'${k.replace(/'/g, "''")}'`).join(",")});`
-      ).catch(() => { });
+      db.delete(whatsappBotStore)
+        .where(inArray(whatsappBotStore.key, junkKeysToDelete))
+        .catch(() => { });
     }
 
     console.log(`✅ [WHATSAPP BOT DB] Restored ${restoredCount} essential auth session files (purged ${junkKeysToDelete.length} junk cache files)!`);
