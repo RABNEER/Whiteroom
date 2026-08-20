@@ -71,7 +71,7 @@ export async function uploadToStorage(
     const resolvedLocal = nodePath.resolve(localStoragePath);
     const resolvedFull = nodePath.resolve(fullPath);
 
-    if (!resolvedFull.startsWith(resolvedLocal)) {
+    if (!resolvedFull.startsWith(resolvedLocal + nodePath.sep) && resolvedFull !== resolvedLocal) {
       throw new Error("Invalid storage path traversal detected");
     }
 

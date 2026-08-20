@@ -1,0 +1,4 @@
+## 2025-02-24 - Fix Partial Path Traversal in Storage Endpoint
+**Vulnerability:** The static file serving endpoint in `apps/api/src/index.ts` and the `uploadToStorage` function in `apps/api/src/lib/storage.ts` used `fullPath.startsWith(normalizedRoot)` to validate paths. This allowed a partial path traversal attack where a directory named, for example, `/app/data-secrets` would falsely pass the check if `normalizedRoot` was `/app/data`.
+**Learning:** `startsWith` on strings is insufficient for path boundary validation because it matches string prefixes, not path segments.
+**Prevention:** Always append the directory separator (e.g., `path.sep`) to the root path when using `startsWith` for path boundary checks (e.g., `fullPath.startsWith(normalizedRoot + path.sep) && fullPath !== normalizedRoot`).
