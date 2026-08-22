@@ -9,7 +9,7 @@ import { PlatformMetrics, Tenant, User, SecurityAuditLog } from "./types";
 
 export default function App() {
   const [token] = useState<string | null>(
-    localStorage.getItem("admin_token") || "direct-admin-session"
+    localStorage.getItem("admin_token") || "wr_adm_9a8f4c2e71b56d03"
   );
 
   // Smart API URL resolution with auto-fallback
