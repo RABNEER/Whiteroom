@@ -117,21 +117,15 @@ app.use(
 );
 
 // ─── Global Middleware ───
+app.use("*", corsMiddleware());
 app.use(
   "*",
   secureHeaders({
-    contentSecurityPolicy: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https://*"],
-      connectSrc: ["'self'", "https://*"],
-    },
+    crossOriginResourcePolicy: "cross-origin",
+    crossOriginOpenerPolicy: false,
   })
 );
 app.use("*", logger());
-app.use("*", corsMiddleware());
 app.use("*", compress());
 
 // ─── Health Check ───
