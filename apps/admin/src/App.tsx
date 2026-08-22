@@ -18,11 +18,7 @@ export default function App() {
     if (stored && !stored.includes(":8080") && !stored.includes("localhost:3000")) {
       return stored;
     }
-    // If running inside browser on localhost, default to "/api" (Vite Proxy) or direct VPS IP
-    if (typeof window !== "undefined" && window.location.hostname === "localhost") {
-      return "/api";
-    }
-    return "http://66.42.90.144:3000/api/v1";
+    return "https://apps.whiteroom.co.in/api/v1";
   };
 
   const [apiBaseUrl, setApiBaseUrl] = useState<string>(getInitialApiUrl);
@@ -171,10 +167,10 @@ export default function App() {
     setSyncingPulse(true);
 
     const candidates = Array.from(new Set([
-      initialUrl,
-      "/api",
+      "https://apps.whiteroom.co.in/api/v1",
       "http://66.42.90.144:3000/api/v1",
-      "https://apps.whiteroom.co.in/api/v1"
+      "/api",
+      initialUrl,
     ]));
 
     let successUrl: string | null = null;
