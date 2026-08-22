@@ -14,11 +14,19 @@ export default function App() {
 
   // Smart API URL resolution with auto-fallback
   const getInitialApiUrl = () => {
+    if (typeof window !== "undefined") {
+      if (window.location.hostname === "66.42.90.144") {
+        return "http://66.42.90.144:3000/api/v1";
+      }
+      if (window.location.hostname.includes("whiteroom.co.in")) {
+        return "https://apps.whiteroom.co.in/api/v1";
+      }
+    }
     const stored = localStorage.getItem("admin_api_url");
     if (stored && !stored.includes(":8080") && !stored.includes("localhost:3000")) {
       return stored;
     }
-    return "https://apps.whiteroom.co.in/api/v1";
+    return "http://66.42.90.144:3000/api/v1";
   };
 
   const [apiBaseUrl, setApiBaseUrl] = useState<string>(getInitialApiUrl);
