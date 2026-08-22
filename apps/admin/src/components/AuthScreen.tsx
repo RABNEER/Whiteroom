@@ -186,28 +186,6 @@ export default function AuthScreen({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
               <button
                 type="button"
-                onClick={() => handleApiChange("https://apps.whiteroom.co.in/api/v1")}
-                style={{
-                  padding: "8px 4px",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  borderRadius: 8,
-                  border: "1px solid " + (apiBaseUrl.includes("whiteroom.co.in") ? "rgba(14, 165, 233, 0.4)" : "var(--border)"),
-                  background: apiBaseUrl.includes("whiteroom.co.in") ? "rgba(14, 165, 233, 0.15)" : "rgba(255,255,255,0.02)",
-                  color: apiBaseUrl.includes("whiteroom.co.in") ? "#38bdf8" : "var(--text-muted)",
-                  cursor: "pointer",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                <Globe size={14} />
-                <span>Production</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => handleApiChange("http://66.42.90.144:3000/api/v1")}
                 style={{
                   padding: "8px 4px",
@@ -225,7 +203,29 @@ export default function AuthScreen({
                 }}
               >
                 <Server size={14} />
-                <span>Direct VPS</span>
+                <span>VPS Production</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleApiChange("https://apps.whiteroom.co.in/api/v1")}
+                style={{
+                  padding: "8px 4px",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  borderRadius: 8,
+                  border: "1px solid " + (apiBaseUrl.includes("whiteroom.co.in") ? "rgba(14, 165, 233, 0.4)" : "var(--border)"),
+                  background: apiBaseUrl.includes("whiteroom.co.in") ? "rgba(14, 165, 233, 0.15)" : "rgba(255,255,255,0.02)",
+                  color: apiBaseUrl.includes("whiteroom.co.in") ? "#38bdf8" : "var(--text-muted)",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <Globe size={14} />
+                <span>Cloud Domain</span>
               </button>
 
               <button

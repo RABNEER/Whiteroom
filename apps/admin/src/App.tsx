@@ -16,13 +16,13 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
-  // API base URL configuration (defaults to live Cloud API, cleansing stale port 8080)
+  // API base URL configuration (defaults to VPS IP, cleansing stale port 8080)
   const getInitialApiUrl = () => {
     const stored = localStorage.getItem("admin_api_url");
     if (stored && !stored.includes(":8080")) {
       return stored;
     }
-    return "https://apps.whiteroom.co.in/api/v1";
+    return "http://66.42.90.144:3000/api/v1";
   };
 
   const [apiBaseUrl, setApiBaseUrl] = useState<string>(getInitialApiUrl);

@@ -62,27 +62,6 @@ export default function TopNavbar({
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginRight: 16 }}>
         <div style={{ display: "flex", background: "rgba(0,0,0,0.3)", padding: 3, borderRadius: 10, border: "1px solid var(--border)" }}>
           <button
-            onClick={() => handleApiChange("https://apps.whiteroom.co.in/api/v1")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 12px",
-              fontSize: 11,
-              fontWeight: 600,
-              borderRadius: 8,
-              border: "none",
-              background: apiBaseUrl.includes("whiteroom.co.in") ? "rgba(14, 165, 233, 0.2)" : "transparent",
-              color: apiBaseUrl.includes("whiteroom.co.in") ? "#38bdf8" : "var(--text-muted)",
-              cursor: "pointer",
-              transition: "all 0.2s",
-            }}
-          >
-            <Globe size={12} />
-            <span>Cloud</span>
-          </button>
-
-          <button
             onClick={() => handleApiChange("http://66.42.90.144:3000/api/v1")}
             style={{
               display: "flex",
@@ -100,7 +79,28 @@ export default function TopNavbar({
             }}
           >
             <Server size={12} />
-            <span>VPS</span>
+            <span>VPS (Production)</span>
+          </button>
+
+          <button
+            onClick={() => handleApiChange("https://apps.whiteroom.co.in/api/v1")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 12px",
+              fontSize: 11,
+              fontWeight: 600,
+              borderRadius: 8,
+              border: "none",
+              background: apiBaseUrl.includes("whiteroom.co.in") ? "rgba(14, 165, 233, 0.2)" : "transparent",
+              color: apiBaseUrl.includes("whiteroom.co.in") ? "#38bdf8" : "var(--text-muted)",
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+          >
+            <Globe size={12} />
+            <span>Cloud Domain</span>
           </button>
 
           <button
