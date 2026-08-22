@@ -35,6 +35,7 @@ export async function startJobs() {
   const queues = [
     "attendance-reminder",
     "attendance-auto-close",
+    "enqueue-attendance-reminders",
     "absent-follow-up",
     "subscription-expiry",
     "registration-token-cleanup",
