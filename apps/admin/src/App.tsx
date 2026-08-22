@@ -12,11 +12,15 @@ export default function App() {
     localStorage.getItem("admin_token") || "direct-admin-session"
   );
 
-  // API base URL configuration (defaults to VPS IP)
+  // Smart API URL resolution with auto-fallback
   const getInitialApiUrl = () => {
     const stored = localStorage.getItem("admin_api_url");
-    if (stored && !stored.includes(":8080")) {
+    if (stored && !stored.includes(":8080") && !stored.includes("localhost:3000")) {
       return stored;
+    }
+    // If running inside browser on localhost, default to "/api" (Vite Proxy) or direct VPS IP
+    if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+      return "/api";
     }
     return "http://66.42.90.144:3000/api/v1";
   };
@@ -24,7 +28,7 @@ export default function App() {
   const [apiBaseUrl, setApiBaseUrl] = useState<string>(getInitialApiUrl);
 
   const handleApiChange = (url: string) => {
-    console.log(`[GATEWAY] Switching API Gateway to: ${url}`);
+    console.log(`[GATEWAY] Manually switching API Gateway to: ${url}`);
     localStorage.setItem("admin_api_url", url);
     setApiBaseUrl(url);
     setFetchError(null);
@@ -161,74 +165,93 @@ export default function App() {
     }
   };
 
-  // ─── Direct Data Fetching & Polling Engine ───
-  const fetchDashboardData = async (isBackground = false, targetUrl = apiBaseUrl) => {
+  // ─── Multi-Candidate Auto-Fallback Data Fetching Engine ───
+  const fetchDashboardData = async (isBackground = false, initialUrl = apiBaseUrl) => {
     if (!isBackground) setLoadingData(true);
     setSyncingPulse(true);
 
-    try {
-      const headers = { Authorization: `Bearer ${token || "direct-admin-session"}` };
-      console.log(`[DASHBOARD] Fetching administrative telemetry from ${targetUrl}...`);
+    const candidates = Array.from(new Set([
+      initialUrl,
+      "/api",
+      "http://66.42.90.144:3000/api/v1",
+      "https://apps.whiteroom.co.in/api/v1"
+    ]));
 
-      const [metricsRes, tenantsRes, usersRes, secRes] = await Promise.allSettled([
-        fetch(`${targetUrl}/admin/metrics`, { headers }),
-        fetch(`${targetUrl}/admin/tenants`, { headers }),
-        fetch(`${targetUrl}/admin/users`, { headers }),
-        fetch(`${targetUrl}/admin/security/logs?limit=100&severity=${severityFilter}`, { headers }),
-      ]);
+    let successUrl: string | null = null;
 
-      let anySuccessful = false;
+    for (const targetUrl of candidates) {
+      try {
+        console.log(`[DASHBOARD] Probing API Gateway at ${targetUrl}...`);
+        const headers = { Authorization: `Bearer ${token || "direct-admin-session"}` };
 
-      // Handle Metrics
-      if (metricsRes.status === "fulfilled" && metricsRes.value.ok) {
-        const metricsResult = await metricsRes.value.json();
-        if (metricsResult.success) {
-          setMetrics(metricsResult.data);
-          anySuccessful = true;
+        const [metricsRes, tenantsRes, usersRes, secRes] = await Promise.allSettled([
+          fetch(`${targetUrl}/admin/metrics`, { headers }),
+          fetch(`${targetUrl}/admin/tenants`, { headers }),
+          fetch(`${targetUrl}/admin/users`, { headers }),
+          fetch(`${targetUrl}/admin/security/logs?limit=100&severity=${severityFilter}`, { headers }),
+        ]);
+
+        let hasSuccess = false;
+
+        // Handle Metrics
+        if (metricsRes.status === "fulfilled" && metricsRes.value.ok) {
+          const metricsResult = await metricsRes.value.json();
+          if (metricsResult.success) {
+            setMetrics(metricsResult.data);
+            hasSuccess = true;
+          }
         }
-      }
 
-      // Handle Tenants
-      if (tenantsRes.status === "fulfilled" && tenantsRes.value.ok) {
-        const tenantsResult = await tenantsRes.value.json();
-        if (tenantsResult.success && Array.isArray(tenantsResult.data)) {
-          setTenantsList(tenantsResult.data);
-          anySuccessful = true;
+        // Handle Tenants
+        if (tenantsRes.status === "fulfilled" && tenantsRes.value.ok) {
+          const tenantsResult = await tenantsRes.value.json();
+          if (tenantsResult.success && Array.isArray(tenantsResult.data)) {
+            setTenantsList(tenantsResult.data);
+            hasSuccess = true;
+          }
         }
-      }
 
-      // Handle Users
-      if (usersRes.status === "fulfilled" && usersRes.value.ok) {
-        const usersResult = await usersRes.value.json();
-        if (usersResult.success && Array.isArray(usersResult.data)) {
-          setUsersList(usersResult.data);
-          anySuccessful = true;
+        // Handle Users
+        if (usersRes.status === "fulfilled" && usersRes.value.ok) {
+          const usersResult = await usersRes.value.json();
+          if (usersResult.success && Array.isArray(usersResult.data)) {
+            setUsersList(usersResult.data);
+            hasSuccess = true;
+          }
         }
-      }
 
-      // Handle Security Logs
-      if (secRes.status === "fulfilled" && secRes.value.ok) {
-        const secResult = await secRes.value.json();
-        if (secResult.success && Array.isArray(secResult.data)) {
-          setSecurityLogs(secResult.data);
-          anySuccessful = true;
+        // Handle Security Logs
+        if (secRes.status === "fulfilled" && secRes.value.ok) {
+          const secResult = await secRes.value.json();
+          if (secResult.success && Array.isArray(secResult.data)) {
+            setSecurityLogs(secResult.data);
+            hasSuccess = true;
+          }
         }
-      }
 
-      if (!anySuccessful && metricsRes.status === "rejected") {
-        setFetchError(`Network Error: Cannot reach ${targetUrl}. Please click 'VPS (Production)' in the topbar.`);
-      } else {
-        setFetchError(null);
-        setLastSynced(new Date().toLocaleTimeString());
+        if (hasSuccess) {
+          successUrl = targetUrl;
+          console.log(`✅ [DASHBOARD] Connected successfully to API Gateway at: ${targetUrl}`);
+          if (targetUrl !== apiBaseUrl) {
+            setApiBaseUrl(targetUrl);
+            localStorage.setItem("admin_api_url", targetUrl);
+          }
+          setFetchError(null);
+          setLastSynced(new Date().toLocaleTimeString());
+          break; // Stop probing since we found a working gateway!
+        }
+      } catch (err: any) {
+        console.warn(`[DASHBOARD] Probing failed for ${targetUrl}:`, err.message);
       }
-    } catch (err: any) {
-      console.error("Failed to poll dashboard statistics:", err);
-      setFetchError(`Connection Error: ${err.message || "Failed to reach API gateway."}`);
-    } finally {
-      setLoadingData(false);
-      if (syncPulseTimerRef.current) clearTimeout(syncPulseTimerRef.current);
-      syncPulseTimerRef.current = setTimeout(() => setSyncingPulse(false), 800);
     }
+
+    if (!successUrl) {
+      setFetchError(`Could not connect to API Gateway. Checked: ${candidates.join(", ")}`);
+    }
+
+    setLoadingData(false);
+    if (syncPulseTimerRef.current) clearTimeout(syncPulseTimerRef.current);
+    syncPulseTimerRef.current = setTimeout(() => setSyncingPulse(false), 800);
   };
 
   useEffect(() => {
@@ -237,7 +260,7 @@ export default function App() {
     pollTimerRef.current = setInterval(() => {
       fetchDashboardData(true);
     }, 15000);
-  }, [apiBaseUrl]);
+  }, []);
 
   return (
     <div className="dashboard-layout">
