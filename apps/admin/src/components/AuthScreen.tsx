@@ -1,4 +1,4 @@
-import { RefreshCw, Shield, Globe, Laptop, Server, AlertCircle } from "lucide-react";
+import { RefreshCw, Shield, Globe, Laptop, Server, AlertCircle, Send, CheckCircle } from "lucide-react";
 import React, { useState } from "react";
 
 interface AuthScreenProps {
@@ -30,6 +30,38 @@ export default function AuthScreen({
 }: AuthScreenProps) {
   const [customUrl, setCustomUrl] = useState("");
   const [showCustomUrl, setShowCustomUrl] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [otpSentMsg, setOtpSentMsg] = useState<string | null>(null);
+
+  const handleSendOtp = async () => {
+    if (!phone.trim() || phone.length < 10) {
+      alert("Please enter a valid 10-digit mobile number with country code (e.g. +919876543210)");
+      return;
+    }
+
+    setSendingOtp(true);
+    setOtpSentMsg(null);
+
+    try {
+      const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+      const res = await fetch(`${apiBaseUrl}/auth/otp/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: formattedPhone }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error?.message || "Failed to send verification OTP.");
+      }
+
+      setOtpSentMsg("✅ OTP dispatched via SMS / WhatsApp! Enter the 6-digit code below.");
+    } catch (err: any) {
+      alert(`OTP Error: ${err.message}`);
+    } finally {
+      setSendingOtp(false);
+    }
+  };
 
   if (isInitializing) {
     return (
@@ -64,26 +96,67 @@ export default function AuthScreen({
           </div>
         )}
 
+        {otpSentMsg && (
+          <div
+            style={{
+              padding: "10px 14px",
+              background: "rgba(16, 185, 129, 0.15)",
+              border: "1px solid rgba(16, 185, 129, 0.3)",
+              borderRadius: 8,
+              color: "#34d399",
+              fontSize: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 16,
+            }}
+          >
+            <CheckCircle size={16} style={{ flexShrink: 0 }} />
+            <span>{otpSentMsg}</span>
+          </div>
+        )}
+
         <form onSubmit={handleLogin} style={{ marginBottom: 20 }}>
           <div className="input-group">
             <label className="input-label">Admin Mobile Number</label>
-            <input
-              type="tel"
-              className="glowing-input"
-              placeholder="+919999999999"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-              autoFocus
-            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="tel"
+                className="glowing-input"
+                placeholder="+919876543210"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+                autoFocus
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={handleSendOtp}
+                disabled={sendingOtp || !phone.trim()}
+                className="refresh-btn"
+                style={{
+                  padding: "0 12px",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                  background: "rgba(14, 165, 233, 0.15)",
+                  borderColor: "rgba(14, 165, 233, 0.3)",
+                  color: "#38bdf8",
+                }}
+              >
+                {sendingOtp ? <RefreshCw size={12} className="spin" /> : <Send size={12} />}
+                <span>{sendingOtp ? "Sending..." : "Get OTP"}</span>
+              </button>
+            </div>
           </div>
 
           <div className="input-group">
-            <label className="input-label">WhatsApp OTP / Bypass Code</label>
+            <label className="input-label">6-Digit Verification Code</label>
             <input
               type="text"
               className="glowing-input"
-              placeholder="Enter 6-digit code (or 000000 in dev)"
+              placeholder="Enter 6-digit OTP code"
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
               maxLength={6}
@@ -99,7 +172,7 @@ export default function AuthScreen({
         {/* Server Target Selector */}
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <label className="input-label" style={{ marginBottom: 0 }}>Target Gateway</label>
+            <label className="input-label" style={{ marginBottom: 0 }}>Target Gateway Environment</label>
             <button
               type="button"
               onClick={() => setShowCustomUrl(!showCustomUrl)}

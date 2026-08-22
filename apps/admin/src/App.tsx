@@ -28,11 +28,12 @@ export default function App() {
   const [apiBaseUrl, setApiBaseUrl] = useState<string>(getInitialApiUrl);
 
   const handleApiChange = (url: string) => {
+    console.log(`[GATEWAY] Switching API Gateway to: ${url}`);
     localStorage.setItem("admin_api_url", url);
     setApiBaseUrl(url);
     setFetchError(null);
     if (token) {
-      fetchDashboardData();
+      fetchDashboardData(false, url);
     }
   };
 
@@ -86,10 +87,13 @@ export default function App() {
     setAuthError(null);
 
     try {
+      const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+      console.log(`[AUTH] Attempting login for ${formattedPhone} on ${apiBaseUrl}`);
+      
       const response = await fetch(`${apiBaseUrl}/auth/otp/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, otp }),
+        body: JSON.stringify({ phone: formattedPhone, otp: otp.trim() }),
       });
 
       const result = await response.json();
@@ -99,14 +103,18 @@ export default function App() {
       }
 
       const verifiedUser = result.data.user;
+      console.log(`[AUTH] User verified successfully:`, verifiedUser);
+      
       if (!["super_admin", "school_admin", "tenant_admin"].includes(verifiedUser.role)) {
-        throw new Error(`Access Denied: Account (${verifiedUser.phone}) does not have administrative privileges.`);
+        throw new Error(`Access Denied: Account role (${verifiedUser.role}) does not have administrative dashboard access.`);
       }
 
       const accessToken = result.data.accessToken;
       localStorage.setItem("admin_token", accessToken);
       setToken(accessToken);
+      setFetchError(null);
     } catch (err: any) {
+      console.error("[AUTH] Login failed:", err);
       setAuthError(err.message || "Failed to authenticate.");
     } finally {
       setAuthLoading(false);
@@ -114,6 +122,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    console.log("[AUTH] Logging out administrator session");
     localStorage.removeItem("admin_token");
     setToken(null);
     setMetrics(null);
@@ -213,52 +222,97 @@ export default function App() {
   };
 
   // ─── Data Fetching & Polling Engine ───
-  const fetchDashboardData = async (isBackground = false) => {
+  const fetchDashboardData = async (isBackground = false, targetUrl = apiBaseUrl) => {
     if (!token) return;
     if (!isBackground) setLoadingData(true);
     setSyncingPulse(true);
 
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      
+      console.log(`[DASHBOARD] Fetching administrative telemetry from ${targetUrl}...`);
+
       const [metricsRes, tenantsRes, usersRes, secRes] = await Promise.allSettled([
-        fetch(`${apiBaseUrl}/admin/metrics`, { headers }),
-        fetch(`${apiBaseUrl}/admin/tenants`, { headers }),
-        fetch(`${apiBaseUrl}/admin/users`, { headers }),
-        fetch(`${apiBaseUrl}/admin/security/logs?limit=100&severity=${severityFilter}`, { headers }),
+        fetch(`${targetUrl}/admin/metrics`, { headers }),
+        fetch(`${targetUrl}/admin/tenants`, { headers }),
+        fetch(`${targetUrl}/admin/users`, { headers }),
+        fetch(`${targetUrl}/admin/security/logs?limit=100&severity=${severityFilter}`, { headers }),
       ]);
 
-      if (metricsRes.status === "fulfilled" && metricsRes.value.ok) {
-        const metricsResult = await metricsRes.value.json();
-        if (metricsResult.success) setMetrics(metricsResult.data);
-      }
+      let has401 = false;
+      let has403 = false;
+      let anySuccessful = false;
 
-      if (tenantsRes.status === "fulfilled" && tenantsRes.value.ok) {
-        const tenantsResult = await tenantsRes.value.json();
-        if (tenantsResult.success && Array.isArray(tenantsResult.data)) {
-          setTenantsList(tenantsResult.data);
+      // Handle Metrics
+      if (metricsRes.status === "fulfilled") {
+        if (metricsRes.value.status === 401) has401 = true;
+        if (metricsRes.value.status === 403) has403 = true;
+        if (metricsRes.value.ok) {
+          const metricsResult = await metricsRes.value.json();
+          if (metricsResult.success) {
+            setMetrics(metricsResult.data);
+            anySuccessful = true;
+          }
         }
       }
 
-      if (usersRes.status === "fulfilled" && usersRes.value.ok) {
-        const usersResult = await usersRes.value.json();
-        if (usersResult.success && Array.isArray(usersResult.data)) {
-          setUsersList(usersResult.data);
+      // Handle Tenants
+      if (tenantsRes.status === "fulfilled") {
+        if (tenantsRes.value.status === 401) has401 = true;
+        if (tenantsRes.value.status === 403) has403 = true;
+        if (tenantsRes.value.ok) {
+          const tenantsResult = await tenantsRes.value.json();
+          if (tenantsResult.success && Array.isArray(tenantsResult.data)) {
+            setTenantsList(tenantsResult.data);
+            anySuccessful = true;
+          }
         }
       }
 
-      if (secRes.status === "fulfilled" && secRes.value.ok) {
-        const secResult = await secRes.value.json();
-        if (secResult.success && Array.isArray(secResult.data)) {
-          setSecurityLogs(secResult.data);
+      // Handle Users
+      if (usersRes.status === "fulfilled") {
+        if (usersRes.value.status === 401) has401 = true;
+        if (usersRes.value.status === 403) has403 = true;
+        if (usersRes.value.ok) {
+          const usersResult = await usersRes.value.json();
+          if (usersResult.success && Array.isArray(usersResult.data)) {
+            setUsersList(usersResult.data);
+            anySuccessful = true;
+          }
         }
       }
 
-      setFetchError(null);
-      setLastSynced(new Date().toLocaleTimeString());
+      // Handle Security Logs
+      if (secRes.status === "fulfilled") {
+        if (secRes.value.status === 401) has401 = true;
+        if (secRes.value.status === 403) has403 = true;
+        if (secRes.value.ok) {
+          const secResult = await secRes.value.json();
+          if (secResult.success && Array.isArray(secResult.data)) {
+            setSecurityLogs(secResult.data);
+            anySuccessful = true;
+          }
+        }
+      }
+
+      if (has401) {
+        console.warn("[AUTH] Session token expired (401). Redirecting to login.");
+        localStorage.removeItem("admin_token");
+        setToken(null);
+        setAuthError("Your administrative session has expired. Please sign in again.");
+        return;
+      }
+
+      if (has403 && !anySuccessful) {
+        setFetchError("403 Forbidden: Your account does not have permission to view platform metrics.");
+      } else if (!anySuccessful && metricsRes.status === "rejected") {
+        setFetchError(`Network Error: Cannot reach ${targetUrl}. Please check CORS or select a different gateway.`);
+      } else {
+        setFetchError(null);
+        setLastSynced(new Date().toLocaleTimeString());
+      }
     } catch (err: any) {
       console.error("Failed to poll dashboard statistics:", err);
-      setFetchError("Could not connect to the API Gateway. Ensure the backend is reachable.");
+      setFetchError(`Connection Error: ${err.message || "Failed to reach API gateway."}`);
     } finally {
       setLoadingData(false);
       if (syncPulseTimerRef.current) clearTimeout(syncPulseTimerRef.current);
