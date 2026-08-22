@@ -85,6 +85,25 @@ export async function otpVerifyHandler(c: Context) {
     phoneHash = hashSHA256(phone);
     const otpHash = hashSHA256(parsed.data.otp);
 
+    // 🛡️ Sentinel: Check if phone is currently locked out from brute-force attempts
+    const [lockout] = await db
+      .select()
+      .from(otpLockouts)
+      .where(eq(otpLockouts.phone, phone))
+      .limit(1);
+
+    if (lockout && lockout.lockedUntil && lockout.lockedUntil > new Date()) {
+      const minutesRemaining = Math.max(
+        1,
+        Math.ceil((lockout.lockedUntil.getTime() - Date.now()) / 60000)
+      );
+      throw new AppError(
+        ErrorCode.OTP_RATE_LIMITED,
+        `Too many failed attempts. Phone locked for ${minutesRemaining} more minutes.`,
+        429
+      );
+    }
+
     // Verify OTP record in DB
     const [attempt] = await db
       .select()
@@ -100,7 +119,48 @@ export async function otpVerifyHandler(c: Context) {
       .limit(1);
 
     if (!attempt || attempt.expiresAt < new Date()) {
+      // 🛡️ Sentinel: Increment failed attempt counter and lock if threshold (5) reached
+      const currentAttempts = (lockout?.attempts ?? 0) + 1;
+      const isLockedNow = currentAttempts >= 5;
+      const lockedUntil = isLockedNow
+        ? new Date(Date.now() + 15 * 60 * 1000) // 15 minutes lockout
+        : null;
+
+      if (lockout) {
+        await db
+          .update(otpLockouts)
+          .set({
+            attempts: currentAttempts,
+            lockedUntil,
+            updatedAt: new Date(),
+          })
+          .where(eq(otpLockouts.id, lockout.id));
+      } else {
+        await db.insert(otpLockouts).values({
+          phone,
+          attempts: currentAttempts,
+          lockedUntil,
+          updatedAt: new Date(),
+        });
+      }
+
+      if (isLockedNow) {
+        throw new AppError(
+          ErrorCode.OTP_RATE_LIMITED,
+          "Too many failed OTP attempts. Your account has been temporarily locked for 15 minutes.",
+          429
+        );
+      }
+
       throw new AppError(ErrorCode.INVALID_OTP, "Invalid or expired OTP.", 401);
+    }
+
+    // 🛡️ Sentinel: Reset failed attempts on successful OTP verification
+    if (lockout && (lockout.attempts > 0 || lockout.lockedUntil)) {
+      await db
+        .update(otpLockouts)
+        .set({ attempts: 0, lockedUntil: null, updatedAt: new Date() })
+        .where(eq(otpLockouts.id, lockout.id));
     }
 
     await db
