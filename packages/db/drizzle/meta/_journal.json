@@ -148,6 +148,13 @@
       "when": 1787391000000,
       "tag": "0020_enable_rls_all_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787392000000,
+      "tag": "0021_fix_function_search_path",
+      "breakpoints": true
     }
   ]
 }
