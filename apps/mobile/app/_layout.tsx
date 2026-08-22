@@ -17,8 +17,8 @@ import {
   Inter_900Black,
 } from "@expo-google-fonts/inter";
 import * as Updates from "expo-updates";
-import * as Sentry from "@sentry/react-native";
 import * as Notifications from "expo-notifications";
+import { initMobileCrashReporting, ErrorBoundary } from "@/telemetry/tracker";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -28,13 +28,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
-Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-  debug: false,
-  tracesSampleRate: 1.0,
-});
-
-export { ErrorBoundary } from "expo-router";
+initMobileCrashReporting();
 
 function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -135,20 +129,22 @@ function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <ApiProvider>
-        <AuthProvider>
-          <StatusBar style="dark" backgroundColor={colors.paper} />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.paper },
-            }}
-          />
-        </AuthProvider>
-      </ApiProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <ApiProvider>
+          <AuthProvider>
+            <StatusBar style="dark" backgroundColor={colors.paper} />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: colors.paper },
+              }}
+            />
+          </AuthProvider>
+        </ApiProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
 
-export default Sentry.wrap(RootLayout);
+export default RootLayout;

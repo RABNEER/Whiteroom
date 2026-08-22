@@ -44,16 +44,31 @@ import { db } from "./lib/db.js";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
-import * as Sentry from "@sentry/node";
+import { telemetryRouter } from "./routes/telemetry.js";
+import { captureException, getDiscordWebhookUrl } from "./lib/discord-tracker.js";
 
-if (process.env.SENTRY_DSN) {
-  Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    environment: process.env.NODE_ENV || "development",
-    tracesSampleRate: 1.0,
-  });
-  console.log("🛡️ [SENTRY] Backend error & performance monitoring initialized.");
+if (getDiscordWebhookUrl()) {
+  console.log("🛡️ [DISCORD-TRACKER] Real-time crash & error alerts active.");
 }
+
+process.on("uncaughtException", (err) => {
+  console.error("💥 Uncaught Exception:", err);
+  captureException(err, {
+    service: "apps/api",
+    level: "critical",
+    route: "process.uncaughtException",
+  }).catch(() => {});
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("💥 Unhandled Rejection:", reason);
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  captureException(err, {
+    service: "apps/api",
+    level: "warning",
+    route: "process.unhandledRejection",
+  }).catch(() => {});
+});
 
 const app = new Hono();
 
@@ -151,6 +166,7 @@ app.route("/api/v1/billing", billingRoutes);
 app.route("/api/v1/upload", chunkedRoutes);
 app.route("/api/v1/users", userRoutes);
 app.route("/api/v1/bulletins", bulletinsRoutes);
+app.route("/api/v1/telemetry", telemetryRouter);
 app.route("/", publicRoutes);
 
 // ─── Walt AI Routes ───

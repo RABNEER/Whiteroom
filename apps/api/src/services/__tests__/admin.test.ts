@@ -71,7 +71,7 @@ describe("admin service integration", () => {
         updated_at timestamp with time zone DEFAULT now() NOT NULL
       );
     `);
-  });
+  }, 30000);
 
   describe("listAdminTenants", () => {
     it("should fetch all tenants with their subscription details", async () => {

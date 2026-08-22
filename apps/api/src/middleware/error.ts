@@ -1,13 +1,16 @@
 import { Context } from "hono";
 import { AppError, Errors } from "@whiteroom/shared";
-import * as Sentry from "@sentry/node";
+import { captureException } from "../lib/discord-tracker.js";
 
 /**
  * Global error handler — catches AppErrors and unknown errors,
- * returns consistent JSON shape and reports to Sentry.
+ * returns consistent JSON shape and reports to Discord Tracker.
  */
 export async function errorHandler(err: Error, c: Context) {
   const correlationId = crypto.randomUUID();
+  const user = c.get("user") as
+    | { userId?: string; role?: string; tenantId?: string }
+    | undefined;
 
   if (err instanceof SyntaxError) {
     const validationError = Errors.validation("Invalid or empty JSON request body");
@@ -16,17 +19,29 @@ export async function errorHandler(err: Error, c: Context) {
 
   if (err instanceof AppError) {
     if (err.statusCode >= 500) {
-      Sentry.captureException(err, {
-        extra: { correlationId, path: c.req.path, method: c.req.method, statusCode: err.statusCode },
-      });
+      captureException(err, {
+        service: "apps/api",
+        route: `${c.req.method} ${c.req.path}`,
+        statusCode: err.statusCode,
+        userId: user?.userId,
+        role: user?.role,
+        tenantId: user?.tenantId,
+        correlationId,
+      }).catch(() => {});
     }
     return c.json({ ...err.toJSON(), correlationId }, err.statusCode as any);
   }
 
   console.error("Unhandled error:", err);
-  Sentry.captureException(err, {
-    extra: { correlationId, path: c.req.path, method: c.req.method },
-  });
+  captureException(err, {
+    service: "apps/api",
+    route: `${c.req.method} ${c.req.path}`,
+    statusCode: 500,
+    userId: user?.userId,
+    role: user?.role,
+    tenantId: user?.tenantId,
+    correlationId,
+  }).catch(() => {});
 
   const isProd = process.env.NODE_ENV === "production";
   return c.json({

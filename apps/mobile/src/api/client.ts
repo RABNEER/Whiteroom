@@ -615,4 +615,23 @@ export const api = {
     }),
   promotionHistory: (): Promise<any[]> =>
     request<any[]>("/admin/promotion-history"),
+
+  // ─── Telemetry & Error Reporting ───
+  reportError: (payload: {
+    errorName?: string;
+    message: string;
+    stack?: string;
+    screen?: string;
+    deviceInfo?: Record<string, any>;
+    breadcrumbs?: Array<{ timestamp?: string; category?: string; message: string }>;
+    level?: "critical" | "warning" | "info";
+  }): Promise<{ success: boolean }> =>
+    request<{ success: boolean }>(
+      "/telemetry/report-error",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      false
+    ),
 };
