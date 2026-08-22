@@ -92,12 +92,7 @@ export async function sendPushToUsers(
     const tokens = await db
       .select({ userId: deviceTokens.userId, fcmToken: deviceTokens.fcmToken })
       .from(deviceTokens)
-      .where(
-        and(
-          inArray(deviceTokens.userId, uniqueUserIds),
-          eq(deviceTokens.tenantId, tenantId)
-        )
-      );
+      .where(inArray(deviceTokens.userId, uniqueUserIds));
 
     // 2. Batch write notification records
     const insertedNotifications = await db

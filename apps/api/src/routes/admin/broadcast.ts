@@ -51,10 +51,11 @@ export async function sendBroadcastNotificationHandler(c: Context) {
     parseResult.data;
 
   // School Admins can only broadcast to their own school/tenant
+  const isSuperAdmin = user.role === UserRole.SUPER_ADMIN;
   const effectiveTenantId =
-    user.role === UserRole.SUPER_ADMIN && targetTenantId
-      ? targetTenantId
-      : user.tenantId;
+    isSuperAdmin
+      ? (targetTenantId && targetTenantId !== "ALL" ? targetTenantId : undefined)
+      : (user.tenantId && user.tenantId !== "global" ? user.tenantId : undefined);
 
   // 1. Resolve role filter
   let rolesToQuery: string[] = [];
