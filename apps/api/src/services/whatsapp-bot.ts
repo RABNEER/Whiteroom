@@ -292,7 +292,8 @@ async function ensureTableCreated(): Promise<void> {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL,
         updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
-      );`
+      );
+      ALTER TABLE whatsapp_bot_store ENABLE ROW LEVEL SECURITY;`
     );
     tableCreated = true;
   } catch { }
