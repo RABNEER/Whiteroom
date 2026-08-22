@@ -20,9 +20,9 @@ const adminRoutes = new Hono();
 
 adminRoutes.use("*", authMiddleware);
 
-adminRoutes.get("/tenants", requireRole(UserRole.SUPER_ADMIN), adminTenantsHandler);
-adminRoutes.get("/metrics", requireRole(UserRole.SUPER_ADMIN), adminMetricsHandler);
-adminRoutes.get("/users", requireRole(UserRole.SUPER_ADMIN), adminUsersHandler);
+adminRoutes.get("/tenants", requireRole(UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), adminTenantsHandler);
+adminRoutes.get("/metrics", requireRole(UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), adminMetricsHandler);
+adminRoutes.get("/users", requireRole(UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), adminUsersHandler);
 adminRoutes.get("/pilot-stats", pilotStatsHandler);
 
 adminRoutes.post("/promote-all", requireRole(UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), promoteAllHandler);
@@ -33,8 +33,8 @@ adminRoutes.post("/broadcast-notification", requireRole(UserRole.SCHOOL_ADMIN, U
 adminRoutes.get("/broadcast-notification/history", requireRole(UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), getBroadcastHistoryHandler);
 
 // Security & Compliance (DPDP Act 2023 & CERT-In)
-adminRoutes.get("/security/logs", requireRole(UserRole.SUPER_ADMIN), getSecurityLogsHandler);
-adminRoutes.post("/security/breach-notify", requireRole(UserRole.SUPER_ADMIN), sendBreachNotificationHandler);
-adminRoutes.get("/security/certin-export", requireRole(UserRole.SUPER_ADMIN), exportCertInReportHandler);
+adminRoutes.get("/security/logs", requireRole(UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), getSecurityLogsHandler);
+adminRoutes.post("/security/breach-notify", requireRole(UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), sendBreachNotificationHandler);
+adminRoutes.get("/security/certin-export", requireRole(UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN), exportCertInReportHandler);
 
 export { adminRoutes };

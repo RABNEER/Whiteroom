@@ -16,24 +16,28 @@ export default function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
-  // API base URL configuration (Production Cloud or Local Dev)
-  const [apiBaseUrl, setApiBaseUrl] = useState<string>(
-    localStorage.getItem("admin_api_url") || "http://66.42.90.144:8080/api/v1"
-  );
+  // API base URL configuration (defaults to live Cloud API, cleansing stale port 8080)
+  const getInitialApiUrl = () => {
+    const stored = localStorage.getItem("admin_api_url");
+    if (stored && !stored.includes(":8080")) {
+      return stored;
+    }
+    return "https://apps.whiteroom.co.in/api/v1";
+  };
+
+  const [apiBaseUrl, setApiBaseUrl] = useState<string>(getInitialApiUrl);
 
   const handleApiChange = (url: string) => {
     localStorage.setItem("admin_api_url", url);
     setApiBaseUrl(url);
-    // Clear credentials to re-authenticate on the new gateway environment
-    localStorage.removeItem("admin_token");
-    setToken(null);
-    setMetrics(null);
-    setTenantsList([]);
-    setUsersList([]);
+    setFetchError(null);
+    if (token) {
+      fetchDashboardData();
+    }
   };
 
   // Tab control state
-  const [activeTab, setActiveTab] = useState<TabType>("MONITOR");
+  const [activeTab, setActiveTab] = useState<TabType>("BROADCAST");
 
   // Dashboard Data State
   const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
@@ -72,12 +76,8 @@ export default function App() {
 
   // ─── Initializer Hook ───
   useEffect(() => {
-    if (token) {
-      setIsInitializing(false);
-    } else {
-      setIsInitializing(false);
-    }
-  }, [token]);
+    setIsInitializing(false);
+  }, []);
 
   // ─── Login Logic ───
   const handleLogin = async (e: React.FormEvent) => {
@@ -99,8 +99,8 @@ export default function App() {
       }
 
       const verifiedUser = result.data.user;
-      if (verifiedUser.role !== "super_admin") {
-        throw new Error("Access Denied: Account does not have administrative privileges.");
+      if (!["super_admin", "school_admin", "tenant_admin"].includes(verifiedUser.role)) {
+        throw new Error(`Access Denied: Account (${verifiedUser.phone}) does not have administrative privileges.`);
       }
 
       const accessToken = result.data.accessToken;
@@ -220,51 +220,45 @@ export default function App() {
 
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      const [metricsRes, tenantsRes, usersRes, secRes] = await Promise.all([
+      
+      const [metricsRes, tenantsRes, usersRes, secRes] = await Promise.allSettled([
         fetch(`${apiBaseUrl}/admin/metrics`, { headers }),
         fetch(`${apiBaseUrl}/admin/tenants`, { headers }),
         fetch(`${apiBaseUrl}/admin/users`, { headers }),
-        fetch(`${apiBaseUrl}/admin/security/logs?limit=100&severity=${severityFilter}`, { headers })
+        fetch(`${apiBaseUrl}/admin/security/logs?limit=100&severity=${severityFilter}`, { headers }),
       ]);
 
-      if (
-        metricsRes.status === 401 || tenantsRes.status === 401 || usersRes.status === 401 ||
-        metricsRes.status === 403 || tenantsRes.status === 403 || usersRes.status === 403
-      ) {
-        console.warn("API token is expired or unauthorized. Re-authenticating automatically...");
-        localStorage.removeItem("admin_token");
-        setToken(null);
-        setFetchError("Session credentials expired. Attempting secure re-authentication...");
-        return;
+      if (metricsRes.status === "fulfilled" && metricsRes.value.ok) {
+        const metricsResult = await metricsRes.value.json();
+        if (metricsResult.success) setMetrics(metricsResult.data);
       }
 
-      if (!metricsRes.ok || !tenantsRes.ok || !usersRes.ok) {
-        throw new Error(
-          `Gateway API error (Metrics: ${metricsRes.status}, Tenants: ${tenantsRes.status}, Users: ${usersRes.status})`
-        );
+      if (tenantsRes.status === "fulfilled" && tenantsRes.value.ok) {
+        const tenantsResult = await tenantsRes.value.json();
+        if (tenantsResult.success && Array.isArray(tenantsResult.data)) {
+          setTenantsList(tenantsResult.data);
+        }
       }
 
-      const [metricsResult, tenantsResult, usersResult, secResult] = await Promise.all([
-        metricsRes.json(),
-        tenantsRes.json(),
-        usersRes.json(),
-        secRes.ok ? secRes.json() : Promise.resolve({ success: false })
-      ]);
+      if (usersRes.status === "fulfilled" && usersRes.value.ok) {
+        const usersResult = await usersRes.value.json();
+        if (usersResult.success && Array.isArray(usersResult.data)) {
+          setUsersList(usersResult.data);
+        }
+      }
 
-      if (metricsResult.success) setMetrics(metricsResult.data);
-      if (tenantsResult.success) setTenantsList(tenantsResult.data);
-      if (usersResult.success) setUsersList(usersResult.data);
-      if (secResult.success) setSecurityLogs(secResult.data || []);
+      if (secRes.status === "fulfilled" && secRes.value.ok) {
+        const secResult = await secRes.value.json();
+        if (secResult.success && Array.isArray(secResult.data)) {
+          setSecurityLogs(secResult.data);
+        }
+      }
 
       setFetchError(null);
       setLastSynced(new Date().toLocaleTimeString());
     } catch (err: any) {
       console.error("Failed to poll dashboard statistics:", err);
-      setFetchError(
-        err.message && err.message.includes("Gateway API error")
-          ? err.message
-          : "Could not connect to the API Gateway. Ensure the backend server is running and CORS is configured."
-      );
+      setFetchError("Could not connect to the API Gateway. Ensure the backend is reachable.");
     } finally {
       setLoadingData(false);
       if (syncPulseTimerRef.current) clearTimeout(syncPulseTimerRef.current);
@@ -278,14 +272,10 @@ export default function App() {
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     pollTimerRef.current = setInterval(() => {
       fetchDashboardData(true);
-    }, 10000);
+    }, 15000);
+  }, [token, apiBaseUrl]);
 
-    return () => {
-      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-    };
-  }, [token, apiBaseUrl, severityFilter]);
-
-  if (!token || isInitializing) {
+  if (!token) {
     return (
       <AuthScreen
         isInitializing={isInitializing}
@@ -304,8 +294,9 @@ export default function App() {
   }
 
   return (
-    <div className="layout">
+    <div className="dashboard-layout">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+
       <div className="main-content">
         <TopNavbar
           apiBaseUrl={apiBaseUrl}
@@ -314,9 +305,18 @@ export default function App() {
           syncingPulse={syncingPulse}
           fetchError={fetchError}
           handleLogout={handleLogout}
+          onRefresh={() => fetchDashboardData(false)}
         />
-        
-        <div className="dashboard-content">
+
+        <div>
+          {activeTab === "BROADCAST" && (
+            <BroadcastTab
+              apiBaseUrl={apiBaseUrl}
+              token={token}
+              tenantsList={tenantsList}
+            />
+          )}
+
           {activeTab === "MONITOR" && (
             <MonitorTab
               metrics={metrics}
@@ -324,6 +324,7 @@ export default function App() {
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}
               tenantsList={tenantsList}
+              onRefresh={() => fetchDashboardData(false)}
             />
           )}
 
@@ -333,14 +334,7 @@ export default function App() {
               setUserSearchTerm={setUserSearchTerm}
               loadingData={loadingData}
               usersList={usersList}
-            />
-          )}
-
-          {activeTab === "BROADCAST" && (
-            <BroadcastTab
-              apiBaseUrl={apiBaseUrl}
-              token={token}
-              tenantsList={tenantsList}
+              onRefresh={() => fetchDashboardData(false)}
             />
           )}
 
