@@ -53,22 +53,6 @@ export async function whatsappWebhookHandler(c: Context) {
     const tokenHash = hashSHA256(code);
     const now = new Date();
 
-    const queryConditions = [
-      or(eq(whatsappSessions.token, tokenHash), eq(whatsappSessions.id, code)),
-      eq(whatsappSessions.verified, false),
-      gte(whatsappSessions.expiresAt, now),
-    ];
-
-    const rawSenderPhone = parsed.data.phone || from;
-    const normalizedSenderPhone = rawSenderPhone ? normalizePhone(rawSenderPhone) : undefined;
-    const phoneToMatch = (normalizedSenderPhone && isValidIndianPhone(normalizedSenderPhone)) ? normalizedSenderPhone : undefined;
-
-    if (phoneToMatch) {
-      queryConditions.push(eq(whatsappSessions.phone, phoneToMatch));
-    } else {
-      console.log(`[WHATSAPP WEBHOOK] Verifying session ${code} via LID match (${from}) based on valid session code.`);
-    }
-
     // 1. Find session by code or token
     const [session] = await db
       .select()
@@ -80,7 +64,7 @@ export async function whatsappWebhookHandler(c: Context) {
       console.warn(`[WHATSAPP WEBHOOK] Session code ${code} not found in database.`);
       return c.json({
         success: false,
-        error: "Verification session not found. Please request a new code.",
+        error: "Verification session not found. Please request a new code from the Whiteroom app.",
       }, 400);
     }
 
@@ -90,7 +74,7 @@ export async function whatsappWebhookHandler(c: Context) {
       console.warn(`[WHATSAPP WEBHOOK] Session code ${code} is already verified.`);
       return c.json({
         success: false,
-        error: "Session already verified. You can proceed to log in.",
+        error: "Session already verified. You can proceed to log in on the Whiteroom app.",
         data: { phone: sessionPhone },
       }, 400);
     }
@@ -99,32 +83,56 @@ export async function whatsappWebhookHandler(c: Context) {
       console.warn(`[WHATSAPP WEBHOOK] Session code ${code} is expired.`);
       return c.json({
         success: false,
-        error: "Verification session expired. Please request a new code.",
+        error: "Verification session expired. Please request a new code from the Whiteroom app.",
         data: { phone: sessionPhone },
       }, 400);
     }
 
-    if (session.phone && phoneToMatch) {
+    // 🔒 STRICT SECURITY: Enforce that WhatsApp sender phone matches the session phone number
+    const rawSenderPhone = parsed.data.phone || from;
+    const normalizedSenderPhone = rawSenderPhone ? normalizePhone(rawSenderPhone) : "";
+    const isValidSender = isValidIndianPhone(normalizedSenderPhone);
+
+    if (session.phone) {
       const normalizedSessionPhone = normalizePhone(session.phone);
-      if (phoneToMatch !== normalizedSessionPhone) {
-        console.warn(`[WHATSAPP WEBHOOK] Phone mismatch for session ${code}. Entered in App: ${session.phone}, Sent from WhatsApp: ${phoneToMatch}`);
+
+      if (!isValidSender) {
+        console.warn(`❌ [WHATSAPP WEBHOOK] Could not extract a valid phone from sender (raw: ${rawSenderPhone}, isLid: ${isLid}).`);
         return c.json({
           success: false,
-          error: `Phone number mismatch. You entered ${session.phone} in the app, but sent the verification from ${phoneToMatch}. Please use the matching WhatsApp account.`,
+          error: "Could not verify your phone number from WhatsApp. Please send the message directly from the primary WhatsApp phone associated with your account.",
           data: { phone: sessionPhone },
         }, 400);
       }
+
+      if (normalizedSenderPhone !== normalizedSessionPhone) {
+        console.warn(`❌ [WHATSAPP WEBHOOK] Phone mismatch! App entered: ${normalizedSessionPhone}, WhatsApp sender: ${normalizedSenderPhone}`);
+        return c.json({
+          success: false,
+          error: `Phone number mismatch. You entered ${session.phone} in the app, but sent the verification from ${normalizedSenderPhone}. Please send the code from the WhatsApp account for ${session.phone}.`,
+          data: { phone: sessionPhone },
+        }, 400);
+      }
+    } else if (isValidSender) {
+      // If session had no pre-bound phone, bind to verified sender phone
+      session.phone = normalizedSenderPhone;
+    } else {
+      return c.json({
+        success: false,
+        error: "Unable to verify sender phone number.",
+      }, 400);
     }
 
-    // Update session to verified
+    // Update session to verified with verified phone
     await db
       .update(whatsappSessions)
       .set({
         verified: true,
+        phone: normalizedSenderPhone || session.phone,
       })
       .where(eq(whatsappSessions.id, session.id));
 
-    console.log(`[WHATSAPP WEBHOOK] Session ${code} successfully verified.`);
+    console.log(`[WHATSAPP WEBHOOK] Session ${code} successfully verified for phone ${normalizedSenderPhone || session.phone}.`);
 
     const response: ApiResponse<{ verified: boolean; phone?: string }> = {
       success: true,

@@ -144,14 +144,24 @@ async function handleIncomingMessage(
     const code = match[1];
 
     // Extract phone from contact info (handles both @c.us and @lid JIDs accurately)
-    let realPhone = cleanPhone;
+    let realPhone = rawFrom.endsWith("@c.us") ? cleanPhone : "";
     try {
       const contact = await msg.getContact().catch(() => null);
       if (contact && contact.number) {
         realPhone = contact.number.replace(/\D/g, "");
       }
     } catch (e) {
-      // Fallback to cleanPhone
+      // Fallback
+    }
+
+    if (!realPhone && (msg as any)._data?.id?.participant) {
+      realPhone = (msg as any)._data.id.participant.split("@")[0].replace(/\D/g, "");
+    }
+    if (!realPhone && (msg as any).author) {
+      realPhone = (msg as any).author.split("@")[0].replace(/\D/g, "");
+    }
+    if (!realPhone && rawFrom.endsWith("@c.us")) {
+      realPhone = cleanPhone;
     }
 
     console.log(

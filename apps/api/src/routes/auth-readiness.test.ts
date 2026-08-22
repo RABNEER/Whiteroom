@@ -19,6 +19,7 @@ import {
   otpAttempts,
   rateLimits,
   auditLogs,
+  whatsappSessions,
   eq,
   inArray,
 } from "@whiteroom/db";
@@ -387,6 +388,75 @@ describe("Auth Readiness & Security Integration Tests", () => {
       expect(json2.success).toBe(true);
       expect(json2.data.processed).toBe(true);
       expect(json2.data.alreadyProcessed).toBe(true);
+    });
+
+    it("should strictly reject WhatsApp webhook verification if sender phone does not match session phone", async () => {
+      // 1. Create a WhatsApp session for phone +919999999991
+      const sessionId = "test-wa-session-" + Date.now();
+      const sessionToken = "test-wa-token-" + Date.now();
+      const appPhone = "+919999999991";
+      const attackerPhone = "+918888888888";
+
+      await db.insert(whatsappSessions).values({
+        id: sessionId,
+        token: hashSHA256(sessionToken),
+        phone: appPhone,
+        verified: false,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      });
+
+      // 2. Attacker sends code from another phone -> should be rejected with 400
+      const mismatchRes = await testApp.request("/api/v1/auth/whatsapp/webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: attackerPhone,
+          phone: attackerPhone,
+          text: `Verify ${sessionId}`,
+          code: sessionId,
+        }),
+      });
+
+      expect(mismatchRes.status).toBe(400);
+      const mismatchJson = await mismatchRes.json() as any;
+      expect(mismatchJson.success).toBe(false);
+      expect(mismatchJson.error).toContain("Phone number mismatch");
+
+      // Verify session in DB was NOT marked as verified
+      const [unverifiedSession] = await db
+        .select()
+        .from(whatsappSessions)
+        .where(eq(whatsappSessions.id, sessionId))
+        .limit(1);
+      expect(unverifiedSession?.verified).toBe(false);
+
+      // 3. Legitimate user sends code from the matching phone -> should succeed
+      const validRes = await testApp.request("/api/v1/auth/whatsapp/webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: appPhone,
+          phone: appPhone,
+          text: `Verify ${sessionId}`,
+          code: sessionId,
+        }),
+      });
+
+      expect(validRes.status).toBe(200);
+      const validJson = await validRes.json() as any;
+      expect(validJson.success).toBe(true);
+
+      // Verify session in DB is now verified
+      const [verifiedSession] = await db
+        .select()
+        .from(whatsappSessions)
+        .where(eq(whatsappSessions.id, sessionId))
+        .limit(1);
+      expect(verifiedSession?.verified).toBe(true);
+      expect(verifiedSession?.phone).toBe(appPhone);
+
+      // Clean up
+      await db.delete(whatsappSessions).where(eq(whatsappSessions.id, sessionId));
     });
   });
 });
