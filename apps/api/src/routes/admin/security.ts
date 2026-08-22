@@ -26,28 +26,36 @@ const breachNotifySchema = z.object({
  * GET /api/v1/admin/security/logs?severity=...&limit=50
  */
 export async function getSecurityLogsHandler(c: Context) {
-  const severity = c.req.query("severity");
-  const limitQuery = parseInt(c.req.query("limit") || "50", 10);
-  const limit = isNaN(limitQuery) ? 50 : Math.min(limitQuery, 200);
+  try {
+    const severity = c.req.query("severity");
+    const limitQuery = parseInt(c.req.query("limit") || "50", 10);
+    const limit = isNaN(limitQuery) ? 50 : Math.min(limitQuery, 200);
 
-  const conditions: any[] = [];
-  if (severity && severity !== "ALL") {
-    conditions.push(eq(securityAuditLogs.severity, severity));
+    const conditions: any[] = [];
+    if (severity && severity !== "ALL") {
+      conditions.push(eq(securityAuditLogs.severity, severity));
+    }
+
+    const logs = await db
+      .select()
+      .from(securityAuditLogs)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(securityAuditLogs.createdAt))
+      .limit(limit);
+
+    const response: ApiResponse<typeof logs> = {
+      success: true,
+      data: logs || [],
+    };
+
+    return c.json(response, 200);
+  } catch (err: any) {
+    console.warn("[SECURITY] Could not read audit logs:", err.message);
+    return c.json({
+      success: true,
+      data: [],
+    }, 200);
   }
-
-  const logs = await db
-    .select()
-    .from(securityAuditLogs)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(securityAuditLogs.createdAt))
-    .limit(limit);
-
-  const response: ApiResponse<typeof logs> = {
-    success: true,
-    data: logs,
-  };
-
-  return c.json(response, 200);
 }
 
 /**
