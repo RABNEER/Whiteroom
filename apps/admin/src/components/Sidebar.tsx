@@ -2,10 +2,11 @@ import {
   Activity, 
   Database, 
   ShieldAlert, 
-  Users 
+  Users,
+  Bell
 } from "lucide-react";
 
-export type TabType = "MONITOR" | "USERS" | "SECURITY";
+export type TabType = "MONITOR" | "USERS" | "SECURITY" | "BROADCAST";
 
 interface SidebarProps {
   activeTab: TabType;
@@ -44,6 +45,13 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
         >
           <Users size={18} />
           <span>Users Directory</span>
+        </div>
+        <div 
+          className={`nav-link ${activeTab === "BROADCAST" ? "active" : ""}`}
+          onClick={() => setActiveTab("BROADCAST")}
+        >
+          <Bell size={18} />
+          <span>Broadcast Alerts</span>
         </div>
         <div 
           className={`nav-link ${activeTab === "SECURITY" ? "active" : ""}`}

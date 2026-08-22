@@ -5,6 +5,8 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "dev:api": "turbo run dev --filter=@whiteroom/api",
+    "dev:admin": "turbo run dev --filter=@whiteroom/admin",
+    "admin": "pnpm --filter @whiteroom/admin dev",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "seed": "pnpm --filter @whiteroom/api seed",

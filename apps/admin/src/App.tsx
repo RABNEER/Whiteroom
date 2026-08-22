@@ -5,6 +5,7 @@ import TopNavbar from "./components/TopNavbar";
 import MonitorTab from "./components/tabs/MonitorTab";
 import UsersTab from "./components/tabs/UsersTab";
 import SecurityTab from "./components/tabs/SecurityTab";
+import BroadcastTab from "./components/tabs/BroadcastTab";
 import { PlatformMetrics, Tenant, User, SecurityAuditLog } from "./types";
 
 export default function App() {
@@ -332,6 +333,14 @@ export default function App() {
               setUserSearchTerm={setUserSearchTerm}
               loadingData={loadingData}
               usersList={usersList}
+            />
+          )}
+
+          {activeTab === "BROADCAST" && (
+            <BroadcastTab
+              apiBaseUrl={apiBaseUrl}
+              token={token}
+              tenantsList={tenantsList}
             />
           )}
 
