@@ -1,44 +1,117 @@
-# Dependencies
-node_modules/
-
-# Build output
-dist/
-build/
-.gradle/
-.gradle_home/
-
-# Environment
+# ==========================================
+# 🔒 Environment & Confidential Secrets
+# ==========================================
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+*.env
+*.env.local
+*.env.*.local
+*.vault
 
-# Turbo
-.turbo/
+# Confidential Keys, Certificates & Service Accounts
+*.pem
+*.key
+*.pkcs12
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+*.keystore
+!apps/mobile/android/app/debug.keystore
+service-account*.json
+google-service-account*.json
+firebase-adminsdk*.json
+credentials*.json
+client_secret*.json
+creds.json
+id_rsa*
+id_ed25519*
+id_ecdsa*
+*.private_key*
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Drizzle
-drizzle/meta/
-
-# Logs
-*.log
-npm-debug.log*
-
-# WhatsApp Bot / Baileys & Wwebjs session data
+# ==========================================
+# 💬 WhatsApp Bot / Auth Sessions & Browser Caches
+# ==========================================
 auth_info_baileys/
 .wwebjs_auth/
 .wwebjs_cache/
+wwebjs_auth/
 pre-key-*.json
 session-*.json
 sender-key-*.json
 app-state-sync-key-*.json
 app-state-sync-version-*.json
-creds.json
+chromium-data/
+chrome-profile/
+.puppeteer/
+
+# ==========================================
+# 🛠️ Scratch, Ad-hoc Scripts & Local DBs
+# ==========================================
+scratch/
+tmp/
+temp/
+check-*.ts
+check-*.js
+check_*.py
+find_node.py
+nuclear_wipe.py
+run_migration_*.cjs
+*.dump
+*.sql.gz
+*.bak
+*.backup
+agentbox.db*
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ==========================================
+# 📦 Build Artifacts & Binaries
+# ==========================================
+dist/
+build/
+out/
+.next/
+*.apk
+*.aab
+*.ap_
+*.ipa
+.tsbuildinfo
+
+# Turbo & Drizzle Cache
+.turbo/
+drizzle/meta/
+
+# Android / Mobile Builds
+.gradle/
+.gradle_home/
+apps/mobile/android/.gradle/
+apps/mobile/android/app/build/
+apps/mobile/android/build/
+.expo/
+.eas/
+
+# ==========================================
+# 📁 Dependencies & Package Managers
+# ==========================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+*.log
+
+# ==========================================
+# 💻 OS & IDE Metadata
+# ==========================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
