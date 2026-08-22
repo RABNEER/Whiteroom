@@ -22,7 +22,7 @@ adminRoutes.use("*", async (c, next) => {
   const authHeader = c.req.header("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ") || authHeader === "Bearer bypass") {
     // 🔓 Direct Access: Provide full Super Admin context for dashboard control
-    c.set("user", {
+    c.set("user" as any, {
       userId: "admin-direct-access",
       phone: "+919999999999",
       role: UserRole.SUPER_ADMIN,
