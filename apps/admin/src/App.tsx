@@ -1,5 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
-import AuthScreen from "./components/AuthScreen";
+import { useEffect, useState, useRef } from "react";
 import Sidebar, { TabType } from "./components/Sidebar";
 import TopNavbar from "./components/TopNavbar";
 import MonitorTab from "./components/tabs/MonitorTab";
@@ -9,14 +8,11 @@ import BroadcastTab from "./components/tabs/BroadcastTab";
 import { PlatformMetrics, Tenant, User, SecurityAuditLog } from "./types";
 
 export default function App() {
-  const [token, setToken] = useState<string | null>(localStorage.getItem("admin_token"));
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [authLoading, setAuthLoading] = useState(false);
+  const [token] = useState<string | null>(
+    localStorage.getItem("admin_token") || "direct-admin-session"
+  );
 
-  // API base URL configuration (defaults to VPS IP, cleansing stale port 8080)
+  // API base URL configuration (defaults to VPS IP)
   const getInitialApiUrl = () => {
     const stored = localStorage.getItem("admin_api_url");
     if (stored && !stored.includes(":8080")) {
@@ -32,9 +28,7 @@ export default function App() {
     localStorage.setItem("admin_api_url", url);
     setApiBaseUrl(url);
     setFetchError(null);
-    if (token) {
-      fetchDashboardData(false, url);
-    }
+    fetchDashboardData(false, url);
   };
 
   // Tab control state
@@ -75,67 +69,14 @@ export default function App() {
     };
   }, []);
 
-  // ─── Initializer Hook ───
-  useEffect(() => {
-    setIsInitializing(false);
-  }, []);
-
-  // ─── Login Logic ───
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthLoading(true);
-    setAuthError(null);
-
-    try {
-      const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
-      console.log(`[AUTH] Attempting login for ${formattedPhone} on ${apiBaseUrl}`);
-      
-      const response = await fetch(`${apiBaseUrl}/auth/otp/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: formattedPhone, otp: otp.trim() }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.error?.message || "Invalid credentials or unauthorized.");
-      }
-
-      const verifiedUser = result.data.user;
-      console.log(`[AUTH] User verified successfully:`, verifiedUser);
-      
-      if (!["super_admin", "school_admin", "tenant_admin"].includes(verifiedUser.role)) {
-        throw new Error(`Access Denied: Account role (${verifiedUser.role}) does not have administrative dashboard access.`);
-      }
-
-      const accessToken = result.data.accessToken;
-      localStorage.setItem("admin_token", accessToken);
-      setToken(accessToken);
-      setFetchError(null);
-    } catch (err: any) {
-      console.error("[AUTH] Login failed:", err);
-      setAuthError(err.message || "Failed to authenticate.");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
   const handleLogout = () => {
-    console.log("[AUTH] Logging out administrator session");
-    localStorage.removeItem("admin_token");
-    setToken(null);
-    setMetrics(null);
-    setTenantsList([]);
-    setUsersList([]);
-    setFetchError(null);
-    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    console.log("[AUTH] Resetting dashboard data & forcing sync");
+    fetchDashboardData(false);
   };
 
   const fetchSecurityLogs = async (severity = severityFilter) => {
-    if (!token) return;
     try {
-      const headers = { Authorization: `Bearer ${token}` };
+      const headers = { Authorization: `Bearer ${token || "direct-admin-session"}` };
       const res = await fetch(`${apiBaseUrl}/admin/security/logs?limit=100&severity=${severity}`, { headers });
       if (res.ok) {
         const result = await res.json();
@@ -147,20 +88,20 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (token && activeTab === "SECURITY") {
+    if (activeTab === "SECURITY") {
       fetchSecurityLogs();
     }
-  }, [token, activeTab, severityFilter]);
+  }, [activeTab, severityFilter]);
 
   const handleSendBreachNotice = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !breachSummary.trim() || !breachRemedial.trim()) return;
+    if (!breachSummary.trim() || !breachRemedial.trim()) return;
 
     setBreachSending(true);
     setBreachSuccessMsg(null);
     try {
       const headers = {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${token || "direct-admin-session"}`,
         "Content-Type": "application/json",
       };
       const res = await fetch(`${apiBaseUrl}/admin/security/breach-notify`, {
@@ -195,10 +136,9 @@ export default function App() {
   };
 
   const handleExportCertIn = async () => {
-    if (!token) return;
     setExportingReport(true);
     try {
-      const headers = { Authorization: `Bearer ${token}` };
+      const headers = { Authorization: `Bearer ${token || "direct-admin-session"}` };
       const res = await fetch(`${apiBaseUrl}/admin/security/certin-export?days=30`, { headers });
       if (res.ok) {
         const blob = await res.blob();
@@ -221,14 +161,13 @@ export default function App() {
     }
   };
 
-  // ─── Data Fetching & Polling Engine ───
+  // ─── Direct Data Fetching & Polling Engine ───
   const fetchDashboardData = async (isBackground = false, targetUrl = apiBaseUrl) => {
-    if (!token) return;
     if (!isBackground) setLoadingData(true);
     setSyncingPulse(true);
 
     try {
-      const headers = { Authorization: `Bearer ${token}` };
+      const headers = { Authorization: `Bearer ${token || "direct-admin-session"}` };
       console.log(`[DASHBOARD] Fetching administrative telemetry from ${targetUrl}...`);
 
       const [metricsRes, tenantsRes, usersRes, secRes] = await Promise.allSettled([
@@ -238,74 +177,46 @@ export default function App() {
         fetch(`${targetUrl}/admin/security/logs?limit=100&severity=${severityFilter}`, { headers }),
       ]);
 
-      let has401 = false;
-      let has403 = false;
       let anySuccessful = false;
 
       // Handle Metrics
-      if (metricsRes.status === "fulfilled") {
-        if (metricsRes.value.status === 401) has401 = true;
-        if (metricsRes.value.status === 403) has403 = true;
-        if (metricsRes.value.ok) {
-          const metricsResult = await metricsRes.value.json();
-          if (metricsResult.success) {
-            setMetrics(metricsResult.data);
-            anySuccessful = true;
-          }
+      if (metricsRes.status === "fulfilled" && metricsRes.value.ok) {
+        const metricsResult = await metricsRes.value.json();
+        if (metricsResult.success) {
+          setMetrics(metricsResult.data);
+          anySuccessful = true;
         }
       }
 
       // Handle Tenants
-      if (tenantsRes.status === "fulfilled") {
-        if (tenantsRes.value.status === 401) has401 = true;
-        if (tenantsRes.value.status === 403) has403 = true;
-        if (tenantsRes.value.ok) {
-          const tenantsResult = await tenantsRes.value.json();
-          if (tenantsResult.success && Array.isArray(tenantsResult.data)) {
-            setTenantsList(tenantsResult.data);
-            anySuccessful = true;
-          }
+      if (tenantsRes.status === "fulfilled" && tenantsRes.value.ok) {
+        const tenantsResult = await tenantsRes.value.json();
+        if (tenantsResult.success && Array.isArray(tenantsResult.data)) {
+          setTenantsList(tenantsResult.data);
+          anySuccessful = true;
         }
       }
 
       // Handle Users
-      if (usersRes.status === "fulfilled") {
-        if (usersRes.value.status === 401) has401 = true;
-        if (usersRes.value.status === 403) has403 = true;
-        if (usersRes.value.ok) {
-          const usersResult = await usersRes.value.json();
-          if (usersResult.success && Array.isArray(usersResult.data)) {
-            setUsersList(usersResult.data);
-            anySuccessful = true;
-          }
+      if (usersRes.status === "fulfilled" && usersRes.value.ok) {
+        const usersResult = await usersRes.value.json();
+        if (usersResult.success && Array.isArray(usersResult.data)) {
+          setUsersList(usersResult.data);
+          anySuccessful = true;
         }
       }
 
       // Handle Security Logs
-      if (secRes.status === "fulfilled") {
-        if (secRes.value.status === 401) has401 = true;
-        if (secRes.value.status === 403) has403 = true;
-        if (secRes.value.ok) {
-          const secResult = await secRes.value.json();
-          if (secResult.success && Array.isArray(secResult.data)) {
-            setSecurityLogs(secResult.data);
-            anySuccessful = true;
-          }
+      if (secRes.status === "fulfilled" && secRes.value.ok) {
+        const secResult = await secRes.value.json();
+        if (secResult.success && Array.isArray(secResult.data)) {
+          setSecurityLogs(secResult.data);
+          anySuccessful = true;
         }
       }
 
-      if (has401) {
-        console.warn("[AUTH] Session token expired (401). Redirecting to login.");
-        localStorage.removeItem("admin_token");
-        setToken(null);
-        setAuthError("Your administrative session has expired. Please sign in again.");
-        return;
-      }
-
-      if (has403 && !anySuccessful) {
-        setFetchError("403 Forbidden: Your account does not have permission to view platform metrics.");
-      } else if (!anySuccessful && metricsRes.status === "rejected") {
-        setFetchError(`Network Error: Cannot reach ${targetUrl}. Please check CORS or select a different gateway.`);
+      if (!anySuccessful && metricsRes.status === "rejected") {
+        setFetchError(`Network Error: Cannot reach ${targetUrl}. Please click 'VPS (Production)' in the topbar.`);
       } else {
         setFetchError(null);
         setLastSynced(new Date().toLocaleTimeString());
@@ -321,31 +232,12 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!token) return;
     fetchDashboardData();
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     pollTimerRef.current = setInterval(() => {
       fetchDashboardData(true);
     }, 15000);
-  }, [token, apiBaseUrl]);
-
-  if (!token) {
-    return (
-      <AuthScreen
-        isInitializing={isInitializing}
-        token={token}
-        phone={phone}
-        setPhone={setPhone}
-        otp={otp}
-        setOtp={setOtp}
-        authError={authError}
-        authLoading={authLoading}
-        handleLogin={handleLogin}
-        apiBaseUrl={apiBaseUrl}
-        handleApiChange={handleApiChange}
-      />
-    );
-  }
+  }, [apiBaseUrl]);
 
   return (
     <div className="dashboard-layout">
@@ -366,7 +258,7 @@ export default function App() {
           {activeTab === "BROADCAST" && (
             <BroadcastTab
               apiBaseUrl={apiBaseUrl}
-              token={token}
+              token={token || "direct-admin-session"}
               tenantsList={tenantsList}
             />
           )}
