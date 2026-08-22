@@ -182,45 +182,47 @@ export async function listClassStudents(
   const limit = Math.min(100, Math.max(1, options?.limit ?? 20));
   const offset = (page - 1) * limit;
 
-  const [totalResult] = await db
-    .select({ total: count() })
-    .from(classEnrollments)
-    .innerJoin(students, eq(classEnrollments.studentId, students.id))
-    .where(
-      and(
-        eq(classEnrollments.classId, classId),
-        eq(students.tenantId, tenantId),
-        isNull(students.deletedAt)
+  // ⚡ Bolt: Execute total count and data selection concurrently using Promise.all
+  const [[totalResult], data] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(classEnrollments)
+      .innerJoin(students, eq(classEnrollments.studentId, students.id))
+      .where(
+        and(
+          eq(classEnrollments.classId, classId),
+          eq(students.tenantId, tenantId),
+          isNull(students.deletedAt)
+        )
+      ),
+    db
+      .select({
+        id: students.id,
+        tenantId: students.tenantId,
+        name: students.name,
+        rollNumber: students.rollNumber,
+        parentId: students.parentId,
+        phone: students.phone,
+        createdAt: students.createdAt,
+        updatedAt: students.updatedAt,
+        enrolledAt: classEnrollments.enrolledAt,
+        isMonitor: classEnrollments.isMonitor,
+      })
+      .from(classEnrollments)
+      .innerJoin(students, eq(classEnrollments.studentId, students.id))
+      .where(
+        and(
+          eq(classEnrollments.classId, classId),
+          eq(students.tenantId, tenantId),
+          isNull(students.deletedAt)
+        )
       )
-    );
+      .orderBy(students.name)
+      .limit(limit)
+      .offset(offset),
+  ]);
 
   const total = totalResult?.total ?? 0;
-
-  const data = await db
-    .select({
-      id: students.id,
-      tenantId: students.tenantId,
-      name: students.name,
-      rollNumber: students.rollNumber,
-      parentId: students.parentId,
-      phone: students.phone,
-      createdAt: students.createdAt,
-      updatedAt: students.updatedAt,
-      enrolledAt: classEnrollments.enrolledAt,
-      isMonitor: classEnrollments.isMonitor,
-    })
-    .from(classEnrollments)
-    .innerJoin(students, eq(classEnrollments.studentId, students.id))
-    .where(
-      and(
-        eq(classEnrollments.classId, classId),
-        eq(students.tenantId, tenantId),
-        isNull(students.deletedAt)
-      )
-    )
-    .orderBy(students.name)
-    .limit(limit)
-    .offset(offset);
 
   return {
     data,
