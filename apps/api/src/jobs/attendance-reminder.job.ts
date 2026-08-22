@@ -1,5 +1,5 @@
 import { db } from "../lib/db.js";
-import { schedules, teacherProfiles, attendanceSessions } from "@whiteroom/db";
+import { schedules, teacherProfiles, schoolAdmins, classes, attendanceSessions } from "@whiteroom/db";
 import { sendPushToUser } from "../lib/fcm.js";
 import { getBoss } from "../lib/pgboss.js";
 import { eq, and } from "@whiteroom/db";
@@ -36,7 +36,7 @@ export async function registerAttendanceReminderWorker() {
   const boss = getBoss();
 
   await boss.work<ReminderJob>("attendance-reminder", async ([job]) => {
-    const { classId, tenantId, date, message } = job.data;
+    const { classId, tenantId, date, message, className } = job.data;
 
     // Check if session already marked (done or live)
     const [session] = await db
@@ -52,18 +52,43 @@ export async function registerAttendanceReminderWorker() {
 
     if (session && (session.status === "done" || session.status === "live")) {
       // Already marked or started manually, skip notification silently
+      console.log(`[ATTENDANCE REMINDER] Session already ${session.status} for class ${classId} on ${date}. Skipping notification.`);
       return;
     }
 
-    // Send FCM to teachers
+    // Look up assigned teacher on the class
+    const [classRow] = await db
+      .select({ name: classes.name, teacherId: classes.teacherId })
+      .from(classes)
+      .where(eq(classes.id, classId))
+      .limit(1);
+
+    const targetUserIds: string[] = [];
+    if (classRow?.teacherId) {
+      targetUserIds.push(classRow.teacherId);
+    }
+
+    // Send FCM to all teachers of tenant
     const teachers = await db
       .select({ userId: teacherProfiles.userId })
       .from(teacherProfiles)
       .where(eq(teacherProfiles.tenantId, tenantId));
+    for (const t of teachers) targetUserIds.push(t.userId);
+
+    // Send FCM to school admins (so single-admin tuition centers & creators get notified)
+    const admins = await db
+      .select({ userId: schoolAdmins.userId })
+      .from(schoolAdmins)
+      .where(eq(schoolAdmins.tenantId, tenantId));
+    for (const a of admins) targetUserIds.push(a.userId);
+
+    const uniqueUserIds = [...new Set(targetUserIds)];
+
+    console.log(`📢 [ATTENDANCE REMINDER] Dispatching push for "${classRow?.name || className}" on ${date} to ${uniqueUserIds.length} users:`, uniqueUserIds);
 
     await Promise.all(
-      teachers.map((teacher) =>
-        sendPushToUser(tenantId, teacher.userId, {
+      uniqueUserIds.map((userId) =>
+        sendPushToUser(tenantId, userId, {
           title: "Attendance Alert",
           body: message,
           type: "reminder",

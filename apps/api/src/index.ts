@@ -289,9 +289,16 @@ serve({ fetch: app.fetch, port: env.PORT, hostname: "0.0.0.0" }, (info) => {
   `);
 });
 
-runDbMigrations().catch((err) => {
-  console.error("❌ [DB] Migrations failed:", err);
-});
+runDbMigrations()
+  .then(() => {
+    return startJobs();
+  })
+  .then(() => {
+    console.log("⏰ [JOBS] Background workers & attendance reminder queues initialized.");
+  })
+  .catch((err) => {
+    console.error("❌ [BOOT] DB migrations or jobs initialization failed:", err);
+  });
 
 // ─── Start WhatsApp Bot (lazy init — only when explicitly enabled in-process) ───
 if (process.env.ENABLE_INPROCESS_WHATSAPP_BOT === "true") {
