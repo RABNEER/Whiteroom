@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { logger } from "hono/logger";
 import { bodyLimit } from "hono/body-limit";
+import { compress } from "hono/compress";
 import { corsMiddleware } from "./middleware/cors.js";
 import { errorHandler } from "./middleware/error.js";
 import { env } from "./lib/env.js";
@@ -131,6 +132,7 @@ app.use(
 );
 app.use("*", logger());
 app.use("*", corsMiddleware());
+app.use("*", compress());
 
 // ─── Health Check ───
 app.get("/health", (c) => {
