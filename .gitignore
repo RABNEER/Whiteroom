@@ -48,14 +48,21 @@ chrome-profile/
 .puppeteer/
 
 # ==========================================
-# 🛠️ Scratch, Ad-hoc Scripts & Local DBs
+# 🛠️ Scratch, Ad-hoc Scripts, Docs & Python
 # ==========================================
+docs/
 scratch/
 tmp/
 temp/
+.agents/skills/docx/scripts/
+*.py
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+.pytest_cache/
 check-*.ts
 check-*.js
-check_*.py
 find_node.py
 nuclear_wipe.py
 run_migration_*.cjs
