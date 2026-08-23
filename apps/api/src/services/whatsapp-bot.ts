@@ -28,12 +28,44 @@ let botConnected = false;
 let botInitialized = false;
 let client: InstanceType<typeof Client> | null = null;
 
+const QR_FILE_PATH = "/tmp/whatsapp_qr.json";
+
+function writeQrState(qr: string | null, connected: boolean) {
+  try {
+    fs.writeFileSync(
+      QR_FILE_PATH,
+      JSON.stringify({ qr, connected, updatedAt: Date.now() }),
+      "utf-8"
+    );
+  } catch {}
+}
+
 export function getLatestQr(): string | null {
-  return latestQr;
+  if (latestQr) return latestQr;
+  try {
+    if (fs.existsSync(QR_FILE_PATH)) {
+      const raw = fs.readFileSync(QR_FILE_PATH, "utf-8");
+      const data = JSON.parse(raw);
+      if (Date.now() - (data.updatedAt || 0) < 120000) {
+        return data.qr || null;
+      }
+    }
+  } catch {}
+  return null;
 }
 
 export function isBotConnected(): boolean {
-  return botConnected;
+  if (botConnected) return true;
+  try {
+    if (fs.existsSync(QR_FILE_PATH)) {
+      const raw = fs.readFileSync(QR_FILE_PATH, "utf-8");
+      const data = JSON.parse(raw);
+      if (Date.now() - (data.updatedAt || 0) < 120000) {
+        return !!data.connected;
+      }
+    }
+  } catch {}
+  return false;
 }
 
 export async function logoutBot(
@@ -46,6 +78,7 @@ export async function logoutBot(
     latestQr = null;
     botConnected = false;
     (globalThis as any).whatsappBotConnected = false;
+    writeQrState(null, false);
     await db.delete(whatsappBotStore).catch(() => { });
     console.log("🗑️ [WHATSAPP BOT DB] Cleared auth session from PostgreSQL database.");
   } catch (err) {
@@ -446,6 +479,7 @@ export async function initWhatsAppBot(): Promise<void> {
   client.on("qr", (qr: string) => {
     latestQr = qr;
     (globalThis as any).whatsappLatestQr = qr;
+    writeQrState(qr, false);
     console.log(
       "\n📱 [WHATSAPP BOT] Scan this QR code using Linked Devices in WhatsApp:"
     );
@@ -458,6 +492,7 @@ export async function initWhatsAppBot(): Promise<void> {
     botConnected = true;
     (globalThis as any).whatsappLatestQr = null;
     (globalThis as any).whatsappBotConnected = true;
+    writeQrState(null, true);
     console.log(
       "\n✅ [WHATSAPP BOT] Connected successfully to WhatsApp network via Chromium!"
     );
@@ -492,6 +527,7 @@ export async function initWhatsAppBot(): Promise<void> {
   client.on("authenticated", async () => {
     latestQr = null;
     (globalThis as any).whatsappLatestQr = null;
+    writeQrState(null, true);
     console.log("🔒 [WHATSAPP BOT] Authenticated successfully.");
     await saveAuthToDb(authDataPath);
   });
@@ -513,6 +549,7 @@ export async function initWhatsAppBot(): Promise<void> {
   client.on("disconnected", async (reason: string) => {
     botConnected = false;
     (globalThis as any).whatsappBotConnected = false;
+    writeQrState(null, false);
     console.warn("⚠️ [WHATSAPP BOT] Client disconnected:", reason);
 
     if (reason === "LOGOUT" || String(reason).toUpperCase().includes("LOGOUT")) {
