@@ -88,24 +88,18 @@ export async function whatsappWebhookHandler(c: Context) {
       }, 400);
     }
 
-    // 🔒 STRICT SECURITY: Enforce that WhatsApp sender phone matches the session phone number
+    // 🔒 Enforce that WhatsApp sender matches session phone number
     const rawSenderPhone = parsed.data.phone || from;
     const normalizedSenderPhone = rawSenderPhone ? normalizePhone(rawSenderPhone) : "";
     const isValidSender = isValidIndianPhone(normalizedSenderPhone);
 
+    let verifiedPhone = "";
+
     if (session.phone) {
       const normalizedSessionPhone = normalizePhone(session.phone);
 
-      if (!isValidSender) {
-        console.warn(`❌ [WHATSAPP WEBHOOK] Could not extract a valid phone from sender (raw: ${rawSenderPhone}, isLid: ${isLid}).`);
-        return c.json({
-          success: false,
-          error: "Could not verify your phone number from WhatsApp. Please send the message directly from the primary WhatsApp phone associated with your account.",
-          data: { phone: sessionPhone },
-        }, 400);
-      }
-
-      if (normalizedSenderPhone !== normalizedSessionPhone) {
+      // If sender phone is a valid phone number and explicitly differs from session phone
+      if (isValidSender && normalizedSenderPhone !== normalizedSessionPhone) {
         console.warn(`❌ [WHATSAPP WEBHOOK] Phone mismatch! App entered: ${normalizedSessionPhone}, WhatsApp sender: ${normalizedSenderPhone}`);
         return c.json({
           success: false,
@@ -113,9 +107,11 @@ export async function whatsappWebhookHandler(c: Context) {
           data: { phone: sessionPhone },
         }, 400);
       }
+
+      // If sender phone matches OR sender is using @lid (masked identity), bind to the pre-authorized session phone
+      verifiedPhone = normalizedSessionPhone;
     } else if (isValidSender) {
-      // If session had no pre-bound phone, bind to verified sender phone
-      session.phone = normalizedSenderPhone;
+      verifiedPhone = normalizedSenderPhone;
     } else {
       return c.json({
         success: false,
@@ -128,7 +124,7 @@ export async function whatsappWebhookHandler(c: Context) {
       .update(whatsappSessions)
       .set({
         verified: true,
-        phone: normalizedSenderPhone || session.phone,
+        phone: verifiedPhone,
       })
       .where(eq(whatsappSessions.id, session.id));
 

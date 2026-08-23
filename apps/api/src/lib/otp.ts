@@ -11,27 +11,20 @@ import { createHash, randomBytes, randomInt } from "node:crypto";
  * - If already starts with +91, keep as-is
  */
 export function normalizePhone(raw: string): string {
-  // Strip non-numeric characters except leading +
-  let phone = raw.replace(/[\s\-.()\u00A0]/g, "");
+  if (!raw) return "";
 
-  // Handle leading 0 (common Indian format: 09876543210)
-  if (phone.startsWith("0") && phone.length === 11) {
-    phone = "+91" + phone.slice(1);
-  }
-  // Handle bare 10-digit number
-  else if (/^\d{10}$/.test(phone)) {
-    phone = "+91" + phone;
-  }
-  // Handle 91XXXXXXXXXX without plus
-  else if (phone.startsWith("91") && phone.length === 12) {
-    phone = "+" + phone;
-  }
-  // Handle already formatted +91XXXXXXXXXX
-  else if (phone.startsWith("+91") && phone.length === 13) {
-    // Already correct
+  // Strip any @c.us, @lid, or device suffix like :1, :2
+  let cleaned = raw.split("@")[0].split(":")[0];
+  // Extract only digits
+  const digits = cleaned.replace(/\D/g, "");
+
+  // If digits contain at least 10 digits, take the last 10 digits as the Indian mobile number
+  if (digits.length >= 10) {
+    const last10 = digits.slice(-10);
+    return "+91" + last10;
   }
 
-  return phone;
+  return raw.trim();
 }
 
 /**
