@@ -10,13 +10,25 @@ type WhatsappSessionPhoneResponse = {
   phone: string | null;
 };
 
+import crypto from "node:crypto";
+
 export async function whatsappSessionPhoneHandler(c: Context) {
   try {
     const secret = c.req.header("x-webhook-secret");
-    const configSecret = env.WHATSAPP_WEBHOOK_SECRET || "whiteroom-whatsapp-bot-internal-secret";
-    const defaultSecret = "whiteroom-whatsapp-bot-internal-secret";
+    const configSecret = env.WHATSAPP_WEBHOOK_SECRET;
 
-    if (!secret || (secret !== configSecret && secret !== defaultSecret)) {
+    if (!secret || !configSecret) {
+      console.error("❌ [WHATSAPP] Webhook secret missing or unconfigured.");
+      throw Errors.unauthorized("Invalid webhook secret");
+    }
+
+    const secretBuf = Buffer.from(secret);
+    const configBuf = Buffer.from(configSecret);
+    const isSecretValid =
+      secretBuf.length === configBuf.length &&
+      crypto.timingSafeEqual(secretBuf, configBuf);
+
+    if (!isSecretValid) {
       console.error("❌ [WHATSAPP] Webhook secret mismatch.");
       throw Errors.unauthorized("Invalid webhook secret");
     }

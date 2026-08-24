@@ -9,15 +9,12 @@ import { PlatformMetrics, Tenant, User, SecurityAuditLog } from "./types";
 
 export default function App() {
   const [token] = useState<string | null>(
-    localStorage.getItem("admin_token") || "wr_adm_9a8f4c2e71b56d03"
+    localStorage.getItem("admin_token") || ((import.meta as any).env?.VITE_ADMIN_API_KEY as string) || ""
   );
 
   // Smart API URL resolution with auto-fallback
   const getInitialApiUrl = () => {
     if (typeof window !== "undefined") {
-      if (window.location.hostname === "66.42.90.144") {
-        return "http://66.42.90.144:3000/api/v1";
-      }
       if (window.location.hostname.includes("whiteroom.co.in")) {
         return "https://apps.whiteroom.co.in/api/v1";
       }
@@ -26,7 +23,7 @@ export default function App() {
     if (stored && !stored.includes(":8080") && !stored.includes("localhost:3000")) {
       return stored;
     }
-    return "http://66.42.90.144:3000/api/v1";
+    return "https://apps.whiteroom.co.in/api/v1";
   };
 
   const [apiBaseUrl, setApiBaseUrl] = useState<string>(getInitialApiUrl);

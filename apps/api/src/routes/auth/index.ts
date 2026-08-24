@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
+import { env } from "../../lib/env.js";
 import { otpSendHandler } from "./otp-send.js";
 import { otpVerifyHandler } from "./otp-verify.js";
 import { registerHandler } from "./register.js";
@@ -58,15 +59,58 @@ const pairCodeLimiter = rateLimitMiddleware({
   errorCode: "PAIR_CODE_RATE_LIMITED",
 });
 
+import QRCode from "qrcode";
+import crypto from "node:crypto";
+
+function isAuthorizedAdmin(c: Context): boolean {
+  const authHeader = c.req.header("Authorization");
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const queryToken = c.req.query("admin_key") || c.req.query("token");
+  const provided = bearerToken || queryToken;
+  const configured = env.ADMIN_API_KEY;
+
+  if (provided && configured) {
+    const providedBuf = Buffer.from(provided);
+    const configuredBuf = Buffer.from(configured);
+    if (
+      providedBuf.length === configuredBuf.length &&
+      crypto.timingSafeEqual(providedBuf, configuredBuf)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Public - no auth required
 authRoutes.post("/otp/send", otpSendLimiter, otpSendHandler);
 authRoutes.post("/otp/verify", otpVerifyLimiter, otpVerifyHandler);
 authRoutes.post("/whatsapp/session", otpSendLimiter, whatsappSessionCreateHandler);
 authRoutes.get("/whatsapp/session/:id", whatsappSessionGetHandler);
 authRoutes.get("/whatsapp/session/:id/phone", whatsappSessionPhoneHandler);
+
 authRoutes.get("/whatsapp/qr/raw", qrRawLimiter, async (c) => {
+  // Check admin authorization
+  if (!isAuthorizedAdmin(c)) {
+    const user = c.get("user" as any);
+    if (!user || (user.role !== "super_admin" && user.role !== "school_admin")) {
+      return c.json({ success: false, error: "Admin authorization required to view pairing QR code." }, 401);
+    }
+  }
+
+  const qr = getLatestQr();
+  let qrImage: string | null = null;
+  if (qr) {
+    try {
+      qrImage = await QRCode.toDataURL(qr, { width: 300, margin: 2 });
+    } catch {
+      qrImage = null;
+    }
+  }
+
   return c.json({
-    qr: getLatestQr(),
+    qr,
+    qrImage,
     connected: isBotConnected(),
   });
 });
@@ -115,6 +159,20 @@ authRoutes.post("/whatsapp/pair-code", authMiddleware, requireRole("school_admin
 });
 
 authRoutes.get("/whatsapp/qr", qrPageLimiter, async (c) => {
+  if (!isAuthorizedAdmin(c)) {
+    return c.html(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Admin Authentication Required</title></head>
+      <body style="font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f5f5f5;">
+        <div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center;">
+          <h2 style="color: #d32f2f;">🔒 Admin Authorization Required</h2>
+          <p>Please pass your admin key in the URL: <code>?admin_key=YOUR_KEY</code></p>
+        </div>
+      </body>
+      </html>
+    `, 401);
+  }
   const html = `
     <!DOCTYPE html>
     <html>
@@ -313,25 +371,29 @@ authRoutes.get("/whatsapp/qr", qrPageLimiter, async (c) => {
           }
         }
 
-        function renderQr(qrData) {
+        function renderQr(qrData, qrImage) {
           if (qrData === currentQr) return;
           currentQr = qrData;
           loader.style.display = 'none';
           img.style.display = 'block';
-          img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qrData);
+          if (qrImage) {
+            img.src = qrImage;
+          }
           statusDiv.innerText = 'Ready to scan! (Auto-updates in real-time)';
         }
 
         async function pollQr() {
           try {
-            const res = await fetch('/api/v1/auth/whatsapp/qr/raw');
+            const adminKey = new URLSearchParams(window.location.search).get('admin_key') || new URLSearchParams(window.location.search).get('token') || '';
+            const url = '/api/v1/auth/whatsapp/qr/raw' + (adminKey ? '?admin_key=' + encodeURIComponent(adminKey) : '');
+            const res = await fetch(url);
             const data = await res.json();
             if (data.connected) {
               currentQr = null;
               setupContainer.style.display = 'none';
               statusDiv.innerHTML = '<span style="color: #128c7e; font-size: 24px; font-weight: bold;">✅ Connected!</span><br/><br/>The WhatsApp bot is paired and ready.';
-            } else if (data.qr) {
-              renderQr(data.qr);
+            } else if (data.qrImage || data.qr) {
+              renderQr(data.qr, data.qrImage);
             } else {
               currentQr = null;
               img.style.display = 'none';

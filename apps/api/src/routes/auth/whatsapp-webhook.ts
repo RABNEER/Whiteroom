@@ -18,17 +18,26 @@ const webhookSchema = z.object({
   rawJid: z.string().optional(),
 });
 
+import crypto from "node:crypto";
+
 export async function whatsappWebhookHandler(c: Context) {
   try {
     const secret = c.req.header("x-webhook-secret");
     const configSecret = env.WHATSAPP_WEBHOOK_SECRET;
-    
-    // Allow loopback/internal requests without secret check
-    const clientIp = getClientIp(c);
-    const isLoopback = clientIp === "" || clientIp === "unknown" || clientIp === "127.0.0.1" || clientIp === "::1" || clientIp.startsWith("::ffff:127.");
 
-    if (!isLoopback && secret !== configSecret) {
-      console.error("❌ [WHATSAPP WEBHOOK] Webhook secret mismatch. IP:", clientIp);
+    if (!secret || !configSecret) {
+      console.error("❌ [WHATSAPP WEBHOOK] Missing webhook secret header or configuration.");
+      throw Errors.unauthorized("Invalid webhook secret");
+    }
+
+    const secretBuf = Buffer.from(secret);
+    const configBuf = Buffer.from(configSecret);
+    const isSecretValid =
+      secretBuf.length === configBuf.length &&
+      crypto.timingSafeEqual(secretBuf, configBuf);
+
+    if (!isSecretValid) {
+      console.error("❌ [WHATSAPP WEBHOOK] Webhook secret mismatch.");
       throw Errors.unauthorized("Invalid webhook secret");
     }
 
@@ -55,15 +64,15 @@ export async function whatsappWebhookHandler(c: Context) {
     const tokenHash = hashSHA256(code);
     const now = new Date();
 
-    // 1. Find session by code or token
+    // 1. Find session strictly by cryptographic token hash
     const [session] = await db
       .select()
       .from(whatsappSessions)
-      .where(or(eq(whatsappSessions.token, tokenHash), eq(whatsappSessions.id, code)))
+      .where(eq(whatsappSessions.token, tokenHash))
       .limit(1);
 
     if (!session) {
-      console.warn(`[WHATSAPP WEBHOOK] Session code ${code} not found in database.`);
+      console.warn(`[WHATSAPP WEBHOOK] Verification session not found.`);
       return c.json({
         success: false,
         error: "Verification session not found. Please request a new code from the Whiteroom app.",

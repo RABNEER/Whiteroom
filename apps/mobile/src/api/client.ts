@@ -578,11 +578,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  simulatePaymentWebhook: (payload: any): Promise<any> =>
-    request<any>("/payments/webhook", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
 
   // ─── Bulletins ───
   getBulletins: (filters?: { classId?: string }): Promise<BulletinResponse[]> => {

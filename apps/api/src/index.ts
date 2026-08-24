@@ -175,12 +175,13 @@ app.post(
 app.post(
   "/api/v1/classes/:id/walt/flashcards",
   authMiddleware,
+  requireRole(UserRole.SCHOOL_ADMIN, UserRole.TEACHER),
   waltFlashcardHandler
 );
 app.get(
   "/api/v1/reports/insights",
   authMiddleware,
-  requireRole(UserRole.SCHOOL_ADMIN, UserRole.TEACHER),
+  requireRole(UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   waltInsightsHandler
 );
 app.post(
@@ -190,9 +191,9 @@ app.post(
   waltDraftNoticeHandler
 );
 
-// ─── Local Storage Static File Serving (for G:\My Drive\Whiteroom) ───
-app.get("/api/v1/storage/files/*", async (c) => {
-  const localStoragePath = env.LOCAL_STORAGE_PATH || process.env.LOCAL_STORAGE_PATH || "G:\\My Drive\\Whiteroom";
+// ─── Local Storage Static File Serving ───
+app.get("/api/v1/storage/files/*", authMiddleware, async (c) => {
+  const localStoragePath = env.LOCAL_STORAGE_PATH || process.env.LOCAL_STORAGE_PATH || path.resolve(process.cwd(), "uploads");
   const rawPath = c.req.path.replace(/^\/api\/v1\/storage\/files\//, "");
   const relPath = decodeURIComponent(rawPath);
   const normalizedRoot = path.normalize(localStoragePath);
@@ -203,12 +204,22 @@ app.get("/api/v1/storage/files/*", async (c) => {
     return c.json({ error: "Access denied" }, 403);
   }
 
+  // Tenant access verification
+  const user = c.get("user" as any);
+  const pathParts = relPath.split(/[/\\]/);
+  const targetTenantId = pathParts[0];
+
+  if (targetTenantId && user && user.role !== "super_admin" && user.tenantId !== "global" && user.tenantId !== targetTenantId) {
+    return c.json({ error: "Unauthorized access to tenant files" }, 403);
+  }
+
   try {
     const fileBuf = await fsPromises.readFile(fullPath);
     return new Response(fileBuf, {
       status: 200,
       headers: {
         "Content-Type": "application/octet-stream",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch {

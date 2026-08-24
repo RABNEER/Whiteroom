@@ -19,16 +19,14 @@ export function corsMiddleware() {
     "https://admin.whiteroom.co.in",
     env.MOBILE_WEB_URL,
     env.ADMIN_URL,
-  ]);
+  ].filter(Boolean));
 
   return honoCors({
     origin: (origin) => {
       if (!origin) return "*";
       if (allowedExact.has(origin)) return origin;
-      if (LOCALHOST_REGEX.test(origin)) return origin;
       if (LOCAL_LAN_REGEX.test(origin)) return origin;
-      if (env.NODE_ENV !== "production") return origin;
-      return origin; // Allow all origins for administrative dashboard client & mobile web
+      return null;
     },
     credentials: true,
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],

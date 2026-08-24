@@ -253,20 +253,20 @@ export async function promoteAllStudents(
   if (promotionsToSend.length > 0) {
     const studentIds = promotionsToSend.map((p) => p.studentId);
     const parentLinks = await getParentUserIdsForStudents(tenantId, studentIds);
-    const parentMap = new Map(parentLinks.map((p) => [p.studentId, p.parentId]));
+    const parentMap = new Map(parentLinks.map((p) => [p.studentId, p.parentUserId]));
 
     const groupedPromotions = new Map<string, string[]>();
     for (const promotion of promotionsToSend) {
-      const parentId = parentMap.get(promotion.studentId);
-      if (parentId) {
+      const parentUserId = parentMap.get(promotion.studentId);
+      if (parentUserId) {
         const group = groupedPromotions.get(promotion.newClassName) ?? [];
-        group.push(parentId);
+        group.push(parentUserId);
         groupedPromotions.set(promotion.newClassName, group);
       }
     }
 
-    for (const [newClassName, parentIds] of groupedPromotions.entries()) {
-      sendPushToUsers(tenantId, parentIds, {
+    for (const [newClassName, parentUserIds] of groupedPromotions.entries()) {
+      sendPushToUsers(tenantId, parentUserIds, {
         title: "Class Promotion 🎓",
         body: `Your child has been promoted to ${newClassName} for academic year ${academicYear}.`,
         type: "reminder",
@@ -278,20 +278,20 @@ export async function promoteAllStudents(
   if (graduationsToSend.length > 0) {
     const studentIds = graduationsToSend.map((g) => g.studentId);
     const parentLinks = await getParentUserIdsForStudents(tenantId, studentIds);
-    const parentMap = new Map(parentLinks.map((p) => [p.studentId, p.parentId]));
+    const parentMap = new Map(parentLinks.map((p) => [p.studentId, p.parentUserId]));
 
     const groupedGraduations = new Map<string, string[]>();
     for (const graduation of graduationsToSend) {
-      const parentId = parentMap.get(graduation.studentId);
-      if (parentId) {
+      const parentUserId = parentMap.get(graduation.studentId);
+      if (parentUserId) {
         const group = groupedGraduations.get(graduation.className) ?? [];
-        group.push(parentId);
+        group.push(parentUserId);
         groupedGraduations.set(graduation.className, group);
       }
     }
 
-    for (const [className, parentIds] of groupedGraduations.entries()) {
-      sendPushToUsers(tenantId, parentIds, {
+    for (const [className, parentUserIds] of groupedGraduations.entries()) {
+      sendPushToUsers(tenantId, parentUserIds, {
         title: "Congratulations! 🎉",
         body: `Your child has graduated from ${className}.`,
         type: "reminder",

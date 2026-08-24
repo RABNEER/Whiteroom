@@ -64,7 +64,11 @@ function RootLayout() {
               {
                 text: "Download Update",
                 onPress: () => {
-                  if (config.apkUrl) {
+                  if (
+                    config.apkUrl &&
+                    (config.apkUrl.startsWith("https://github.com/RABNEER/Whiteroom/releases/") ||
+                      config.apkUrl.startsWith("https://apps.whiteroom.co.in/"))
+                  ) {
                     Linking.openURL(config.apkUrl).catch(console.warn);
                   }
                 },

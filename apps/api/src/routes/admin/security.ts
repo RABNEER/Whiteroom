@@ -27,6 +27,7 @@ const breachNotifySchema = z.object({
  */
 export async function getSecurityLogsHandler(c: Context) {
   try {
+    const user = c.get("user") as any;
     const severity = c.req.query("severity");
     const limitQuery = parseInt(c.req.query("limit") || "50", 10);
     const limit = isNaN(limitQuery) ? 50 : Math.min(limitQuery, 200);
@@ -34,6 +35,10 @@ export async function getSecurityLogsHandler(c: Context) {
     const conditions: any[] = [];
     if (severity && severity !== "ALL") {
       conditions.push(eq(securityAuditLogs.severity, severity));
+    }
+
+    if (user?.role !== "super_admin" && user?.tenantId && user?.tenantId !== "global") {
+      conditions.push(eq(securityAuditLogs.tenantId, user.tenantId));
     }
 
     const logs = await db
@@ -139,22 +144,31 @@ export async function sendBreachNotificationHandler(c: Context) {
  * Exports CERT-In (6-hour timeline) and DPDP (72-hour timeline) compliance incident report.
  */
 export async function exportCertInReportHandler(c: Context) {
+  const user = c.get("user") as any;
   const daysQuery = parseInt(c.req.query("days") || "30", 10);
   const days = isNaN(daysQuery) ? 30 : Math.min(daysQuery, 365);
 
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
 
+  const logConditions: any[] = [gte(securityAuditLogs.createdAt, cutoff)];
+  const breachConditions: any[] = [gte(breachNotifications.notifiedAt, cutoff)];
+
+  if (user?.role !== "super_admin" && user?.tenantId && user?.tenantId !== "global") {
+    logConditions.push(eq(securityAuditLogs.tenantId, user.tenantId));
+    breachConditions.push(eq(breachNotifications.tenantId, user.tenantId));
+  }
+
   const logs = await db
     .select()
     .from(securityAuditLogs)
-    .where(gte(securityAuditLogs.createdAt, cutoff))
+    .where(and(...logConditions))
     .orderBy(desc(securityAuditLogs.createdAt));
 
   const breaches = await db
     .select()
     .from(breachNotifications)
-    .where(gte(breachNotifications.notifiedAt, cutoff))
+    .where(and(...breachConditions))
     .orderBy(desc(breachNotifications.notifiedAt));
 
   const report = {

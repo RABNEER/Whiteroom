@@ -330,10 +330,10 @@ export async function markAttendanceBatch(
       absentStudentIds
     );
 
-    const parentIds = parentLinks.map((p) => p.parentId);
+    const parentUserIds = parentLinks.map((p) => p.parentUserId);
 
-    if (parentIds.length > 0) {
-      sendPushToUsers(tenantId, parentIds, {
+    if (parentUserIds.length > 0) {
+      sendPushToUsers(tenantId, parentUserIds, {
         title: "Absence Alert",
         body: "Your child was marked absent today.",
         type: "absence",
@@ -468,25 +468,33 @@ export async function markAllPresent(
 
   // Send instant FCM notifications to all parents (fire-and-forget)
   if (!("duplicate" in result.response)) {
-    const parentIds = result.enrolledStudents
+    const studentIds = result.enrolledStudents
       .filter((s) => s.parentId !== null)
-      .map((s) => s.parentId as string);
+      .map((s) => s.studentId);
 
-    if (parentIds.length > 0) {
-      // Get class name for notification
-      const { classes } = await import("@whiteroom/db");
-      const [classInfo] = await db
-        .select({ name: classes.name })
-        .from(attendanceSessions)
-        .innerJoin(classes, eq(attendanceSessions.classId, classes.id))
-        .where(eq(attendanceSessions.id, sessionId))
-        .limit(1);
+    if (studentIds.length > 0) {
+      const parentLinks = await getParentUserIdsForStudents(
+        tenantId,
+        studentIds
+      );
+      const parentUserIds = parentLinks.map((p) => p.parentUserId);
 
-      sendPushToUsers(tenantId, parentIds, {
-        title: "Attendance Marked ✓",
-        body: `Your child was present in ${classInfo?.name || "class"} today`,
-        type: "reminder",
-      });
+      if (parentUserIds.length > 0) {
+        // Get class name for notification
+        const { classes } = await import("@whiteroom/db");
+        const [classInfo] = await db
+          .select({ name: classes.name })
+          .from(attendanceSessions)
+          .innerJoin(classes, eq(attendanceSessions.classId, classes.id))
+          .where(eq(attendanceSessions.id, sessionId))
+          .limit(1);
+
+        sendPushToUsers(tenantId, parentUserIds, {
+          title: "Attendance Marked ✓",
+          body: `Your child was present in ${classInfo?.name || "class"} today`,
+          type: "reminder",
+        });
+      }
     }
   }
 

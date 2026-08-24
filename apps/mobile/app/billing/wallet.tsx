@@ -78,7 +78,7 @@ export default function WalletScreen() {
         return;
       }
 
-      const isMockOrder = !order.paymentUrl || order.paymentUrl.includes("example.com") || order.id?.startsWith("order_mock") || order.id?.startsWith("recharge_");
+      const isMockOrder = !order.paymentUrl || order.paymentUrl.includes("example.com") || order.id?.startsWith("order_mock");
 
       if (isMockOrder) {
         const msg = `Recharge order ${order.id} initiated for ${order.credits} credits (₹${(order.amountPaise / 100).toFixed(0)}).\n\nIn live mode, you will be redirected to Razorpay checkout.`;

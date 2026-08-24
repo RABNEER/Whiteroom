@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeAll } from "vitest";
 import { Hono } from "hono";
+import { env } from "../lib/env.js";
 import { db } from "../lib/db.js";
 import {
   users,
@@ -380,9 +381,7 @@ describe("Auth Readiness & Security Integration Tests", () => {
           "x-razorpay-signature": signature,
         },
         body: bodyString,
-      });
-
-      expect(res2.status).toBe(200);
+      });      expect(res2.status).toBe(200);
       const json2 = await res2.json() as any;
       console.log("💳 Webhook Run 2 response:", json2);
       expect(json2.success).toBe(true);
@@ -408,12 +407,15 @@ describe("Auth Readiness & Security Integration Tests", () => {
       // 2. Attacker sends code from another phone -> should be rejected with 400
       const mismatchRes = await testApp.request("/api/v1/auth/whatsapp/webhook", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-webhook-secret": env.WHATSAPP_WEBHOOK_SECRET || "whiteroom-whatsapp-bot-internal-secret",
+        },
         body: JSON.stringify({
           from: attackerPhone,
           phone: attackerPhone,
-          text: `Verify ${sessionId}`,
-          code: sessionId,
+          text: `Verify ${sessionToken}`,
+          code: sessionToken,
         }),
       });
 
@@ -433,12 +435,15 @@ describe("Auth Readiness & Security Integration Tests", () => {
       // 3. Legitimate user sends code from the matching phone -> should succeed
       const validRes = await testApp.request("/api/v1/auth/whatsapp/webhook", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-webhook-secret": env.WHATSAPP_WEBHOOK_SECRET || "whiteroom-whatsapp-bot-internal-secret",
+        },
         body: JSON.stringify({
           from: appPhone,
           phone: appPhone,
-          text: `Verify ${sessionId}`,
-          code: sessionId,
+          text: `Verify ${sessionToken}`,
+          code: sessionToken,
         }),
       });
 

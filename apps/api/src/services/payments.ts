@@ -249,7 +249,7 @@ export async function createSubscriptionOrder(
 }
 
 export async function handleRazorpayWebhook(body: string, signature?: string) {
-  if (env.NODE_ENV !== "development" && !verifyRazorpaySignature(body, signature)) {
+  if (!verifyRazorpaySignature(body, signature)) {
     throw Errors.validation(
       "Invalid Razorpay webhook signature"
     );
@@ -310,45 +310,33 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
     return { processed: false };
   }
 
-  // ── Subscription events (autopay) ──────────────────────────────
-  if (event.event === "subscription.authenticated" || event.event === "subscription.activated") {
-    if (!subEntity?.id || !tenantId) return { processed: false };
-
-    const existingSub = await db
-      .select()
-      .from(subscriptions)
-      .where(eq(subscriptions.razorpaySubscriptionId, subEntity.id))
-      .limit(1);
-
-    if (existingSub.length === 0) return { processed: false };
-
-    const startDate = new Date();
-    const endDate = new Date(startDate);
-    endDate.setMonth(endDate.getMonth() + 1);
-
-    await db
-      .update(subscriptions)
-      .set({
-        plan: PlanTier.PRO,
-        razorpayPaymentId: payment?.id ?? existingSub[0].razorpayPaymentId,
-        startDate,
-        endDate,
-        updatedAt: new Date(),
+  // Universal event idempotency guard across all event types
+  if (eventId && tenantId) {
+    const inserted = await db
+      .insert(idempotencyKeys)
+      .values({
+        tenantId,
+        key: `webhook_${eventId}`,
+        scope: "webhook.razorpay",
+        resourceId: eventId,
+        response: { processed: true },
       })
-      .where(eq(subscriptions.id, existingSub[0].id));
+      .onConflictDoNothing()
+      .returning();
 
-    await logAuditEvent({
-      tenantId,
-      action: "subscription.activated.webhook",
-      resource: "subscription",
-      resourceId: existingSub[0].id,
-      details: { event: event.event, subscriptionId: subEntity.id },
-    });
-
-    return { processed: true, subscription: existingSub[0] };
+    if (inserted.length === 0) {
+      console.log(`💳 [PAYMENTS IDEMPOTENCY] Webhook event ${eventId} already processed.`);
+      return { processed: true, alreadyProcessed: true };
+    }
   }
 
-  if (event.event === "subscription.charged") {
+  // ── Subscription events (autopay) ──────────────────────────────
+  if (event.event === "subscription.authenticated") {
+    console.log(`💳 [PAYMENTS] Subscription authenticated for tenant: ${tenantId}, awaiting first charge.`);
+    return { processed: true };
+  }
+
+  if (event.event === "subscription.charged" || event.event === "subscription.activated") {
     if (!subEntity?.id || !tenantId) return { processed: false };
 
     const existingSub = await db
@@ -359,8 +347,9 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
 
     if (existingSub.length === 0) return { processed: false };
 
-    const startDate = new Date();
-    const endDate = new Date(startDate);
+    const now = new Date();
+    const baseDate = (existingSub[0].endDate && existingSub[0].endDate > now) ? existingSub[0].endDate : now;
+    const endDate = new Date(baseDate);
     endDate.setMonth(endDate.getMonth() + 1);
 
     await db
@@ -368,7 +357,7 @@ export async function handleRazorpayWebhook(body: string, signature?: string) {
       .set({
         plan: PlanTier.PRO,
         razorpayPaymentId: payment?.id ?? existingSub[0].razorpayPaymentId,
-        startDate,
+        startDate: existingSub[0].startDate || now,
         endDate,
         updatedAt: new Date(),
       })

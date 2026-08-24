@@ -17,22 +17,28 @@ import {
   getBroadcastHistoryHandler,
 } from "./broadcast.js";
 
+import crypto from "node:crypto";
+
 const adminRoutes = new Hono();
 
 adminRoutes.use("*", async (c, next) => {
   const authHeader = c.req.header("Authorization");
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  const configuredAdminKey = env.ADMIN_API_KEY || "wr_adm_9a8f4c2e71b56d03";
+  const configuredAdminKey = env.ADMIN_API_KEY;
 
-  // 1. Direct local dashboard authentication with secure ADMIN_API_KEY
-  if (token && (token === configuredAdminKey || token === "wr_adm_9a8f4c2e71b56d03")) {
-    c.set("user" as any, {
-      userId: "admin-master-key",
-      phone: env.SUPER_ADMIN_PHONE || "+919999999999",
-      role: UserRole.SUPER_ADMIN,
-      tenantId: "global",
-    });
-    return next();
+  // 1. Direct local dashboard authentication with secure ADMIN_API_KEY (timing-safe comparison)
+  if (token && configuredAdminKey) {
+    const tokenBuf = Buffer.from(token);
+    const keyBuf = Buffer.from(configuredAdminKey);
+    if (tokenBuf.length === keyBuf.length && crypto.timingSafeEqual(tokenBuf, keyBuf)) {
+      c.set("user" as any, {
+        userId: "admin-master-key",
+        phone: env.SUPER_ADMIN_PHONE || "+919999999999",
+        role: UserRole.SUPER_ADMIN,
+        tenantId: "global",
+      });
+      return next();
+    }
   }
 
   // 2. Reject unauthenticated requests

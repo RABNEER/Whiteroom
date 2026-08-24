@@ -212,6 +212,12 @@ export async function sendMessage(
       throw Errors.notFound("Direct message room");
     }
 
+    const isParticipant =
+      dmRoom.participant1Id === senderId || dmRoom.participant2Id === senderId;
+    if (!isParticipant) {
+      throw Errors.forbidden("You are not a participant in this direct message room.");
+    }
+
     const recipientId = dmRoom.participant1Id === senderId ? dmRoom.participant2Id : dmRoom.participant1Id;
 
     // Check if blocked by recipient
@@ -230,7 +236,6 @@ export async function sendMessage(
     if (isBlocked) {
       throw Errors.forbidden("You cannot message this user.");
     }
-
   }
 
   const messageContent = roomType === "direct_message" ? encryptMessage(content, tenantId) : content;
@@ -780,43 +785,44 @@ export async function markRoomRead(tenantId: string, roomId: string, userId: str
     if (role !== UserRole.TEACHER && role !== UserRole.SCHOOL_ADMIN && role !== UserRole.SUPER_ADMIN) {
       throw Errors.forbidden();
     }
-  } else if (roomId.startsWith("dm_")) {
+  } else {
+    // Check if room is a 1-on-1 DM room
     const [dm] = await db
       .select()
       .from(dmRooms)
-      .where(
-        and(
-          eq(dmRooms.id, roomId),
-          eq(dmRooms.tenantId, tenantId),
-          or(eq(dmRooms.participant1Id, userId), eq(dmRooms.participant2Id, userId))
-        )
-      )
+      .where(and(eq(dmRooms.id, roomId), eq(dmRooms.tenantId, tenantId)))
       .limit(1);
-    if (!dm) throw Errors.forbidden();
-  } else {
-    const [classRow] = await db
-      .select()
-      .from(classes)
-      .where(and(eq(classes.id, roomId), eq(classes.tenantId, tenantId), isNull(classes.deletedAt)))
-      .limit(1);
-    if (!classRow) throw Errors.notFound("Room");
 
-    // Check enrollment for non-teacher/admin users
-    if (role !== UserRole.TEACHER && role !== UserRole.SCHOOL_ADMIN && role !== UserRole.SUPER_ADMIN) {
-      const [enrollment] = await db
-        .select({ classId: classEnrollments.classId })
-        .from(classEnrollments)
-        .innerJoin(students, eq(classEnrollments.studentId, students.id))
-        .innerJoin(parentProfiles, eq(students.parentId, parentProfiles.id))
-        .where(
-          and(
-            eq(classEnrollments.classId, roomId),
-            eq(parentProfiles.userId, userId),
-            eq(classEnrollments.status, "active")
-          )
-        )
+    if (dm) {
+      const isParticipant = dm.participant1Id === userId || dm.participant2Id === userId;
+      if (!isParticipant && role !== UserRole.SUPER_ADMIN && role !== UserRole.SCHOOL_ADMIN) {
+        throw Errors.forbidden();
+      }
+    } else {
+      const [classRow] = await db
+        .select()
+        .from(classes)
+        .where(and(eq(classes.id, roomId), eq(classes.tenantId, tenantId), isNull(classes.deletedAt)))
         .limit(1);
-      if (!enrollment) throw Errors.forbidden();
+      if (!classRow) throw Errors.notFound("Room");
+
+      // Check enrollment for non-teacher/admin users
+      if (role !== UserRole.TEACHER && role !== UserRole.SCHOOL_ADMIN && role !== UserRole.SUPER_ADMIN) {
+        const [enrollment] = await db
+          .select({ classId: classEnrollments.classId })
+          .from(classEnrollments)
+          .innerJoin(students, eq(classEnrollments.studentId, students.id))
+          .innerJoin(parentProfiles, eq(students.parentId, parentProfiles.id))
+          .where(
+            and(
+              eq(classEnrollments.classId, roomId),
+              eq(parentProfiles.userId, userId),
+              eq(classEnrollments.status, "active")
+            )
+          )
+          .limit(1);
+        if (!enrollment) throw Errors.forbidden();
+      }
     }
   }
 

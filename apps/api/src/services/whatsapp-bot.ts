@@ -453,6 +453,7 @@ export async function initWhatsAppBot(): Promise<void> {
       protocolTimeout: 120000,
       args: [
         "--no-sandbox",
+        "--single-process",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
         "--disable-accelerated-2d-canvas",

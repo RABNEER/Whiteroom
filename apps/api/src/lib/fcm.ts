@@ -1,5 +1,5 @@
 import { db } from "./db.js";
-import { deviceTokens, notifications, students } from "@whiteroom/db";
+import { deviceTokens, notifications, students, parentProfiles } from "@whiteroom/db";
 import { eq, and, inArray } from "@whiteroom/db";
 import { getFirebaseMessaging } from "./firebase.js";
 
@@ -88,11 +88,16 @@ export async function sendPushToUsers(
   try {
     const uniqueUserIds = Array.from(new Set(userIds));
 
-    // 1. Batch lookup tokens for all users
+    // 1. Batch lookup tokens for all users (tenant isolated)
     const tokens = await db
       .select({ userId: deviceTokens.userId, fcmToken: deviceTokens.fcmToken })
       .from(deviceTokens)
-      .where(inArray(deviceTokens.userId, uniqueUserIds));
+      .where(
+        and(
+          eq(deviceTokens.tenantId, tenantId),
+          inArray(deviceTokens.userId, uniqueUserIds)
+        )
+      );
 
     // 2. Batch write notification records
     const insertedNotifications = await db
@@ -146,21 +151,23 @@ export async function sendPushToUsers(
 }
 
 /**
- * Look up parent user IDs for a list of student IDs.
- * Returns only students that have a linked parent.
+ * Look up parent user IDs (users.id via parent_profiles) for a list of student IDs.
+ * Returns only students that have a linked parent with an active user account.
  */
 export async function getParentUserIdsForStudents(
   tenantId: string,
   studentIds: string[]
-): Promise<{ studentId: string; parentId: string }[]> {
+): Promise<{ studentId: string; parentId: string; parentUserId: string }[]> {
   if (studentIds.length === 0) return [];
 
   const rows = await db
     .select({
       studentId: students.id,
       parentId: students.parentId,
+      parentUserId: parentProfiles.userId,
     })
     .from(students)
+    .innerJoin(parentProfiles, eq(students.parentId, parentProfiles.id))
     .where(
       and(
         eq(students.tenantId, tenantId),
@@ -169,7 +176,7 @@ export async function getParentUserIdsForStudents(
     );
 
   return rows
-    .filter((r): r is { studentId: string; parentId: string } => r.parentId !== null);
+    .filter((r): r is { studentId: string; parentId: string; parentUserId: string } => Boolean(r.parentUserId));
 }
 
 /**
