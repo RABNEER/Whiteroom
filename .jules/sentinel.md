@@ -1,4 +1,4 @@
-## 2025-02-24 - Fix Partial Path Traversal in Storage Endpoint
-**Vulnerability:** The static file serving endpoint in `apps/api/src/index.ts` and the `uploadToStorage` function in `apps/api/src/lib/storage.ts` used `fullPath.startsWith(normalizedRoot)` to validate paths. This allowed a partial path traversal attack where a directory named, for example, `/app/data-secrets` would falsely pass the check if `normalizedRoot` was `/app/data`.
-**Learning:** `startsWith` on strings is insufficient for path boundary validation because it matches string prefixes, not path segments.
-**Prevention:** Always append the directory separator (e.g., `path.sep`) to the root path when using `startsWith` for path boundary checks (e.g., `fullPath.startsWith(normalizedRoot + path.sep) && fullPath !== normalizedRoot`).
+## 2025-02-21 - Fix Hono CORS Wildcard Vulnerability
+**Vulnerability:** The CORS middleware in `apps/api/src/middleware/cors.ts` was configured with `credentials: true` and a fallback `origin: (origin) => return origin`, effectively allowing any authenticated cross-origin request.
+**Learning:** Returning `origin` (the string) directly back to Hono's cors middleware allows the unknown origin. Because `credentials: true` was enabled, this allowed wildcard authenticated requests which is a major security risk for CSRF.
+**Prevention:** Always return a falsy value (e.g., `""` or `null`) when denying an origin in dynamic CORS configuration functions. Also be mindful of mobile wrapper defaults (like Android's `http://localhost` without a port) and whitelist them explicitly via environment variables rather than using blanket regexes that are later accidentally removed or broad wildcards.
