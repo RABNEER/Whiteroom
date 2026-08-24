@@ -89,7 +89,14 @@ export async function whatsappWebhookHandler(c: Context) {
     }
 
     // 🔒 Enforce that WhatsApp sender matches session phone number
-    const rawSenderPhone = parsed.data.phone || from;
+    const isLidSender = Boolean(
+      isLid ||
+      (from && String(from).includes("@lid")) ||
+      (parsed.data.senderJid && String(parsed.data.senderJid).includes("@lid")) ||
+      (parsed.data.rawJid && String(parsed.data.rawJid).includes("@lid"))
+    );
+
+    const rawSenderPhone = isLidSender ? "" : (parsed.data.phone || from || "");
     const normalizedSenderPhone = rawSenderPhone ? normalizePhone(rawSenderPhone) : "";
     const isValidSender = isValidIndianPhone(normalizedSenderPhone);
 
@@ -128,13 +135,13 @@ export async function whatsappWebhookHandler(c: Context) {
       })
       .where(eq(whatsappSessions.id, session.id));
 
-    console.log(`[WHATSAPP WEBHOOK] Session ${code} successfully verified for phone ${normalizedSenderPhone || session.phone}.`);
+    console.log(`[WHATSAPP WEBHOOK] Session ${code} successfully verified for phone ${verifiedPhone}.`);
 
     const response: ApiResponse<{ verified: boolean; phone?: string }> = {
       success: true,
       data: {
         verified: true,
-        phone: session.phone || undefined,
+        phone: verifiedPhone,
       },
     };
 

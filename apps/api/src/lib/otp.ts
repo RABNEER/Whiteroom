@@ -13,25 +13,34 @@ import { createHash, randomBytes, randomInt } from "node:crypto";
 export function normalizePhone(raw: string): string {
   if (!raw) return "";
 
-  // Strip any @c.us, @lid, or device suffix like :1, :2
+  // If the raw string is an @lid JID or contains 'lid', it's an internal WhatsApp identifier, not a phone
+  if (raw.includes("@lid") || raw.toLowerCase().includes("lid")) {
+    return "";
+  }
+
+  // Strip any @c.us or device suffix like :1, :2
   let cleaned = raw.split("@")[0].split(":")[0];
   // Extract only digits
   const digits = cleaned.replace(/\D/g, "");
 
-  // If digits contain at least 10 digits, take the last 10 digits as the Indian mobile number
+  // An Indian mobile number has 10 digits starting with [6-9]
+  // e.g. 9876543210 (10), 09876543210 (11), 919876543210 (12)
   if (digits.length >= 10) {
     const last10 = digits.slice(-10);
-    return "+91" + last10;
+    // Real Indian mobile telecom series: starts with 6, 7, 8, or 9
+    if (/^[6-9]\d{9}$/.test(last10)) {
+      return "+91" + last10;
+    }
   }
 
-  return raw.trim();
+  return "";
 }
 
 /**
- * Validate that a phone number is in +91XXXXXXXXXX format.
+ * Validate that a phone number is in +91XXXXXXXXXX format with valid Indian telecom prefix.
  */
 export function isValidIndianPhone(phone: string): boolean {
-  return /^\+91\d{10}$/.test(phone);
+  return /^\+91[6-9]\d{9}$/.test(phone);
 }
 
 /**

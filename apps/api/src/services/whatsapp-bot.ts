@@ -177,24 +177,34 @@ async function handleIncomingMessage(
     const code = match[1];
 
     // Extract phone from contact info (handles both @c.us and @lid JIDs accurately)
-    let realPhone = rawFrom.endsWith("@c.us") ? cleanPhone : "";
+    let realPhone = "";
+    if (rawFrom.endsWith("@c.us")) {
+      realPhone = cleanPhone;
+    }
+
     try {
       const contact = await msg.getContact().catch(() => null);
-      if (contact && contact.number) {
-        realPhone = contact.number.replace(/\D/g, "");
+      if (contact && contact.number && !contact.id?._serialized?.endsWith("@lid")) {
+        const num = contact.number.replace(/\D/g, "");
+        if (num.length >= 10 && /^[6-9]\d{9}$/.test(num.slice(-10))) {
+          realPhone = num;
+        }
       }
     } catch (e) {
       // Fallback
     }
 
     if (!realPhone && (msg as any)._data?.id?.participant) {
-      realPhone = (msg as any)._data.id.participant.split("@")[0].replace(/\D/g, "");
+      const part = String((msg as any)._data.id.participant);
+      if (part.endsWith("@c.us")) {
+        realPhone = part.split("@")[0].replace(/\D/g, "");
+      }
     }
     if (!realPhone && (msg as any).author) {
-      realPhone = (msg as any).author.split("@")[0].replace(/\D/g, "");
-    }
-    if (!realPhone && rawFrom.endsWith("@c.us")) {
-      realPhone = cleanPhone;
+      const auth = String((msg as any).author);
+      if (auth.endsWith("@c.us")) {
+        realPhone = auth.split("@")[0].replace(/\D/g, "");
+      }
     }
 
     console.log(

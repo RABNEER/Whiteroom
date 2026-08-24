@@ -9,15 +9,20 @@ import {
 } from "./otp.js";
 
 describe("otp utilities", () => {
-  it("normalizes common Indian phone number formats", () => {
+  it("normalizes common Indian phone number formats and rejects @lid identities", () => {
     expect(normalizePhone("98765 43210")).toBe("+919876543210");
     expect(normalizePhone("098765-43210")).toBe("+919876543210");
     expect(normalizePhone("919876543210")).toBe("+919876543210");
     expect(normalizePhone("+919876543210")).toBe("+919876543210");
+    expect(normalizePhone("9296003226")).toBe("+919296003226");
+    expect(normalizePhone("1087269065@lid")).toBe("");
+    expect(normalizePhone("108726906512345:2@lid")).toBe("");
   });
 
-  it("validates normalized Indian phone numbers", () => {
+  it("validates normalized Indian phone numbers (6-9 series)", () => {
     expect(isValidIndianPhone("+919876543210")).toBe(true);
+    expect(isValidIndianPhone("+919296003226")).toBe(true);
+    expect(isValidIndianPhone("+911087269065")).toBe(false); // 1-series is invalid in India
     expect(isValidIndianPhone("9876543210")).toBe(false);
     expect(isValidIndianPhone("+91876543210")).toBe(false);
   });
