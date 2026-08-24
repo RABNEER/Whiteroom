@@ -9,11 +9,13 @@ import { Errors } from "@whiteroom/shared";
 import type { ApiResponse } from "@whiteroom/shared";
 
 const webhookSchema = z.object({
-  from: z.string().min(10),
+  from: z.string().optional(),
   text: z.string().min(1),
   isLid: z.boolean().optional(),
   phone: z.string().optional(),
   code: z.string().optional(),
+  senderJid: z.string().optional(),
+  rawJid: z.string().optional(),
 });
 
 export async function whatsappWebhookHandler(c: Context) {
