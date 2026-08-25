@@ -1,0 +1,19 @@
+--- .github/workflows/auto-merge-jules.yml
++++ .github/workflows/auto-merge-jules.yml
+@@ -21,12 +21,14 @@
+         uses: actions/checkout@v4
+
+       - name: Approve the Pull Request
+-        run: gh pr review "${{ github.event.pull_request.html_url }}" --approve
++        run: gh pr review "${{ github.event.pull_request.html_url }}" --approve || true
+         env:
+-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
++          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+       - name: Auto-merge the Pull Request
+         run: gh pr merge "${{ github.event.pull_request.html_url }}" --squash --auto
+         env:
+-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
++          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

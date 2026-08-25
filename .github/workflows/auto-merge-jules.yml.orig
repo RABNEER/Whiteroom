@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     # Run for PRs created by the Jules bot or containing jules in the title/branch name
     if: |
-      contains(github.event.pull_request.user.login, 'jules') || 
+      contains(github.event.pull_request.user.login, 'jules') ||
       contains(github.event.pull_request.head.ref, 'jules') ||
       contains(github.event.pull_request.title, 'Jules')
     steps:
@@ -21,11 +21,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Approve the Pull Request
-        run: gh pr review "${{ github.event.pull_request.html_url }}" --approve || true
+        run: gh pr review "${{ github.event.pull_request.html_url }}" --approve
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
       - name: Auto-merge the Pull Request
         run: gh pr merge "${{ github.event.pull_request.html_url }}" --squash --auto
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
