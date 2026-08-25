@@ -15,6 +15,7 @@ import { env } from "../../lib/env.js";
 
 export async function pilotStatsHandler(c: Context) {
   try {
+    // ⚡ Bolt: Execute independent queries concurrently using Promise.all to reduce latency
     const [
       studentCount,
       userCount,
@@ -22,6 +23,9 @@ export async function pilotStatsHandler(c: Context) {
       announcementCount,
       messageCount,
       fileCount,
+      usersByRoleRaw,
+      activeSchools,
+      recentLogs,
     ] = await Promise.all([
       db.select({ count: count() }).from(students),
       db.select({ count: count() }).from(users),
@@ -29,16 +33,42 @@ export async function pilotStatsHandler(c: Context) {
       db.select({ count: count() }).from(announcements),
       db.select({ count: count() }).from(messages),
       db.select({ count: count() }).from(classroomFiles),
+      // Fetch user counts by role
+      db
+        .select({
+          role: users.role,
+          count: count(),
+        })
+        .from(users)
+        .groupBy(users.role),
+      // Fetch tenants with details
+      db
+        .select({
+          id: tenants.id,
+          name: tenants.name,
+          slug: tenants.slug,
+          address: tenants.address,
+          phone: tenants.phone,
+          createdAt: tenants.createdAt,
+        })
+        .from(tenants),
+      // Fetch recent audit logs joined with user details
+      db
+        .select({
+          id: auditLogs.id,
+          action: auditLogs.action,
+          resource: auditLogs.resource,
+          details: auditLogs.details,
+          createdAt: auditLogs.createdAt,
+          actorName: users.name,
+          actorRole: users.role,
+          actorPhone: users.phone,
+        })
+        .from(auditLogs)
+        .leftJoin(users, eq(auditLogs.actorId, users.id))
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(20),
     ]);
-
-    // Fetch user counts by role
-    const usersByRoleRaw = await db
-      .select({
-        role: users.role,
-        count: count(),
-      })
-      .from(users)
-      .groupBy(users.role);
 
     const rolesBreakdown = {
       super_admin: 0,
@@ -51,35 +81,6 @@ export async function pilotStatsHandler(c: Context) {
         rolesBreakdown[row.role as keyof typeof rolesBreakdown] = Number(row.count);
       }
     }
-
-    // Fetch tenants with details
-    const activeSchools = await db
-      .select({
-        id: tenants.id,
-        name: tenants.name,
-        slug: tenants.slug,
-        address: tenants.address,
-        phone: tenants.phone,
-        createdAt: tenants.createdAt,
-      })
-      .from(tenants);
-
-    // Fetch recent audit logs joined with user details
-    const recentLogs = await db
-      .select({
-        id: auditLogs.id,
-        action: auditLogs.action,
-        resource: auditLogs.resource,
-        details: auditLogs.details,
-        createdAt: auditLogs.createdAt,
-        actorName: users.name,
-        actorRole: users.role,
-        actorPhone: users.phone,
-      })
-      .from(auditLogs)
-      .leftJoin(users, eq(auditLogs.actorId, users.id))
-      .orderBy(desc(auditLogs.createdAt))
-      .limit(20);
 
     return c.json({
       success: true,
