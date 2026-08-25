@@ -2,3 +2,8 @@
 ## 2025-02-13 - Verify Lockfiles before Commit
 **Learning:** Running `pnpm install` blindly during verification can sometimes mutate the `pnpm-lock.yaml` file (e.g., stripping packages like `resend` if not matched by standard dependency resolution). Committing this causes a severe regression where backend services will silently fail or crash due to missing dependencies in production.
 **Action:** Before running tests or during the pre-commit review phase, strictly verify `git status` to ensure `pnpm-lock.yaml` wasn't unexpectedly modified. If it was altered outside of explicit package additions/removals, revert it via `git restore --staged pnpm-lock.yaml && git checkout -- pnpm-lock.yaml`.
+## 2025-08-25 - Promise.all Optimization for Pilot Stats Route
+
+**Learning:** When creating comprehensive dashboard routes that require multiple independent metric queries (like counting total users, active schools, recent logs), sequential `db.select()` or aggregate calls can add significant unnecessary latency due to multiple network round-trips to the database.
+
+**Action:** Identify all independent queries that do not rely on each other's results and wrap them in a single `Promise.all` block. This allows the database driver to dispatch and execute the queries concurrently, reducing the total execution time to roughly the duration of the longest query. Always check files that perform multiple aggregate operations to see if they can be parallelized.
