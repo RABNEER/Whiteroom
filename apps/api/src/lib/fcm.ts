@@ -1,7 +1,9 @@
 import { db } from "./db.js";
 import { deviceTokens, notifications, students, parentProfiles } from "@whiteroom/db";
-import { eq, and, inArray } from "@whiteroom/db";
+import { eq, and, inArray, gte, sql } from "@whiteroom/db";
 import { getFirebaseMessaging } from "./firebase.js";
+
+export const MAX_ATTENDANCE_NOTIFICATIONS_PER_DAY = 3;
 
 export interface PushPayload {
   title: string;
@@ -21,6 +23,31 @@ export async function sendPushToUser(
   payload: PushPayload
 ): Promise<void> {
   try {
+    // 0. Enforce max 3 attendance notifications (reminders/absence) per user per calendar day
+    if (payload.type === "absence" || payload.type === "reminder") {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const [existingCount] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(notifications)
+        .where(
+          and(
+            eq(notifications.userId, userId),
+            eq(notifications.tenantId, tenantId),
+            inArray(notifications.type, ["absence", "reminder"]),
+            gte(notifications.createdAt, startOfDay)
+          )
+        );
+
+      if ((existingCount?.count ?? 0) >= MAX_ATTENDANCE_NOTIFICATIONS_PER_DAY) {
+        console.log(
+          `⚠️ [FCM] User ${userId} already received ${existingCount?.count} attendance notifications today (max ${MAX_ATTENDANCE_NOTIFICATIONS_PER_DAY}/day). Skipping push.`
+        );
+        return;
+      }
+    }
+
     // 1. Look up FCM tokens for this user
     const tokens = await db
       .select({ fcmToken: deviceTokens.fcmToken })
@@ -87,15 +114,53 @@ export async function sendPushToUsers(
 
   try {
     const uniqueUserIds = Array.from(new Set(userIds));
+    let eligibleUserIds = uniqueUserIds;
 
-    // 1. Batch lookup tokens for all users (tenant isolated)
+    // Enforce max 3 attendance notifications (reminders/absence) per user per calendar day
+    if (payload.type === "absence" || payload.type === "reminder") {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const existingCounts = await db
+        .select({
+          userId: notifications.userId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(notifications)
+        .where(
+          and(
+            eq(notifications.tenantId, tenantId),
+            inArray(notifications.userId, uniqueUserIds),
+            inArray(notifications.type, ["absence", "reminder"]),
+            gte(notifications.createdAt, startOfDay)
+          )
+        )
+        .groupBy(notifications.userId);
+
+      const cappedUserIds = new Set(
+        existingCounts
+          .filter((r) => (r.count ?? 0) >= MAX_ATTENDANCE_NOTIFICATIONS_PER_DAY)
+          .map((r) => r.userId)
+      );
+
+      if (cappedUserIds.size > 0) {
+        eligibleUserIds = eligibleUserIds.filter((id) => !cappedUserIds.has(id));
+        console.log(
+          `⚠️ [FCM] Filtered out ${cappedUserIds.size} users who reached daily attendance notification limit (${MAX_ATTENDANCE_NOTIFICATIONS_PER_DAY}/day).`
+        );
+      }
+    }
+
+    if (eligibleUserIds.length === 0) return;
+
+    // 1. Batch lookup tokens for eligible users (tenant isolated)
     const tokens = await db
       .select({ userId: deviceTokens.userId, fcmToken: deviceTokens.fcmToken })
       .from(deviceTokens)
       .where(
         and(
           eq(deviceTokens.tenantId, tenantId),
-          inArray(deviceTokens.userId, uniqueUserIds)
+          inArray(deviceTokens.userId, eligibleUserIds)
         )
       );
 
@@ -103,7 +168,7 @@ export async function sendPushToUsers(
     const insertedNotifications = await db
       .insert(notifications)
       .values(
-        uniqueUserIds.map((userId) => ({
+        eligibleUserIds.map((userId) => ({
           tenantId,
           userId,
           title: payload.title,

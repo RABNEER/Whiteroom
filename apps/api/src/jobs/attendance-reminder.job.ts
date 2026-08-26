@@ -66,14 +66,14 @@ export async function registerAttendanceReminderWorker() {
     const targetUserIds: string[] = [];
     if (classRow?.teacherId) {
       targetUserIds.push(classRow.teacherId);
+    } else {
+      // Fallback: Send FCM to all teachers of tenant only if no teacher is explicitly assigned
+      const teachers = await db
+        .select({ userId: teacherProfiles.userId })
+        .from(teacherProfiles)
+        .where(eq(teacherProfiles.tenantId, tenantId));
+      for (const t of teachers) targetUserIds.push(t.userId);
     }
-
-    // Send FCM to all teachers of tenant
-    const teachers = await db
-      .select({ userId: teacherProfiles.userId })
-      .from(teacherProfiles)
-      .where(eq(teacherProfiles.tenantId, tenantId));
-    for (const t of teachers) targetUserIds.push(t.userId);
 
     // Send FCM to school admins (so single-admin tuition centers & creators get notified)
     const admins = await db

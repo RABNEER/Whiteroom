@@ -124,4 +124,13 @@ describe("sendPushToUser", () => {
 
     expect(mockSetWhere).not.toHaveBeenCalled();
   });
+
+  it("skips push when user has already received 3 attendance notifications today", async () => {
+    mockWhereToken.mockResolvedValueOnce([{ count: 3 }]);
+
+    await sendPushToUser("tenant-cap", "user-cap", testPayload);
+
+    expect(sendEachForMulticast).not.toHaveBeenCalled();
+    expect(mockReturningInsert).not.toHaveBeenCalled();
+  });
 });
