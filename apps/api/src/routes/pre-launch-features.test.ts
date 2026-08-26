@@ -242,6 +242,13 @@ describe("Pre-Launch Features Integration Tests", () => {
       expect(body.success).toBe(true);
       expect(body.data.status).toBe("pending");
     });
+
+    it("rejects path traversal attempts in uploadChunk", async () => {
+      const { uploadChunk } = await import("../lib/cdn.js");
+      await expect(
+        uploadChunk("../../../evil-dir", 0, Buffer.from("malicious"))
+      ).rejects.toThrow("Invalid sessionId: Path traversal detected");
+    });
   });
 
   describe("Feature 4: Billing Engine Surcharge & Flat rate updates", () => {
