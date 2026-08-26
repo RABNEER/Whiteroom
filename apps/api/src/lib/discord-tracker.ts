@@ -29,9 +29,9 @@ interface ErrorDeduplicationEntry {
 
 // In-memory sliding window cache for error deduplication (prevents Discord rate limit & alert storms)
 const deduplicationCache = new Map<string, ErrorDeduplicationEntry>();
-const DEDUPLICATION_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const DEDUPLICATION_WINDOW_MS = 15 * 1000; // 15 seconds real-time window
 
-// Clean up stale cache items every 10 minutes
+// Clean up stale cache items every 5 minutes
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of deduplicationCache.entries()) {
@@ -39,7 +39,7 @@ setInterval(() => {
       deduplicationCache.delete(key);
     }
   }
-}, 10 * 60 * 1000).unref?.();
+}, 5 * 60 * 1000).unref?.();
 
 /**
  * Returns the configured Discord Webhook URL from environment variables.
@@ -71,7 +71,7 @@ function computeFingerprint(
 }
 
 /**
- * Formats and dispatches an exception event to Discord as a rich embed.
+ * Formats and dispatches an exception event to Discord as a rich embed in real time.
  */
 export async function captureException(
   err: Error | unknown,
@@ -95,30 +95,35 @@ export async function captureException(
   const environment = context.environment || process.env.NODE_ENV || "development";
   const level = context.level || (context.statusCode && context.statusCode < 500 ? "warning" : "critical");
 
-  // Deduplication check
+  // Real-time deduplication check (only debounce rapid duplicate bursts within 15s)
+  const isTest = context.extra?.test === true;
   const fingerprint = computeFingerprint(service, errorName, errorMessage, stack);
   const now = Date.now();
   let entry = deduplicationCache.get(fingerprint);
 
-  if (!entry) {
-    entry = { count: 1, firstSeen: now, lastSeen: now, lastNotified: now };
-    deduplicationCache.set(fingerprint, entry);
-  } else {
-    entry.count++;
-    entry.lastSeen = now;
+  if (!isTest) {
+    if (!entry) {
+      entry = { count: 1, firstSeen: now, lastSeen: now, lastNotified: now };
+      deduplicationCache.set(fingerprint, entry);
+    } else {
+      entry.count++;
+      entry.lastSeen = now;
 
-    // Throttle duplicate notifications (alert on 1st, 10th, 50th, 100th, or after window expires)
-    const shouldNotify =
-      entry.count === 10 ||
-      entry.count === 50 ||
-      entry.count === 100 ||
-      entry.count % 250 === 0 ||
-      now - entry.lastNotified > DEDUPLICATION_WINDOW_MS;
+      // Real-time notification: alert on 1st, then debounce rapid bursts (notify on 10th, 50th, 100th, or after 15s window)
+      const shouldNotify =
+        entry.count === 10 ||
+        entry.count === 50 ||
+        entry.count === 100 ||
+        entry.count % 250 === 0 ||
+        now - entry.lastNotified > DEDUPLICATION_WINDOW_MS;
 
-    if (!shouldNotify) {
-      return false;
+      if (!shouldNotify) {
+        return false;
+      }
+      entry.lastNotified = now;
     }
-    entry.lastNotified = now;
+  } else {
+    entry = { count: 1, firstSeen: now, lastSeen: now, lastNotified: now };
   }
 
   // Determine Embed Colors: 🔴 Red for critical (500s), 🟡 Amber for warning, 🔵 Blue for info
