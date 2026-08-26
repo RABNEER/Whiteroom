@@ -59,7 +59,14 @@ export async function uploadChunk(
   chunkIndex: number,
   buffer: Buffer
 ): Promise<string> {
-  const chunkPath = path.join(CHUNK_DIR, sessionId, String(chunkIndex));
+  // Ensure the resolved chunk path remains within the CHUNK_DIR to prevent path traversal
+  const normalizedRoot = path.normalize(CHUNK_DIR);
+  const chunkPath = path.normalize(path.join(normalizedRoot, sessionId, String(chunkIndex)));
+
+  if (!chunkPath.startsWith(normalizedRoot + path.sep)) {
+    throw new Error("Invalid sessionId: Path traversal detected");
+  }
+
   await fs.mkdir(path.dirname(chunkPath), { recursive: true });
   await fs.writeFile(chunkPath, buffer);
   return chunkPath;
