@@ -7,3 +7,6 @@
 **Learning:** When creating comprehensive dashboard routes that require multiple independent metric queries (like counting total users, active schools, recent logs), sequential `db.select()` or aggregate calls can add significant unnecessary latency due to multiple network round-trips to the database.
 
 **Action:** Identify all independent queries that do not rely on each other's results and wrap them in a single `Promise.all` block. This allows the database driver to dispatch and execute the queries concurrently, reducing the total execution time to roughly the duration of the longest query. Always check files that perform multiple aggregate operations to see if they can be parallelized.
+## $(date +%Y-%m-%d) - [Optimize Chat Rooms Endpoint]
+**Learning:** In the `listRoomsHandler` (Hono API), fetching user classes and direct messages were completely distinct database queries executed sequentially.
+**Action:** Use `Promise.all` wrapping async IIFEs to fetch distinct arrays concurrently, which theoretically halves the time spent waiting on DB queries for endpoints acting as data aggregators.

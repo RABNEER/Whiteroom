@@ -29,54 +29,95 @@ export async function listRoomsHandler(c: Context) {
 
   const activeRooms: any[] = [];
 
-  // 1. CLASSROOMS
-  let enrolledClasses: any[] = [];
+  // ⚡ Bolt: Execute independent queries (classrooms & direct messages) concurrently using Promise.all to reduce total endpoint latency
+  const [enrolledClasses, userDMs] = await Promise.all([
+    // 1. CLASSROOMS Promise
+    (async () => {
+      if (role === UserRole.SCHOOL_ADMIN || role === UserRole.SUPER_ADMIN) {
+        return db
+          .select()
+          .from(classes)
+          .where(and(eq(classes.tenantId, tenantId), isNull(classes.deletedAt)));
+      } else if (role === UserRole.TEACHER) {
+        return db
+          .select()
+          .from(classes)
+          .where(and(eq(classes.tenantId, tenantId), eq(classes.teacherId, userId), isNull(classes.deletedAt)));
+      } else if (role === UserRole.PARENT) {
+        const [profile] = await db
+          .select({ id: parentProfiles.id })
+          .from(parentProfiles)
+          .where(eq(parentProfiles.userId, userId))
+          .limit(1);
 
-  if (role === UserRole.SCHOOL_ADMIN || role === UserRole.SUPER_ADMIN) {
-    enrolledClasses = await db
-      .select()
-      .from(classes)
-      .where(and(eq(classes.tenantId, tenantId), isNull(classes.deletedAt)));
-  } else if (role === UserRole.TEACHER) {
-    enrolledClasses = await db
-      .select()
-      .from(classes)
-      .where(and(eq(classes.tenantId, tenantId), eq(classes.teacherId, userId), isNull(classes.deletedAt)));
-  } else if (role === UserRole.PARENT) {
-    const [profile] = await db
-      .select({ id: parentProfiles.id })
-      .from(parentProfiles)
-      .where(eq(parentProfiles.userId, userId))
-      .limit(1);
+        if (profile) {
+          const parentStudents = await db
+            .select({ id: students.id })
+            .from(students)
+            .where(and(eq(students.parentId, profile.id), eq(students.tenantId, tenantId), isNull(students.deletedAt)));
 
-    if (profile) {
-      const parentStudents = await db
-        .select({ id: students.id })
-        .from(students)
-        .where(and(eq(students.parentId, profile.id), eq(students.tenantId, tenantId), isNull(students.deletedAt)));
+          if (parentStudents.length > 0) {
+            const studentIds = parentStudents.map((s) => s.id);
+            const enrollments = await db
+              .select({ classId: classEnrollments.classId })
+              .from(classEnrollments)
+              .where(
+                and(
+                  inArray(classEnrollments.studentId, studentIds),
+                  eq(classEnrollments.status, "active")
+                )
+              );
 
-      if (parentStudents.length > 0) {
-        const studentIds = parentStudents.map((s) => s.id);
-        const enrollments = await db
-          .select({ classId: classEnrollments.classId })
-          .from(classEnrollments)
-          .where(
-            and(
-              inArray(classEnrollments.studentId, studentIds),
-              eq(classEnrollments.status, "active")
-            )
-          );
-
-        if (enrollments.length > 0) {
-          const classIds = enrollments.map((e) => e.classId);
-          enrolledClasses = await db
-            .select()
-            .from(classes)
-            .where(and(eq(classes.tenantId, tenantId), inArray(classes.id, classIds), isNull(classes.deletedAt)));
+            if (enrollments.length > 0) {
+              const classIds = enrollments.map((e) => e.classId);
+              return db
+                .select()
+                .from(classes)
+                .where(and(eq(classes.tenantId, tenantId), inArray(classes.id, classIds), isNull(classes.deletedAt)));
+            }
+          }
         }
       }
-    }
-  }
+      return [];
+    })(),
+
+    // 3. DIRECT MESSAGES (1-on-1) Promise
+    (async () => {
+      if (role === UserRole.SCHOOL_ADMIN || role === UserRole.SUPER_ADMIN) {
+        const users2 = alias(users, "users2");
+        return db
+          .select({
+            id: dmRooms.id,
+            participant1Id: dmRooms.participant1Id,
+            participant2Id: dmRooms.participant2Id,
+            updatedAt: dmRooms.updatedAt,
+            p1Name: users.name,
+            p1Role: users.role,
+            p2Name: users2.name,
+            p2Role: users2.role,
+          })
+          .from(dmRooms)
+          .innerJoin(users, eq(dmRooms.participant1Id, users.id))
+          .innerJoin(users2, eq(dmRooms.participant2Id, users2.id))
+          .where(eq(dmRooms.tenantId, tenantId));
+      } else {
+        return db
+          .select({
+            id: dmRooms.id,
+            participant1Id: dmRooms.participant1Id,
+            participant2Id: dmRooms.participant2Id,
+            updatedAt: dmRooms.updatedAt,
+          })
+          .from(dmRooms)
+          .where(
+            and(
+              eq(dmRooms.tenantId, tenantId),
+              or(eq(dmRooms.participant1Id, userId), eq(dmRooms.participant2Id, userId))
+            )
+          );
+      }
+    })(),
+  ]);
 
   for (const cls of enrolledClasses) {
     activeRooms.push({
@@ -99,42 +140,6 @@ export async function listRoomsHandler(c: Context) {
       subtitle: "Visible to school staff only",
       updatedAt: new Date(),
     });
-  }
-
-  // 3. DIRECT MESSAGES (1-on-1)
-  let userDMs: any[] = [];
-  if (role === UserRole.SCHOOL_ADMIN || role === UserRole.SUPER_ADMIN) {
-    const users2 = alias(users, "users2");
-    userDMs = await db
-      .select({
-        id: dmRooms.id,
-        participant1Id: dmRooms.participant1Id,
-        participant2Id: dmRooms.participant2Id,
-        updatedAt: dmRooms.updatedAt,
-        p1Name: users.name,
-        p1Role: users.role,
-        p2Name: users2.name,
-        p2Role: users2.role,
-      })
-      .from(dmRooms)
-      .innerJoin(users, eq(dmRooms.participant1Id, users.id))
-      .innerJoin(users2, eq(dmRooms.participant2Id, users2.id))
-      .where(eq(dmRooms.tenantId, tenantId));
-  } else {
-    userDMs = await db
-      .select({
-        id: dmRooms.id,
-        participant1Id: dmRooms.participant1Id,
-        participant2Id: dmRooms.participant2Id,
-        updatedAt: dmRooms.updatedAt,
-      })
-      .from(dmRooms)
-      .where(
-        and(
-          eq(dmRooms.tenantId, tenantId),
-          or(eq(dmRooms.participant1Id, userId), eq(dmRooms.participant2Id, userId))
-        )
-      );
   }
 
   // Collect all other participant IDs for batch user lookup
