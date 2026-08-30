@@ -7,3 +7,8 @@
 **Learning:** When creating comprehensive dashboard routes that require multiple independent metric queries (like counting total users, active schools, recent logs), sequential `db.select()` or aggregate calls can add significant unnecessary latency due to multiple network round-trips to the database.
 
 **Action:** Identify all independent queries that do not rely on each other's results and wrap them in a single `Promise.all` block. This allows the database driver to dispatch and execute the queries concurrently, reducing the total execution time to roughly the duration of the longest query. Always check files that perform multiple aggregate operations to see if they can be parallelized.
+## 2025-08-30 - Fix N+1 Query in Scheduled Jobs
+
+**Learning:** When processing a collection of entities (like iterating through all tenants for a billing job), performing individual queries inside the loop for each entity (e.g., fetching student counts per tenant) creates an N+1 query problem. This severely degrades performance as the number of entities grows, leading to excessive database roundtrips and high memory/CPU usage on both the application and database servers.
+
+**Action:** Replace the loop with a single aggregated query using `groupBy` before the loop. Fetch all required related data across all entities in one shot, and then iterate over the aggregated results. This converts O(N) database queries into O(1) query, providing a massive performance boost for scheduled jobs and bulk processing tasks.

@@ -1,6 +1,6 @@
 import { db } from "../lib/db.js";
 import { getRazorpayClient, verifyRazorpaySignature } from "../lib/razorpay.js";
-import { subscriptions, idempotencyKeys, billingTransactions, tenants, students, eq, lt, and, or, sql, desc, count, isNull } from "@whiteroom/db";
+import { subscriptions, idempotencyKeys, billingTransactions, students, eq, lt, and, or, sql, desc, count, isNull } from "@whiteroom/db";
 import { Errors, PlanTier } from "@whiteroom/shared";
 import { env } from "../lib/env.js";
 import { logAuditEvent } from "./audit.js";
@@ -551,20 +551,23 @@ export async function downgradeExpiredSubscriptions() {
 }
 
 export async function processMonthlyStudentBilling() {
-  const allTenants = await db.select().from(tenants);
+  // ⚡ Bolt: Fix N+1 query problem by batching all tenant student counts into a single aggregated query.
+  // Instead of querying student count per tenant inside a loop, we fetch all non-zero counts at once.
+  const tenantStudentCounts = await db
+    .select({ tenantId: students.tenantId, studentCount: count() })
+    .from(students)
+    .where(isNull(students.deletedAt))
+    .groupBy(students.tenantId);
+
   let processedCount = 0;
   let totalDeductions = 0;
 
-  for (const tenant of allTenants) {
-    const [studentCountResult] = await db
-      .select({ value: count() })
-      .from(students)
-      .where(and(eq(students.tenantId, tenant.id), isNull(students.deletedAt)));
-    
-    const studentCount = studentCountResult?.value ?? 0;
+  for (const row of tenantStudentCounts) {
+    const tenantId = row.tenantId;
+    const studentCount = row.studentCount;
     if (studentCount <= 0) continue;
 
-    const sub = await ensureTenantSubscription(tenant.id);
+    const sub = await ensureTenantSubscription(tenantId);
     if (!sub) continue;
 
     const deductionCredits = studentCount;
@@ -579,7 +582,7 @@ export async function processMonthlyStudentBilling() {
       .returning();
 
     await db.insert(billingTransactions).values({
-      tenantId: tenant.id,
+      tenantId,
       type: "usage_deduction",
       amountPaise: 0,
       creditsChange: -deductionCredits,
@@ -587,7 +590,7 @@ export async function processMonthlyStudentBilling() {
     });
 
     await logAuditEvent({
-      tenantId: tenant.id,
+      tenantId,
       action: "wallet.usage.deducted",
       resource: "subscription",
       resourceId: sub.id,
