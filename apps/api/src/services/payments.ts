@@ -605,5 +605,10 @@ export async function processMonthlyStudentBilling() {
     totalDeductions += deductionCredits;
   }
 
-  return { processedCount, totalDeductions };
+  return {
+    processedTenants: processedCount,
+    totalCreditsDeducted: totalDeductions,
+    processedCount,
+    totalDeductions,
+  };
 }
