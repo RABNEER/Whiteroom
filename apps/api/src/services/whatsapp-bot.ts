@@ -171,7 +171,8 @@ async function handleIncomingMessage(
     const jidNumber = rawFrom.split("@")[0];
     const cleanPhone = jidNumber.replace(/\D/g, "");
 
-    const match = text.match(/Verify\s+([A-Za-z0-9_-]+)/i);
+    const cleanText = text.replace(/[*_~`]/g, "").trim();
+    const match = cleanText.match(/Verify\s*:?\s*([A-Za-z0-9_-]+)/i);
     if (!match) return;
 
     const code = match[1];

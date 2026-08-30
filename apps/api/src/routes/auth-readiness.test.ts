@@ -463,5 +463,63 @@ describe("Auth Readiness & Security Integration Tests", () => {
       // Clean up
       await db.delete(whatsappSessions).where(eq(whatsappSessions.id, sessionId));
     });
+
+    it("should successfully verify WhatsApp session when user sends sessionId directly (mobile app flow)", async () => {
+      const sessionId = "test-wa-id-" + Date.now();
+      const sessionToken = "test-wa-secret-" + Date.now();
+      const appPhone = "+919876543210";
+
+      await db.insert(whatsappSessions).values({
+        id: sessionId,
+        token: hashSHA256(sessionToken),
+        phone: appPhone,
+        verified: false,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      });
+
+      // Mobile app sends "Verify <sessionId>" with potential markdown bold/formatting
+      const res = await testApp.request("/api/v1/auth/whatsapp/webhook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-webhook-secret": env.WHATSAPP_WEBHOOK_SECRET || "whiteroom-whatsapp-bot-internal-secret",
+        },
+        body: JSON.stringify({
+          from: appPhone,
+          phone: appPhone,
+          text: `Verify *${sessionId}*`,
+          code: sessionId,
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json() as any;
+      expect(json.success).toBe(true);
+
+      const [verified] = await db
+        .select()
+        .from(whatsappSessions)
+        .where(eq(whatsappSessions.id, sessionId))
+        .limit(1);
+
+      expect(verified?.verified).toBe(true);
+
+      // Verify that final auth verification using the secret token succeeds
+      const verifyRes = await testApp.request("/api/v1/auth/whatsapp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: sessionId,
+          token: sessionToken,
+        }),
+      });
+
+      expect(verifyRes.status).toBe(200);
+      const verifyJson = await verifyRes.json() as any;
+      expect(verifyJson.success).toBe(true);
+
+      // Clean up
+      await db.delete(whatsappSessions).where(eq(whatsappSessions.id, sessionId));
+    });
   });
 });

@@ -52,7 +52,8 @@ export async function whatsappWebhookHandler(c: Context) {
     }
 
     const { from, text, isLid } = parsed.data;
-    const code = parsed.data.code || text.match(/Verify\s+([A-Za-z0-9_-]+)/i)?.[1];
+    const cleanText = (text || "").replace(/[*_~`]/g, "").trim();
+    const code = (parsed.data.code || "").replace(/[*_~`]/g, "").trim() || cleanText.match(/Verify\s*:?\s*([A-Za-z0-9_-]+)/i)?.[1];
 
     if (!code) {
       return c.json({
@@ -64,15 +65,15 @@ export async function whatsappWebhookHandler(c: Context) {
     const tokenHash = hashSHA256(code);
     const now = new Date();
 
-    // 1. Find session strictly by cryptographic token hash
+    // 1. Find session by cryptographic token hash OR session ID
     const [session] = await db
       .select()
       .from(whatsappSessions)
-      .where(eq(whatsappSessions.token, tokenHash))
+      .where(or(eq(whatsappSessions.token, tokenHash), eq(whatsappSessions.id, code)))
       .limit(1);
 
     if (!session) {
-      console.warn(`[WHATSAPP WEBHOOK] Verification session not found.`);
+      console.warn(`[WHATSAPP WEBHOOK] Verification session not found for code: ${code}`);
       return c.json({
         success: false,
         error: "Verification session not found. Please request a new code from the Whiteroom app.",
