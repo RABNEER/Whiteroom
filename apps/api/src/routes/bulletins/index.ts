@@ -21,34 +21,29 @@ bulletinsRoutes.get("/", async (c) => {
   const user = c.get("user") as JWTPayload;
   const classId = c.req.query("classId");
 
-  let list;
-  if (classId) {
-    list = await db
-      .select()
-      .from(bulletins)
-      .where(
-        and(
-          eq(bulletins.classId, classId),
-          eq(bulletins.tenantId, user.tenantId)
+  const listQuery = classId
+    ? db
+        .select()
+        .from(bulletins)
+        .where(
+          and(
+            eq(bulletins.classId, classId),
+            eq(bulletins.tenantId, user.tenantId)
+          )
         )
-      )
-      .orderBy(bulletins.createdAt);
-  } else {
-    // School-wide bulletins (classId is null)
-    list = await db
-      .select()
-      .from(bulletins)
-      .where(
-        and(
-          isNull(bulletins.classId),
-          eq(bulletins.tenantId, user.tenantId)
+        .orderBy(bulletins.createdAt)
+    : db
+        .select()
+        .from(bulletins)
+        .where(
+          and(
+            isNull(bulletins.classId),
+            eq(bulletins.tenantId, user.tenantId)
+          )
         )
-      )
-      .orderBy(bulletins.createdAt);
-  }
+        .orderBy(bulletins.createdAt);
 
-  // Fetch read statuses for this user
-  const readList = await db
+  const readListQuery = db
     .select({ bulletinId: bulletinReads.bulletinId })
     .from(bulletinReads)
     .where(
@@ -57,6 +52,9 @@ bulletinsRoutes.get("/", async (c) => {
         eq(bulletinReads.tenantId, user.tenantId)
       )
     );
+
+  // ⚡ Bolt: Execute independent queries concurrently using Promise.all to reduce latency
+  const [list, readList] = await Promise.all([listQuery, readListQuery]);
   
   const readSet = new Set(readList.map((r) => r.bulletinId));
 
