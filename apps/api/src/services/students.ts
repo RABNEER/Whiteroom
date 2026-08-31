@@ -103,26 +103,28 @@ export async function updateStudent(
 }
 
 export async function listParentChildren(tenantId: string, userId: string) {
-  const [parent] = await db
-    .select({ id: parentProfiles.id })
-    .from(parentProfiles)
-    .where(
-      and(
-        eq(parentProfiles.tenantId, tenantId),
-        eq(parentProfiles.userId, userId)
+  // ⚡ Bolt: Execute parent profile and user record queries concurrently to reduce database latency
+  const [[parent], [userRecord]] = await Promise.all([
+    db
+      .select({ id: parentProfiles.id })
+      .from(parentProfiles)
+      .where(
+        and(
+          eq(parentProfiles.tenantId, tenantId),
+          eq(parentProfiles.userId, userId)
+        )
       )
-    )
-    .limit(1);
+      .limit(1),
+    db
+      .select({ phone: users.phone })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+  ]);
 
   if (!parent) {
     throw Errors.notFound("Parent profile");
   }
-
-  const [userRecord] = await db
-    .select({ phone: users.phone })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
 
   if (userRecord?.phone) {
     await db
