@@ -8,3 +8,7 @@
 **Learning:** We cannot assume IDs or identifiers are inherently safe simply because they are expected to be system-generated UUIDs. When constructing file paths, any part of the path that originates from user input (even indirectly) must be considered tainted and strictly validated.
 **Prevention:** Always validate that constructed file paths resolve to the expected base directory. Use `path.normalize()` and ensure the resolved path `startsWith(normalizedRoot + path.sep)` to prevent both absolute path injection and relative path traversal attacks.
 
+## 2023-10-27 - Path Traversal Vulnerability
+**Vulnerability:** A path traversal vulnerability existed in `restoreAuthFromDb` where a database-supplied value (`row.key`) was concatenated to `authDir` using `path.join()`. This allowed arbitrary files on the local filesystem to be overwritten if an attacker poisoned the database with paths containing `../`.
+**Learning:** Using `path.basename()` or `path.join()` alone does not protect against path traversal when the input path is complex or attacker-controlled.
+**Prevention:** Always use `path.resolve()` on both the base directory and the target directory. Verify the resulting file path strictly starts with the base path, including the path separator (`path.sep`).
