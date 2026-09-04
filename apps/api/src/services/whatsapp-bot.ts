@@ -304,9 +304,17 @@ async function restoreAuthFromDb(authDir: string): Promise<boolean> {
         continue;
       }
       const filePath = path.join(authDir, row.key);
-      const dirName = path.dirname(filePath);
+      const resolvedAuthDir = path.resolve(authDir);
+      const resolvedFilePath = path.resolve(filePath);
+
+      // Prevent path traversal
+      if (!resolvedFilePath.startsWith(resolvedAuthDir + path.sep)) {
+        continue;
+      }
+
+      const dirName = path.dirname(resolvedFilePath);
       fs.mkdirSync(dirName, { recursive: true });
-      fs.writeFileSync(filePath, Buffer.from(row.value, "base64"));
+      fs.writeFileSync(resolvedFilePath, Buffer.from(row.value, "base64"));
       restoredCount++;
     }
 
