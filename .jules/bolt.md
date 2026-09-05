@@ -7,3 +7,6 @@
 **Learning:** When creating comprehensive dashboard routes that require multiple independent metric queries (like counting total users, active schools, recent logs), sequential `db.select()` or aggregate calls can add significant unnecessary latency due to multiple network round-trips to the database.
 
 **Action:** Identify all independent queries that do not rely on each other's results and wrap them in a single `Promise.all` block. This allows the database driver to dispatch and execute the queries concurrently, reducing the total execution time to roughly the duration of the longest query. Always check files that perform multiple aggregate operations to see if they can be parallelized.
+## 2024-05-15 - [Concurrency on Route Endpoints via Promise.all]
+**Learning:** Sequential, independent database queries inside route handlers significantly delay responses. Drizzle ORM supports concurrent queries, making it highly suitable to use Promise.all.
+**Action:** Always scan route handlers for consecutive, independent `await db.select()` calls and wrap them into a single `Promise.all()` to decrease overall network round trips and take advantage of pooling. Keep dependent queries inside an async IIFE nested in the same structure.

@@ -29,64 +29,76 @@ userRoutes.get("/me/export", gdprExportLimit, async (c) => {
   const user = c.get("user") as JWTPayload;
   const userId = user.userId;
 
-  // Fetch core user row
-  const [userRow] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  // ⚡ Bolt: Execute independent queries concurrently using Promise.all to reduce latency
+  const [
+    userRowResults,
+    userMessages,
+    logs,
+    { profile, studentsList, attendanceList },
+  ] = await Promise.all([
+    // Fetch core user row
+    db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1),
 
+    // Fetch all chat messages sent by this user
+    db
+      .select()
+      .from(messages)
+      .where(eq(messages.senderId, userId)),
+
+    // Fetch consent logs
+    db
+      .select()
+      .from(consentLogs)
+      .where(eq(consentLogs.userId, userId)),
+
+    // Fetch role-specific data
+    (async () => {
+      let profile: any = null;
+      let studentsList: any[] = [];
+      let attendanceList: any[] = [];
+
+      if (user.role === UserRole.TEACHER) {
+        const [row] = await db
+          .select()
+          .from(teacherProfiles)
+          .where(eq(teacherProfiles.id, userId))
+          .limit(1);
+        profile = row;
+      } else if (user.role === UserRole.PARENT) {
+        const [row] = await db
+          .select()
+          .from(parentProfiles)
+          .where(eq(parentProfiles.userId, userId))
+          .limit(1);
+        profile = row;
+
+        if (profile) {
+          studentsList = await db
+            .select()
+            .from(students)
+            .where(eq(students.parentId, profile.id));
+
+          const studentIds = studentsList.map((s) => s.id);
+          if (studentIds.length > 0) {
+            attendanceList = await db
+              .select()
+              .from(attendanceRecords)
+              .where(inArray(attendanceRecords.studentId, studentIds));
+          }
+        }
+      }
+
+      return { profile, studentsList, attendanceList };
+    })(),
+  ]);
+
+  const userRow = userRowResults[0];
   if (!userRow) {
     throw Errors.notFound("User");
-  }
-
-  // Fetch role-specific profile
-  let profile: any = null;
-  if (user.role === UserRole.TEACHER) {
-    const [row] = await db
-      .select()
-      .from(teacherProfiles)
-      .where(eq(teacherProfiles.id, userId))
-      .limit(1);
-    profile = row;
-  } else if (user.role === UserRole.PARENT) {
-    const [row] = await db
-      .select()
-      .from(parentProfiles)
-      .where(eq(parentProfiles.userId, userId))
-      .limit(1);
-    profile = row;
-  }
-
-  // Fetch all chat messages sent by this user
-  const userMessages = await db
-    .select()
-    .from(messages)
-    .where(eq(messages.senderId, userId));
-
-  // Fetch consent logs
-  const logs = await db
-    .select()
-    .from(consentLogs)
-    .where(eq(consentLogs.userId, userId));
-
-  // Fetch parent student metadata and attendance if applicable
-  let studentsList: any[] = [];
-  let attendanceList: any[] = [];
-
-  if (user.role === UserRole.PARENT) {
-    studentsList = await db
-      .select()
-      .from(students)
-      .where(eq(students.parentId, profile?.id));
-
-    const studentIds = studentsList.map((s) => s.id);
-    if (studentIds.length > 0) {
-      attendanceList = await db
-        .select()
-        .from(attendanceRecords)
-        .where(inArray(attendanceRecords.studentId, studentIds));
-    }
   }
 
   // Generate ZIP file on-the-fly
