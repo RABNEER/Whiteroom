@@ -7,3 +7,8 @@
 **Learning:** When creating comprehensive dashboard routes that require multiple independent metric queries (like counting total users, active schools, recent logs), sequential `db.select()` or aggregate calls can add significant unnecessary latency due to multiple network round-trips to the database.
 
 **Action:** Identify all independent queries that do not rely on each other's results and wrap them in a single `Promise.all` block. This allows the database driver to dispatch and execute the queries concurrently, reducing the total execution time to roughly the duration of the longest query. Always check files that perform multiple aggregate operations to see if they can be parallelized.
+## 2025-08-25 - Optimize Sequential DB Queries using Promise.all in Admin Routes
+
+**Learning:** When generating reports or aggregating data from multiple independent tables (like logs and breaches), sequentially awaiting queries introduces unnecessary latency, compounding network round trips to the database.
+
+**Action:** Whenever multiple independent database read queries are executed in succession, bundle them using `Promise.all()`. This takes advantage of connection pooling to run queries concurrently, significantly reducing the overall response time of the endpoint. This pattern is particularly useful in reporting and admin endpoints.
