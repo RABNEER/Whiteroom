@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { html } from "hono/html";
+import { html, raw } from "hono/html";
 import { db } from "../../lib/db.js";
 import { tenants, eq, and } from "@whiteroom/db";
 import { env } from "../../lib/env.js";
@@ -210,7 +210,9 @@ publicRoutes.get("/invite/:code", async (c) => {
           // Auto-trigger deep link redirect for mobile devices
           if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
             setTimeout(function() {
-              window.location.href = "whiteroom://invite/${code}?role=${role}";
+              var safeCode = ${raw(JSON.stringify(code).replace(/</g, '\\u003c'))};
+              var safeRole = ${raw(JSON.stringify(role).replace(/</g, '\\u003c'))};
+              window.location.href = "whiteroom://invite/" + encodeURIComponent(safeCode) + "?role=" + encodeURIComponent(safeRole);
             }, 300);
           }
         </script>
