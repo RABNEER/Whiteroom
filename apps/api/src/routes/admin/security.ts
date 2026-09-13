@@ -159,17 +159,19 @@ export async function exportCertInReportHandler(c: Context) {
     breachConditions.push(eq(breachNotifications.tenantId, user.tenantId));
   }
 
-  const logs = await db
-    .select()
-    .from(securityAuditLogs)
-    .where(and(...logConditions))
-    .orderBy(desc(securityAuditLogs.createdAt));
-
-  const breaches = await db
-    .select()
-    .from(breachNotifications)
-    .where(and(...breachConditions))
-    .orderBy(desc(breachNotifications.notifiedAt));
+  // ⚡ Bolt: Execute independent queries concurrently using Promise.all to reduce latency
+  const [logs, breaches] = await Promise.all([
+    db
+      .select()
+      .from(securityAuditLogs)
+      .where(and(...logConditions))
+      .orderBy(desc(securityAuditLogs.createdAt)),
+    db
+      .select()
+      .from(breachNotifications)
+      .where(and(...breachConditions))
+      .orderBy(desc(breachNotifications.notifiedAt)),
+  ]);
 
   const report = {
     reportTitle: "CERT-In & DPDP Act 2023 Security Compliance & Incident Audit Report",
